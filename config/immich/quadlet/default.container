@@ -1,0 +1,44 @@
+[Unit]
+Description=immich
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/immich-app/immich-server:release
+#AutoUpdate=registry
+#Intel GPU
+#Image=ghcr.io/immich-app/immich-machine-learning:release-openvino
+#Amd GPU
+#Image=ghcr.io/immich-app/immich-machine-learning:release-rocm
+
+ContainerName=${container_name}
+Label=app=immich
+
+Volume=${instance_dir}/upload:/usr/src/app/upload
+
+Pod=${container_name}.pod
+
+Exec=start.sh immich
+
+EnvironmentFile=${instance_dir}/.env
+
+#NVIDIA GPU 設備映射（如果需要硬件轉碼）
+#Device=nvidia.com/gpu=all
+
+#Intel GPU 設備映射（如果需要 QSV 轉碼）
+#Device=/dev/dri
+
+#Amd GPU 設備映射（如果需要硬件轉碼）
+#Device=/dev/kfd
+#Device=/dev/dri
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

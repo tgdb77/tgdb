@@ -1,0 +1,35 @@
+[Unit]
+Description=headscale
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/juanfont/headscale:0.27.1
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=headscale
+# Headplane（Docker Integration）會用此 label 找到 Headscale 容器（建議保留）
+Label=me.tale.headplane.target=headscale
+
+Pod=${container_name}.pod
+
+Exec=serve
+
+# 目錄分離（常改 / 狀態 / socket），方便維護與備份
+Volume=${instance_dir}/etc:/etc/headscale
+Volume=${instance_dir}/lib:/var/lib/headscale
+Volume=${instance_dir}/run:/var/run/headscale
+
+# Rootless + bind mount 時，為避免權限問題，先以 root 角色跑（之後可再視需求收斂）
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

@@ -1,0 +1,31 @@
+[Unit]
+Description=WordPress（Nginx）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-fpm.service container-${container_name}-fpm.service
+Wants=${container_name}-fpm.service container-${container_name}-fpm.service
+
+[Container]
+Image=docker.io/library/nginx:1.27-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=wordpress
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/html:/var/www/html
+Volume=${instance_dir}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

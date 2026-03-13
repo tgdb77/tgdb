@@ -1,0 +1,57 @@
+# TGDB - Podman Quadlet 自訂映像（.image）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .image 設定範本，讓 systemd/Quadlet 在啟動時先確保映像已拉取完成。
+# - 適用於：想把「拉映像」這件事獨立成可控的 unit（例如搭配依賴關係、重試策略）。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.image
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Image units [Image]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.image
+# ------------------------------
+#
+#[Unit]
+#Description=Podman image: myapp
+#Wants=network-online.target
+#After=network-online.target
+#
+#[Image]
+## Image=：要拉取的映像（含 registry）
+#Image=docker.io/library/nginx:alpine
+#
+## ImageTag=：指定 tag（不填通常由 Image= 本身決定）
+##ImageTag=alpine
+#
+## AllTags=：是否拉取該 repository 的所有 tags（通常不建議）
+##AllTags=false
+#
+## TLSVerify=：是否驗證 TLS（預設通常為 true；關閉風險高）
+##TLSVerify=true
+#
+## Retry/RetryDelay：拉取失敗的重試次數與間隔
+##Retry=3
+##RetryDelay=10s
+#
+## AuthFile/Creds/Username/Password：私有 registry 認證（請避免把密碼硬寫進檔案）
+##AuthFile=/path/to/auth.json
+##Creds=user:pass
+##Username=user
+##Password=pass
+#
+## Arch/OS/Variant：多架構映像時可指定目標
+##Arch=amd64
+##OS=linux
+##Variant=
+#
+## PodmanArgs/GlobalArgs：補齊未提供 key 的 podman pull 參數（按需使用）
+##PodmanArgs=--quiet
+#
+#[Install]
+#WantedBy=default.target
+

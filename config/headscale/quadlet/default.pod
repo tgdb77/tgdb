@@ -1,0 +1,20 @@
+[Unit]
+Description=headscale Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+# 僅綁定本機回環埠，請搭配 Nginx 反向代理提供 HTTPS 對外訪問。
+# UI 也僅綁定回環埠（預設 18081），建議透過 SSH 埠轉發使用。
+#
+# 注意：${ui_host_port} 不是內建模板變數，需由 app 在渲染 Quadlet 時額外提供。
+PublishPort=127.0.0.1:${host_port}:8080
+PublishPort=127.0.0.1:${ui_host_port}:8081
+PodName=${container_name}
+#Network=tgdb.network
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

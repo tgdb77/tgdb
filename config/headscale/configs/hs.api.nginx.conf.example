@@ -1,0 +1,35 @@
+# Headscale（僅 Control Server）反向代理站點範本（不公開 UI）
+
+server {
+    listen 80;
+    server_name hs.<root_domain>;
+    return 301 https://hs.<root_domain>$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen 443 quic reuseport;
+    server_name hs.<root_domain>;
+
+    ssl_certificate     /etc/nginx/certs/hs.<root_domain>.crt;
+    ssl_certificate_key /etc/nginx/certs/hs.<root_domain>.key;
+
+    add_header Alt-Svc 'h3=":443"; ma=86400' always;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_buffering off;
+
+    client_max_body_size 1000m;
+
+    # Headscale（Tailscale control server）
+    location / {
+        proxy_pass http://127.0.0.1:<host_port>;
+    }
+}

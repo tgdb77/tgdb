@@ -1,0 +1,17 @@
+[Unit]
+Description=new-api Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+# 僅綁定本機回環埠，請搭配 Nginx 反向代理提供 HTTPS 對外訪問
+PublishPort=127.0.0.1:${host_port}:3000
+PodName=${container_name}
+#Network=tgdb.network
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

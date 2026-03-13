@@ -1,0 +1,25 @@
+[Unit]
+Description=paperless-ngx gotenberg
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/gotenberg/gotenberg:8.25
+#AutoUpdate=registry
+ContainerName=${container_name}-gotenberg
+Label=app=paperless-ngx
+
+Pod=${container_name}.pod
+
+Exec=gotenberg --chromium-disable-javascript=true --chromium-allow-list=file:///tmp/.*
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

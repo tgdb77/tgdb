@@ -1,0 +1,31 @@
+[Unit]
+Description=seaweedfs postgres
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/library/postgres:16-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}-postgres
+Label=app=seaweedfs
+Label=tgdb_db=postgres
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/pgdata:/var/lib/postgresql/data
+
+# 初始化（僅首次建立資料庫時執行）：建立 SeaweedFS filer 所需的 filemeta table
+Volume=${instance_dir}/init-filemeta.sql:/docker-entrypoint-initdb.d/10-seaweedfs-filemeta.sql:ro
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

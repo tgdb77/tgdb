@@ -1,0 +1,34 @@
+[Unit]
+Description=Cloudflared Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/cloudflare/cloudflared:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=cloudflared
+
+Network=host
+
+Volume=${instance_dir}:/etc/cloudflared:ro
+User=0:0
+
+Environment=TUNNEL_NAME=${TUNNEL_NAME}
+Environment=TUNNEL_UUID=${TUNNEL_UUID}
+Environment=TZ=Asia/Taipei
+
+NoNewPrivileges=true
+
+Exec=tunnel --credentials-file /etc/cloudflared/${TUNNEL_UUID}.json --config /etc/cloudflared/config.yml run ${TUNNEL_NAME}
+
+[Service]
+Restart=on-failure
+RestartSec=10s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

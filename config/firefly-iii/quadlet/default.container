@@ -1,0 +1,31 @@
+[Unit]
+Description=Firefly III（App）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-db.service container-${container_name}-db.service
+Wants=${container_name}-db.service container-${container_name}-db.service
+
+[Container]
+Image=docker.io/fireflyiii/core:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=firefly-iii
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/upload:/var/www/html/storage/upload
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

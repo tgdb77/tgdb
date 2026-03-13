@@ -1,0 +1,33 @@
+# WordPress（PHP-FPM）Nginx FastCGI 設定範本
+#
+# 說明：
+# - Pod 內部：Nginx -> 127.0.0.1:9000（WordPress FPM）
+# - 若你要用自己的 Nginx 反代對外：請反代到 http://127.0.0.1:${host_port}
+
+server {
+  listen 80;
+  server_name _;
+
+  root /var/www/html;
+  index index.php index.html;
+
+  client_max_body_size 64m;
+
+  location / {
+    try_files $uri $uri/ /index.php?$args;
+  }
+
+  location ~ \.php$ {
+    try_files $uri =404;
+    include fastcgi_params;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_pass 127.0.0.1:9000;
+  }
+
+  location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    expires 30d;
+    access_log off;
+  }
+}
+

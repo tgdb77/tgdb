@@ -1,0 +1,17 @@
+[Unit]
+Description=FreshRSS + RSSHub（Pod）
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:${host_port}:80
+PublishPort=127.0.0.1:${rsshub_port}:1200
+PodName=${container_name}
+#Network=tgdb.network
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

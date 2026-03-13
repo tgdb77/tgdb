@@ -1,0 +1,13 @@
+[Unit]
+Description=Podman network: tgdb
+After=network-online.target
+Wants=network-online.target
+
+[Network]
+Driver=bridge
+NetworkName=tgdb
+#IPv6=true
+
+[Install]
+WantedBy=default.target
+

@@ -1,0 +1,23 @@
+[Unit]
+Description=paperless-ngx tika
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/apache/tika:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-tika
+Label=app=paperless-ngx
+
+Pod=${container_name}.pod
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

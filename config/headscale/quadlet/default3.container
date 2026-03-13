@@ -1,0 +1,40 @@
+[Unit]
+Description=headplane
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+# 版本請依需求調整；建議固定 tag 避免升級破壞。
+Image=ghcr.io/tale/headplane:0.6.1
+ContainerName=${container_name}-headplane
+Label=app=headplane
+
+Pod=${container_name}.pod
+
+# 設定檔與資料目錄（由 TGDB 生成到 $TGDB_DIR/headscale/headplane）
+Volume=${instance_dir}/headplane/etc:/etc/headplane:ro
+Volume=${instance_dir}/headplane/lib:/var/lib/headplane
+
+# Headplane 需要讀寫 Headscale 設定目錄才能管理 ACL/DNS 等（同路徑掛載很重要）
+# 注意：若你不打算讓 UI 改設定，請改成 :ro 或移除此行。
+Volume=${instance_dir}/etc:/etc/headscale
+
+# Podman API socket（參考 Portainer 的掛載方式）
+# - 需要 systemd --user 啟用：podman.socket
+# - 以 docker.sock 介面提供給 Headplane（供 Integrated Mode 使用）
+Volume=/run/user/${user_id}/podman/podman.sock:/var/run/docker.sock
+Environment=DOCKER_HOST=unix:///var/run/docker.sock
+
+# Rootless + bind mount/socket 時，為避免權限問題，先以 root 角色跑（之後可再視需求收斂）
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

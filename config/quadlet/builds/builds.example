@@ -1,0 +1,68 @@
+# TGDB - Podman Quadlet 自訂建置（.build）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .build 設定範本，讓 systemd/Quadlet 以 unit 方式執行 podman build。
+# - 適用於：你希望在部署前，先把自有 Containerfile/Container Image 建出來，再由 .container 引用。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.build
+# - 建置 context/Containerfile 路徑建議使用絕對路徑，並確保該路徑對 rootless 使用者可讀。
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Build units [Build]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.build
+# ------------------------------
+#
+#[Unit]
+#Description=Podman build: myimage
+#Wants=network-online.target
+#After=network-online.target
+#
+#[Build]
+## File=：Containerfile/Dockerfile 路徑
+#File=/path/to/Containerfile
+#
+## Tag=：建置產物的 tag（可重複多行）
+#Tag=localhost/myimage:latest
+#
+## SetWorkingDirectory=：建置 context 的工作目錄（相當於 podman build 的 context）
+##SetWorkingDirectory=/path/to/build-context
+#
+## BuildArg=：建置參數（可重複多行）
+##BuildArg=VERSION=1.2.3
+#
+## Environment=：建置時環境變數（可重複多行）
+##Environment=HTTP_PROXY=http://127.0.0.1:3128
+#
+## Network/DNS 等：建置時網路/解析設定（按需使用）
+##Network=slirp4netns
+##DNS=1.1.1.1
+##DNSSearch=example.internal
+##DNSOption=ndots:1
+#
+## Volume=：建置時掛載（例如 cache）（可重複多行）
+##Volume=/path/on/host:/cache:Z
+#
+## Secret=：Build secrets（可重複多行，依 podman build --secret 格式）
+##Secret=id=mysecret,src=/path/to/secret.txt
+#
+## Output=：輸出設定（依 podman build --output 格式）
+##Output=type=local,dest=/tmp/build-output
+#
+## Retry/RetryDelay：建置失敗的重試次數與間隔
+##Retry=2
+##RetryDelay=5s
+#
+## TLSVerify：拉取 base image 時的 TLS 驗證策略（視需求）
+##TLSVerify=true
+#
+## PodmanArgs/GlobalArgs：補齊未提供 key 的 podman build 參數（按需使用）
+##PodmanArgs=--layers
+#
+#[Install]
+#WantedBy=default.target
+

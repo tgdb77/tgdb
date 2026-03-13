@@ -1,0 +1,37 @@
+[Unit]
+Description=seaweedfs s3 gateway
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-filer.service container-${container_name}-filer.service
+Wants=${container_name}-filer.service container-${container_name}-filer.service
+
+[Container]
+Image=docker.io/chrislusf/seaweedfs:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-s3
+Label=app=seaweedfs
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/s3.json:/etc/seaweedfs/s3.json:ro
+Volume=${instance_dir}/security.toml:/etc/seaweedfs/security.toml:ro
+UserNS=keep-id
+User=${user_id}:${user_id}
+
+EnvironmentFile=${instance_dir}/.env
+
+# 依上游文件：S3 Gateway 可用獨立的 `weed s3` 進程啟動，並指向同一個 filer。
+# 注意：若你規劃多個 filer/叢集高可用，請再評估上游「Production Setup」建議的佈署方式。
+Exec=s3 -port=8333 -ip.bind=0.0.0.0 -filer=127.0.0.1:8888 -config=/etc/seaweedfs/s3.json
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

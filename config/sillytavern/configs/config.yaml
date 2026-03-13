@@ -1,0 +1,36 @@
+# SillyTavern 伺服器設定檔（Docker 版）
+# 目的：避免第一次透過反向代理/LAN 存取時，因白名單（whitelist）阻擋而顯示 Forbidden。
+#
+# 注意：
+# - 此檔案會掛載到容器內 `/home/node/app/config/config.yaml`
+# - 修改後需要重啟容器才會生效
+
+# 監聽設定
+listen: true
+protocol:
+  ipv4: true
+  ipv6: false
+port: 8000
+
+# 資料路徑（容器內）
+dataRoot: ./data
+
+# 安全：IP 白名單（建議保留啟用）false
+whitelistMode: true
+
+# 若你使用 Nginx / Cloudflare Tunnel 等反向代理，SillyTavern 可能會讀取轉發標頭取得真實客戶端 IP。
+# 開啟後，whitelist 需要包含你的客戶端網段（例如 10.0.0.0/8、192.168.0.0/16）。
+enableForwardedWhitelist: true 
+
+# 自動加入容器網路的 gateway IP（一般情況下可減少 Docker 網路造成的阻擋問題）
+whitelistDockerHosts: true
+
+# 允許的來源 IP（可填單一 IP、CIDR，例如 10.0.0.0/8，或萬用字元 192.168.0.*）
+whitelist:
+  - ::1
+  - 127.0.0.1
+  # 常見私人網段（適用多數家用/內網）
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+

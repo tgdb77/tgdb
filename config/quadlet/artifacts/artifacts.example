@@ -1,0 +1,44 @@
+# TGDB - Podman Quadlet 自訂 Artifact（.artifact）範本（實驗性）
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .artifact 設定範本，用於拉取/管理 OCI artifact（功能屬實驗性，請留意 Podman 版本差異）。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.artifact
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Artifact units [Artifact]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.artifact
+# ------------------------------
+#
+#[Unit]
+#Description=Podman artifact: myartifact
+#Wants=network-online.target
+#After=network-online.target
+#
+#[Artifact]
+## ArtifactName=：artifact 名稱
+#ArtifactName=myartifact
+#
+## Image=：artifact 所在的 OCI 參照（registry/repo@digest 或 :tag）
+#Image=ghcr.io/example/myartifact:latest
+#
+## Inspect=：是否在拉取後檢視/驗證（依 Podman 行為/版本而定）
+##Inspect=true
+#
+## TLSVerify：是否驗證 TLS（預設通常為 true；關閉風險高）
+##TLSVerify=true
+#
+## AuthFile：私有 registry 認證
+##AuthFile=/path/to/auth.json
+#
+## PodmanArgs/GlobalArgs：補齊未提供 key 的 podman artifact 參數（按需使用）
+##PodmanArgs=--quiet
+#
+#[Install]
+#WantedBy=default.target
+

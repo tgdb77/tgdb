@@ -1,0 +1,28 @@
+[Unit]
+Description=seaweedfs Pod
+After=network-online.target
+Wants=network-online.target
+
+[Pod]
+PodName=${container_name}
+#Network=tgdb.network
+
+# 預設僅綁定本機回環埠，對外請搭配 Nginx 反向代理（HTTPS）或自行評估風險後開放。
+#
+# S3 Gateway（HTTP）：S3 相容 API（由 `${container_name}-s3` 容器提供；若要對外，建議走 HTTPS 反代）
+PublishPort=127.0.0.1:${s3_port}:8333
+#
+# Master（HTTP）：拓樸與卷管理 API（通常不需要對外）
+#PublishPort=127.0.0.1:9333:9333
+#
+# Filer（HTTP）：檔案/目錄 API 與簡易瀏覽介面（需要時再打開）
+PublishPort=127.0.0.1:${host_port}:8888
+#
+# Volume（HTTP）：通常不需要對外；除非你要直接訪問 volume server
+#PublishPort=127.0.0.1:8080:8080
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
