@@ -1,0 +1,35 @@
+[Unit]
+Description=TGDB Game Server (${container_name})
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=${image}
+ContainerName=${container_name}
+Label=app=gameserver
+
+# 預設使用 host 網路，方便先快速部署與測試。
+Network=host
+
+# 若你已確認遊戲實際使用埠，想縮限公開範圍：
+# 1) 將上方改成：Network=tgdb.network（或其他 bridge network）
+# 2) 再啟用下列 PublishPort（依實際遊戲埠調整）
+#PublishPort=0.0.0.0:27015:27015/udp
+#PublishPort=0.0.0.0:27015:27015/tcp
+
+UserNS=keep-id
+WorkingDir=/app
+
+Volume=${instance_dir}:/app/lgsm/backup
+Volume=${volume_dir}:/data
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

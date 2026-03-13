@@ -1,0 +1,17 @@
+# 自建 DERP map 範本（供 headscale 的 derp.paths 使用）
+#
+# 注意：
+# - Region ID 建議用 900–999（Tailscale 保留給使用者自建）
+# - 若 DERP 不走 443/tcp（本計畫預設 33445/tcp），請務必設定 derpport
+
+regions:
+  901:
+    regionid: 901
+    regioncode: "TGDB"
+    regionname: "TGDB DERP"
+    nodes:
+      - name: "<node_name>"
+        regionid: 901
+        hostname: "derp.<root_domain>"
+        derpport: 33445
+        stunport: 3478

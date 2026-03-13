@@ -1,0 +1,16 @@
+no-autoupdate: true
+loglevel: info
+
+# 傳輸協定（選填）：可指定 quic / http2；不設定則使用預設值。
+# protocol: quic
+
+tunnel: ${TUNNEL_UUID}
+credentials-file: /etc/cloudflared/${TUNNEL_UUID}.json
+
+# 如需查看本機 metrics（建議先綁 localhost）
+# metrics: 127.0.0.1:2000
+
+ingress:
+  - hostname: ${fqdn}
+    service: http://127.0.0.1:${port}
+  - service: http_status:404

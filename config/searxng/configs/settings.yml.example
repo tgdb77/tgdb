@@ -1,0 +1,11 @@
+# see https://docs.searxng.org/admin/settings/settings.html#settings-use-default-settings
+use_default_settings: true
+
+server:
+  # base_url 由 .env 的 SEARXNG_BASE_URL 提供
+  secret_key: "${secret_key}" # change this!
+  limiter: false # 若對公網開放，建議改為 true 並調整 limiter.toml
+  image_proxy: true
+
+valkey:
+  url: valkey://127.0.0.1:6379/0

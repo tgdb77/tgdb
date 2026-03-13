@@ -1,0 +1,60 @@
+# TGDB - Podman Quadlet 自訂 Pod（.pod）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .pod 設定範本，協助你建立 Podman Pod（共享網路/埠/部分命名空間）。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.pod
+# - 常見用法：先定義 <name>.pod，再讓多個 <name>-*.container 透過 Pod=<name>.pod 加入同一個 Pod。
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Pod units [Pod]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.pod
+# ------------------------------
+#
+#[Unit]
+#Description=Podman Pod: mypod
+#Wants=network-online.target
+#After=network-online.target
+#
+#[Pod]
+## PodName=：Pod 名稱（建議與檔名一致）
+#PodName=mypod
+#
+## Network=：可填 host/none 或引用 *.network（例如 tgdb.network）
+##Network=tgdb.network
+#
+## PublishPort=：對外映射埠（可重複多行）
+## - 建議優先綁定 127.0.0.1，避免未加防護就直接對外暴露
+##PublishPort=127.0.0.1:8080:80
+#
+## Hostname=：Pod 的主機名
+##Hostname=mypod
+#
+## DNS/DNSSearch/DNSOption：Pod 層級的 DNS 設定（可重複多行）
+##DNS=1.1.1.1
+##DNSSearch=example.internal
+##DNSOption=ndots:1
+#
+## IP/IP6：指定 Pod 的 IPv4/IPv6（需配合自訂 Network/Subnet）
+##IP=10.89.0.10
+##IP6=fd00::10
+#
+## ShmSize=：Pod 共享的 /dev/shm 大小
+##ShmSize=256m
+#
+## SecurityOpt/SeccompProfile 等安全參數（按需使用，且先理解風險）
+##SeccompProfile=/path/to/seccomp.json
+##SecurityOpt=no-new-privileges
+##SecurityLabelDisable=true
+#
+## PodmanArgs=：補齊未提供 key 的 podman pod create 參數（按需使用）
+##PodmanArgs=--share net,ipc
+#
+#[Install]
+#WantedBy=default.target
+

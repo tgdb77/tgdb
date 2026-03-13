@@ -1,0 +1,250 @@
+# TGDB - Podman Quadlet 自訂容器（.container）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份「可複製/可改名」的 .container 設定範本，協助你新增自訂容器服務。
+# - 範例涵蓋：性能/資源限制、健康檢查、基本安全強化、記錄、AutoUpdate 等常用參數。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.container
+# - Quadlet 會把 <name>.container 轉成 systemd user service：<name>.service
+# - Podman 容器預設命名為 systemd-%N（%N 代表 unit 名稱），可用 ContainerName= 覆寫。
+#
+# TGDB 使用方式（以預設持久化目錄為例）：
+# 1) 將檔案存放在：~/.tgdb/config/quadlet/containers/<name>.container
+# 2) 透過 TGDB 選單：00. 自訂義程式管理（config/quadlet）→ container → 從紀錄部署
+#    或手動執行：
+#    - systemctl --user daemon-reload
+#    - systemctl --user enable --now <name>.service
+#
+# 參考文件：
+# - podman-systemd.unit(5)（Quadlet）
+# - systemd.unit(5) / systemd.service(5) / systemd.resource-control(5)
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.container
+# ------------------------------
+#
+#[Unit]
+#Description=My App（請自行命名）
+#Wants=network-online.target
+#After=network-online.target
+## 若資料目錄位於掛載點（外接硬碟/網路盤），可用 RequiresMountsFor 確保掛載就緒再啟動。
+##RequiresMountsFor=/path/to/data
+#
+#[Container]
+## 必填：容器映像（建議寫完整 registry 路徑）
+#Image=docker.io/library/nginx:alpine
+#
+## 選填：容器名稱（未設定時預設 systemd-%N）
+## 建議：若你會用 podman 指令直接操作容器（inspect/logs），可設定固定名稱以方便管理。
+#ContainerName=myapp
+#
+## 選填：覆寫/指定容器要執行的命令（對應 podman run --entrypoint/COMMAND）
+## - 不設定通常沿用 Image 內的 ENTRYPOINT/CMD
+## - 可使用多個 Exec= 逐行加參數（等同追加 argv）
+##Exec=/usr/sbin/nginx
+##Exec=-g
+##Exec=daemon off;
+#
+## 選填：覆寫 ENTRYPOINT（需 JSON 格式字串）
+##Entrypoint=["/bin/sh","-c"]
+#
+## 選填：容器工作目錄
+##WorkingDir=/app
+#
+## 選填：以指定使用者/群組執行（容器內 UID/GID 或名稱）
+## 注意：Group= 不能單獨設定，必須搭配 User=。
+##User=1000
+##Group=1000
+##GroupAdd=keep-groups  # 讓容器繼承 host 群組（常用於讀寫掛載卷權限）
+#
+## --------------------------------
+## 環境變數
+## --------------------------------
+## - 可用多個 Environment= 重複宣告
+## - EnvironmentFile= 可重複宣告（行格式：KEY=VALUE）
+Environment=TZ=Asia/Taipei
+##Environment=FOO=bar
+##EnvironmentFile=/path/to/myapp.env
+##EnvironmentHost=false  # 是否把 host 的 http_proxy/https_proxy/no_proxy 等帶入容器
+#
+## --------------------------------
+## 網路與對外埠
+## --------------------------------
+## Network= 可設定：
+## - host / none
+## - 或引用 *.network 單元（例如：tgdb.network），也可填既有 Podman network 名稱
+##Network=tgdb.network
+#
+## PublishPort= 對應 podman run --publish（可重複多行）
+## 常見格式：
+## - PublishPort=127.0.0.1:8080:80        # 綁定 host IP（建議只開 localhost，避免直曝）
+## - PublishPort=8080:80                  # 綁定所有介面（較高風險）
+## - PublishPort=8080:80/tcp              # 指定協定 tcp/udp
+##PublishPort=127.0.0.1:8080:80
+#
+## NetworkAlias= 在同一 network 內的 DNS 別名（可重複多行）
+##NetworkAlias=myapp
+#
+## --------------------------------
+## 儲存/掛載
+## --------------------------------
+## Volume= 對應 podman run --volume（可重複多行）
+## 格式：<來源>:<目的地>[:選項]
+## - :ro / :rw
+## - SELinux 主機常見：:Z（私有標籤）或 :z（共享標籤）
+##Volume=/path/on/host:/data:Z
+#
+## 也可引用 *.volume 單元（例如：mydata.volume:/data）
+##Volume=mydata.volume:/data
+#
+## Mount= 對應 podman run --mount（更彈性；可重複多行）
+##Mount=type=bind,source=/path/on/host,target=/data,ro=true
+#
+## Tmpfs= 容器內 tmpfs（對應 podman run --tmpfs；可重複多行）
+##Tmpfs=/tmp:rw,size=64m
+#
+## ShmSize= /dev/shm 大小（對應 podman run --shm-size；某些應用需要調大）
+##ShmSize=256m
+#
+## --------------------------------
+## 安全性強化（按需啟用）
+## --------------------------------
+## NoNewPrivileges=true 可阻擋提權（setuid / file capabilities），通常建議開啟。
+NoNewPrivileges=true
+#
+## ReadOnly=true 讓容器根檔案系統唯讀；需要搭配 Volume/Tmpfs 提供可寫入路徑。
+##ReadOnly=true
+##ReadOnlyTmpfs=true  # 當 ReadOnly=true 時，對 /tmp 等路徑掛 rw tmpfs（預設 true）
+#
+## 建議：先 DropCapability=all 再 AddCapability=... 最小化權限。
+##DropCapability=all
+##AddCapability=CAP_NET_BIND_SERVICE  # 允許綁定 1024 以下埠（若你真的需要）
+#
+## SeccompProfile= 可指定 JSON；unconfined 代表不套 seccomp（風險高，慎用）。
+##SeccompProfile=/path/to/seccomp.json
+##SeccompProfile=unconfined
+#
+## AppArmor= 指定 profile；unconfined 代表不套用（視系統支援而定，慎用）。
+##AppArmor=my-profile
+##AppArmor=unconfined
+#
+## SecurityLabel* 與 SELinux 相關（請先理解風險再使用）
+##SecurityLabelDisable=true
+#
+## Mask/Unmask：遮蔽/解除遮蔽容器內路徑（可重複多行；Unmask=ALL 風險高）
+##Mask=/proc/kcore
+##Unmask=ALL
+#
+## --------------------------------
+## 性能/資源限制（Podman 層）
+## --------------------------------
+## Memory=：容器記憶體上限（對應 podman run --memory）
+##Memory=512m
+#
+## PidsLimit=：容器允許的最大程序數（對應 podman run --pids-limit）
+##PidsLimit=1024
+#
+## Ulimit=：設定容器內 ulimit（可重複多行；對應 podman run --ulimit）
+##Ulimit=nofile=1024:8192
+#
+## CgroupsMode=：cgroups 模式（預設 split，與 podman CLI 預設不同）
+## - 若容器加入 Pod（Pod=...）且你希望「Pod 單元」的 systemd 資源限制能一致生效，官方建議考慮調整此值。
+##CgroupsMode=enabled
+#
+## 若你需要 CPU/IO 等資源限制：
+## - 優先用下方 [Service] 的 systemd 資源控制（可讀性好、統一）
+## - 或用 PodmanArgs= 補足（見下方）
+#
+## --------------------------------
+## 健康檢查（Healthcheck）
+## --------------------------------
+## HealthCmd=：健康檢查命令（對應 podman run --health-cmd）
+## - 設為 none 代表停用健康檢查。
+##HealthCmd=/usr/bin/curl -fsS http://127.0.0.1:80/ || exit 1
+#
+## HealthInterval=：檢查間隔（對應 podman run --health-interval）
+## - 設為 disable 代表不建立健康檢查 timer。
+##HealthInterval=30s
+#
+## HealthTimeout=：單次檢查 timeout（對應 podman run --health-timeout）
+##HealthTimeout=5s
+#
+## HealthRetries=：重試次數（對應 podman run --health-retries）
+##HealthRetries=3
+#
+## HealthStartPeriod=：啟動後寬限期（對應 podman run --health-start-period）
+##HealthStartPeriod=20s
+#
+## HealthOnFailure=：健康檢查失敗後的動作（對應 podman run --health-on-failure）
+## - 常見：none / kill / restart / stop
+## - 若使用 kill/restart，通常搭配 [Service] Restart= 讓 systemd 接手重啟策略更一致。
+##HealthOnFailure=kill
+#
+## Notify=healthy：讓 systemd 等到健康檢查通過才視為「已啟動完成」。
+## - 需要同時設定 HealthCmd=。
+##Notify=healthy
+#
+## --------------------------------
+## 映像拉取/自動更新
+## --------------------------------
+## Pull=：拉取策略（對應 podman run --pull）：always / missing / never
+##Pull=missing
+#
+## AutoUpdate=：自動更新策略（配合 podman-auto-update.timer 使用）
+## - registry：比對 registry digest，有更新就重建容器
+## - local：以本機映像為準（例如由你自行 podman pull 更新）
+##AutoUpdate=registry
+#
+## --------------------------------
+## 記錄（Logging）
+## --------------------------------
+## LogDriver= / LogOpt=（可重複多行；對應 podman run --log-driver/--log-opt）
+##LogDriver=journald
+##LogOpt=tag={{.Name}}
+#
+## --------------------------------
+## 進階：用 PodmanArgs/GlobalArgs 補齊未提供 key 的 podman 參數
+## --------------------------------
+## PodmanArgs=：會加在 `podman run` 後面（官方提醒：不建議濫用，可能與既有 key 互相影響）
+## - 例：CPU/IO 限制、額外安全參數…等
+##PodmanArgs=--cpus=1.5 --cpu-shares=512 --blkio-weight=500
+#
+## GlobalArgs=：會加在 `podman` 與 `run` 之間（官方更不建議使用；僅在你很清楚效果時再用）
+##GlobalArgs=--events-backend=journald
+#
+#[Service]
+## 這裡是 systemd.service(5) 的設定（不是 Podman 參數），但對穩定性/資源限制很重要。
+## 官方建議：用 systemd 的 Restart=，不要在 container unit 內使用 podman --restart。
+Restart=on-failure
+RestartSec=10s
+StartLimitBurst=3
+#
+## 第一次拉取映像可能較久，可視需要放寬啟動 timeout。
+##TimeoutStartSec=900
+#
+## 停止容器的總等待時間（與 StopTimeout= 互補；通常要 >= StopTimeout=）
+##TimeoutStopSec=60s
+#
+## ------------------------------
+## 性能/資源限制（systemd 層）
+## ------------------------------
+## 注意：這些是 systemd 的 cgroup 限制；實際是否能完整約束容器內程序，會受 Podman cgroups 模式影響。
+##CPUQuota=150%     # 100% 約等於 1 core
+##MemoryMax=1G
+##IOWeight=100      # 10-1000
+##TasksMax=4096
+##LimitNOFILE=1048576
+#
+## ReloadCmd/ReloadSignal：支援 systemctl --user reload（兩者互斥）
+##ReloadSignal=SIGHUP
+##ReloadCmd=/usr/sbin/nginx -s reload
+#
+#[Install]
+#WantedBy=default.target
+#
+## 防止等待網路就緒所造成的卡頓
+[Quadlet]
+DefaultDependencies=false

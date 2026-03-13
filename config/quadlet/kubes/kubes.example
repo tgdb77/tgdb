@@ -1,0 +1,53 @@
+# TGDB - Podman Quadlet 自訂 Kube（.kube）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .kube 設定範本，讓 systemd/Quadlet 以 `podman kube play` 管理一份 Kubernetes YAML。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.kube
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Kube units [Kube]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.kube
+# ------------------------------
+#
+#[Unit]
+#Description=Podman kube play: myapp
+#Wants=network-online.target
+#After=network-online.target
+#
+#[Kube]
+## Yaml=：Kubernetes YAML 檔案路徑（必填）
+#Yaml=/path/to/app.yaml
+#
+## Network=：套用的 Podman 網路（可選）
+##Network=tgdb.network
+#
+## PublishPort=：對外映射埠（可重複多行；格式同 PublishPort）
+##PublishPort=127.0.0.1:8080:80
+#
+## AutoUpdate=：自動更新策略（registry/local）
+##AutoUpdate=registry
+#
+## LogDriver=：日誌驅動（例如 journald）
+##LogDriver=journald
+#
+## ExitCodePropagation：退出碼傳遞策略（按需使用）
+##ExitCodePropagation=all
+#
+## UserNS/RemapUid/RemapGid：使用者命名空間設定（進階，請先理解 rootless 限制）
+##UserNS=keep-id
+#
+## ConfigMap：Kube ConfigMap（可重複多行）
+##ConfigMap=/path/to/configmap.yaml
+#
+## PodmanArgs/GlobalArgs：補齊未提供 key 的 podman kube play 參數（按需使用）
+##PodmanArgs=--replace
+#
+#[Install]
+#WantedBy=default.target
+

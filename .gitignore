@@ -1,0 +1,105 @@
+# ========================================
+# TGDB Version Control - Ignore File
+# ========================================
+
+# 【白名單策略】先忽略所有，然後只包含需要的文件
+# 忽略所有文件
+*
+
+# 但不忽略目錄本身（這樣才能進入目錄去檢查文件）
+!*/
+
+# ====== 包含這些文件和目錄 ======
+!/config/
+!/src/
+!/tgdb.sh
+!/install.sh
+!/LICENSE
+!/README.md
+!/AGENTS.md
+!/CONTRIBUTING.md
+!/SECURITY.md
+!/scripts/
+!/scripts/**/*
+!/docs/
+!/docs/**/*
+
+# 遞歸包含 config 和 src 的所有內容
+!/config/**/*
+!/src/**/*
+
+# ========================================
+# 額外防護：其他常見需要忽略的文件類型
+# ========================================
+
+# 臨時文件
+*.tmp
+*.temp
+*.log
+*.pid
+
+# Docker 相關
+docker-data/
+*.docker
+
+# 備份文件
+*.bak
+*.backup
+*.old
+*.orig
+
+# 系統生成文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE 編輯器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-*
+
+# 運行時和鎖定文件
+*.lock
+node_modules/
+.pyc
+.pyo
+__pycache__/
+
+# 敏感信息（建議不要上傳）
+.env
+.env.local
+*.key
+*.pem
+*.secret
+
+# 編譯文件
+*.o
+*.so
+*.a
+*.class
+target/
+
+# 日誌和調試
+debug.log
+*.stackdump
+
+# 其他隱藏文件
+.*
+
+!*.env.example
+
+!/.git
+!/.gitignore
+!/.gitattributes
+!/.gitmodules
+/config/teldrive/
+/config/streamrip-web-gui/

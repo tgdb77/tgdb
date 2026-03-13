@@ -1,0 +1,161 @@
+# TGDB AppSpec 規格範例（請複製到 config/<service>/app.spec）
+#
+# 目的：
+# - 讓你「不寫 Bash」也能新增/部署一個 App
+# - 大多數服務只需要：app.spec + Quadlet 模板 +（可選）設定檔模板
+#
+# 使用方式（新增自己的應用）：
+# 1) 建立資料夾：config/<service>/
+# 2) 複製本檔為：config/<service>/app.spec
+# 3) 建立 Quadlet 範本：config/<service>/quadlet/default.container（或 multi 的 .pod/.container 多檔）
+# 4) 若需要 .env / config.json：放到 config/<service>/configs/ 並在本 spec 宣告 config=
+# 5) 若需要「部署後初始化」：使用本 spec 的 post_deploy=（不必寫 hook）
+# 6) 若現有 spec 能力不足：建議新增 AppSpec key + executor 行為（避免維護多套部署流程）
+#
+# 注意：
+# - 此檔案是「範例」，放在 src/apps 不會被執行/讀取。
+# - AppSpec 格式為 key=value；支援空行、# 註解、重複 key（例如多條 input= / config= / unit=）。
+# - 值不做 shell 展開（避免意外執行），一律當字串處理。
+#
+# ------------------------------------------------------------
+# A) 最常見：單容器（single）範例
+# ------------------------------------------------------------
+spec_version=1
+display_name=My App
+image=docker.io/example/myapp:latest
+doc_url=https://example.com/docs
+menu_order=100
+
+# base_port：選單互動模式的「預設對外埠」；可為 0（代表沒有預設）
+base_port=8080
+
+# instance_subdirs：部署時會在 instance_dir（~/.tgdb/app/<name>）下建立的子目錄
+instance_subdirs=data config
+# record_subdirs：從紀錄部署時需要一併建立的子目錄；不填則沿用 instance_subdirs
+record_subdirs=data config
+
+# require_podman_socket：若 Quadlet 會掛載 podman.sock（例如 docker socket），可在部署時自動 enable podman.socket
+require_podman_socket=0
+
+# volume_dir（選填）：若服務需要額外掛載外部目錄（例如下載目錄、媒體目錄）
+# - 需要在 Quadlet 範本使用 ${volume_dir}（Volume=${volume_dir}:...）才會生效
+# - cli_quick_args 可加入 volume_dir，讓 CLI 模式能直接傳入
+#volume_dir_prompt=外部資料目錄（掛載到容器 /data）
+# volume_subdirs（選填）：部署前自動在 volume_dir 底下建立子目錄（以空白分隔）
+# - 適合用於 Volume=${volume_dir}/subdir:... 這類掛載
+#volume_subdirs=media consume export
+#cli_quick_args=volume_dir
+#
+# volume_dir_propagation（選填）：只針對「Volume=${volume_dir}:...」這條掛載詢問/套用 :rshared 等標籤
+# 可選：ask / rshared / shared / rslave / slave / rprivate / private / none
+#volume_dir_propagation=ask
+#volume_dir_propagation_default=none
+#volume_dir_propagation_ask_value=rshared
+#
+# selinux_volume_dir（選填）：SELinux :Z 預設會略過 volume_dir（避免對外部共享目錄 relabel）
+# - skip（預設）：volume_dir 不加 :Z
+# - apply：volume_dir 也加 :Z
+#selinux_volume_dir=skip
+
+# touch_files（選填）：避免「檔案」掛載點不存在時，被 Podman 建成同名資料夾
+# 例：服務要掛載 ${instance_dir}/storage.db 到容器內，請先 touch
+#touch_files=storage.db
+
+# ---- 互動輸入 input=（可重複）----
+# 支援欄位（常用）：
+# - prompt=...：提示文字
+# - required=1：必填（空值會取消）
+# - allow_cancel=1：允許輸入 0 取消
+# - type=password：輸入時隱藏
+# - no_space=1：禁止空白（適合 EnvironmentFile 的值）
+# - default=...：預設值
+# - env=ENV_KEY：可用環境變數注入（CLI 自動化）
+# - ask=1：互動部署時即使有 default 仍會問一次（但若已由 env/ctx 提供就略過）
+#
+# 若想支援 CLI 快速部署：在 cli_quick_args 宣告要收哪些 input key（順序即參數順序）。
+#cli_quick_args=user_name pass_word
+#input=user_name|prompt=請輸入帳號（不得為空，輸入 0 取消）: |required=1|no_space=1|allow_cancel=1
+#input=pass_word|prompt=請輸入密碼（不得為空，輸入 0 取消）: |required=1|type=password|no_space=1|allow_cancel=1
+
+# ---- 自動產生變數 var=（可重複）----
+# random_hex：產生隨機 hex（len 為字元數）
+#var=APP_SECRET|source=random_hex|len=64
+
+# ---- 設定檔（單一或多設定檔）----
+# v1 單一寫法（保留相容用法）
+#config_template=configs/.env.example
+#config_dest=.env
+#config_mode=600
+#config_label=.env（環境變數）
+#
+# 建議：v2 多設定檔（可重複 config=）
+# - dest：相對於 instance_dir 的輸出路徑
+# - template：相對於 config/<service>/ 的範本路徑
+# - mode：chmod（可省略）
+# - label：顯示用名稱（可省略）
+config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
+#config=config.json|template=configs/default.conf|mode=600|label=config.json（應用設定）
+
+# ---- Quadlet 類型與模板 ----
+quadlet_type=single
+quadlet_template=quadlet/default.container
+
+# ---- 部署成功提示（宣告式，可重複）----
+# 會在「共用預設提示」之後追加輸出；支援模板變數（與 Quadlet/.env 同一套渲染器）
+# 常用可用變數：
+# - 共用：${container_name} ${host_port} ${instance_dir} ${volume_dir} ${user_name} ${pass_word}
+# - input/var：所有同名鍵（例如 ${APP_SECRET}）
+# - 存取資訊：${http_url} ${https_url} ${access_host} ${access_port} ${publish_scope}
+#success_extra=🔐 帳號：${user_name}
+#success_extra=🔐 密碼：${pass_word}
+
+# ---- 部署後任務（宣告式，可重複）----
+# 用途：部署完成（單元 enable/start 後）執行一次或多次腳本，取代以往需要寫 hook 的情境。
+# 格式：
+#   post_deploy=<rel_path>|runner=<bash|source>|allow_fail=<0|1>
+#
+# 說明：
+# - rel_path：相對於 config/<service>/ 的腳本路徑（為安全起見，不允許絕對路徑或 ..）
+# - runner：
+#   - bash（預設）：以 bash 執行腳本（腳本可用 $1..$4 取得 service/name/instance_dir/host_port）
+#   - source：在子 shell 中 source 腳本（可直接使用 tgdb_warn/tgdb_fail 等共用函式）
+# - allow_fail=1：腳本失敗時只警告不中止部署（適合「可選初始化」）
+#
+# 腳本會自動注入環境變數：
+# - 共用：container_name/host_port/instance_dir/volume_dir/user_name/pass_word...
+# - input=/var= 所有同名鍵（例如 bucket_name、APP_SECRET）
+# - 若 input/var 宣告 env=，也會同時匯出該 ENV_KEY（例如 POSTGRES_PASSWORD）
+#
+#post_deploy=scripts/post_deploy_init.sh|runner=bash|allow_fail=1
+
+# ---- 可選：從一般 Apps 清單隱藏（進階工具用）----
+#hidden=1
+
+# ---- 可選：更新/移除的進階行為（通常不需要）----
+# update_pull_images：更新版本時額外拉取的映像（multi 常用：postgres/redis/meili 等）
+#update_pull_images=docker.io/postgres:16-alpine
+#update_pull_images=docker.io/redis:7-alpine
+#
+# full_remove_delete_method：完全移除刪資料夾方式（rm/unshare；預設 unshare）
+#full_remove_delete_method=unshare
+# full_remove_purge_record：完全移除時是否一併刪除該實例的紀錄檔（1/0）
+#full_remove_purge_record=0
+
+# ------------------------------------------------------------
+# B) 多單元（multi）範例：Pod + 多 container（進階）
+# ------------------------------------------------------------
+# 若你的應用需要 Pod（例如 main + postgres + redis），可改用 quadlet_type=multi 並宣告 unit=
+#
+#quadlet_type=multi
+#
+# unit=...（可重複）
+# - template：相對於 config/<service>/
+# - suffix：輸出檔名為 ${container_name}${suffix}
+#   - .pod 代表 pod unit
+#   - .container 代表 container unit
+#   - 建議 aux container 用「-postgres.container / -redis.container」這種 suffix，系統可自動辨識為 aux instance name
+#
+#unit=pod|template=quadlet/default.pod|suffix=.pod
+#unit=main|template=quadlet/default.container|suffix=.container
+#unit=postgres|template=quadlet/default2.container|suffix=-postgres.container
+#unit=redis|template=quadlet/default3.container|suffix=-redis.container

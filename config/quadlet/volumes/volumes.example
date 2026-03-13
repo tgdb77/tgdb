@@ -1,0 +1,56 @@
+# TGDB - Podman Quadlet 自訂卷（.volume）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .volume 設定範本，協助你建立自訂 Podman volume。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.volume
+# - Quadlet 會把 <name>.volume 轉成 systemd user service，通常名為：podman-volume-<name>.service
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Volume units [Volume]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.volume
+# ------------------------------
+#
+#[Unit]
+#Description=Podman volume: mydata
+#
+#[Volume]
+## VolumeName=：Podman volume 名稱（建議與檔名一致）
+#VolumeName=mydata
+#
+## Driver=：volume driver（多數情境使用 local）
+#Driver=local
+#
+## Type/Device/Options：常用來做「host 路徑 bind 成 volume」的做法（local driver）
+## - Type=none
+## - Device=/path/on/host
+## - Options=o=bind
+## - Options=rw
+##
+##Type=none
+##Device=/path/on/host
+##Options=o=bind
+##Options=rw
+#
+## User/Group：建立 volume 時套用的擁有者（依 driver/情境而定）
+##User=1000
+##Group=1000
+#
+## Copy=：當 volume 首次掛載到容器指定路徑時，是否從映像把該路徑內容複製到 volume（常見預設為 true）
+##Copy=true
+#
+## Label/LabelFile：替 volume 加上 label（可重複多行）
+##Label=app=myapp
+##LabelFile=/path/to/labels.txt
+#
+## PodmanArgs=：補齊未提供 key 的 podman volume create 參數（按需使用）
+##PodmanArgs=--opt o=uid=1000 --opt o=gid=1000
+#
+#[Install]
+#WantedBy=default.target
+

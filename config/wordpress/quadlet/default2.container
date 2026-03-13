@@ -1,0 +1,32 @@
+[Unit]
+Description=WordPress（PHP-FPM）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mysql.service container-${container_name}-mysql.service
+Wants=${container_name}-mysql.service container-${container_name}-mysql.service
+
+[Container]
+Image=docker.io/library/wordpress:php8.3-fpm
+#AutoUpdate=registry
+ContainerName=${container_name}-fpm
+Label=app=wordpress
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/html:/var/www/html
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

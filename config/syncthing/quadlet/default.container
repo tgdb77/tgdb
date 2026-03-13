@@ -1,0 +1,33 @@
+[Unit]
+Description=syncthing
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/syncthing/syncthing:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=syncthing
+#Network=tgdb.network
+
+PublishPort=127.0.0.1:${host_port}:8384
+
+# 可選：如需外網同步/直連，可自行在自訂 Quadlet 中開放下列埠
+# 多實例部署時需自行調整埠號避免衝突
+#PublishPort=127.0.0.1:22000:22000/tcp
+#PublishPort=127.0.0.1:22000:22000/udp
+#PublishPort=127.0.0.1:21027:21027/udp
+
+Volume=${volume_dir}:/var/syncthing
+EnvironmentFile=${instance_dir}/.env
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

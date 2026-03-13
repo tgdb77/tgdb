@@ -1,0 +1,28 @@
+[Unit]
+Description=searxng valkey
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/valkey/valkey:8-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}-valkey
+Label=app=searxng
+Label=tgdb_db=valkey
+
+Pod=${container_name}.pod
+
+Exec=valkey-server --save 30 1 --loglevel warning
+
+Volume=${instance_dir}/valkey_data:/data
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

@@ -1,0 +1,30 @@
+[Unit]
+Description=new-api Redis
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/library/redis:alpine
+#AutoUpdate=registry
+ContainerName=${container_name}-redis
+Label=app=new-api
+Label=tgdb_db=redis
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/rdata:/data
+
+EnvironmentFile=${instance_dir}/.env
+
+Exec=redis-server --appendonly yes --requirepass ${db_pass}
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

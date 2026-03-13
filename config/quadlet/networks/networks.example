@@ -1,0 +1,63 @@
+# TGDB - Podman Quadlet 自訂網路（.network）範本
+# =====================================================
+#
+# 目的：
+# - 提供一份可複製/可改名的 .network 設定範本，協助你建立自訂 Podman 網路。
+#
+# 重要提醒：
+# - 本檔案副檔名是 .example，不會被 Quadlet 讀取；請複製其中的範本區塊，另存為：<name>.network
+# - Quadlet 會把 <name>.network 轉成 systemd user service，通常名為：podman-network-<name>.service
+# - 若 NetworkName= 指向已存在的 Podman 網路，啟動時通常會「略過建立」；網路參數要變更時多半需要移除既有網路再重建。
+#
+# 參考文件：
+# - podman-systemd.unit(5) → Network units [Network]
+#
+#
+# ------------------------------
+# 範本區塊：請複製另存為 <name>.network
+# ------------------------------
+#
+#[Unit]
+#Description=Podman network: mynet
+#Wants=network-online.target
+#After=network-online.target
+#
+#[Network]
+## NetworkName=：Podman 網路名稱（建議與檔名一致，避免困惑）
+#NetworkName=mynet
+#
+## Driver=：網路驅動（常用：bridge；進階：macvlan/ipvlan）
+#Driver=bridge
+#
+## Subnet/Gateway/IPRange：自訂 IPv4 網段與分配範圍
+##Subnet=10.89.0.0/24
+##Gateway=10.89.0.1
+##IPRange=10.89.0.128/25
+#
+## IPv6=：是否啟用 IPv6（環境支援時才建議）
+##IPv6=true
+#
+## Internal=：建立「內部網路」，容器僅能彼此互通，無法對外連線（常用於資料庫等內網服務）
+##Internal=true
+#
+## DisableDNS=：停用 Podman 內建 DNS（若你要完全自控 DNS 才建議）
+##DisableDNS=true
+#
+## DNS/DNSSearch/DNSOption：自訂 DNS 解析設定（可重複多行）
+##DNS=1.1.1.1
+##DNS=8.8.8.8
+##DNSSearch=example.internal
+##DNSOption=ndots:1
+#
+## IPAMDriver=：IP 位址管理（通常用預設 host-local 即可）
+##IPAMDriver=host-local
+#
+## Options=：額外網路選項（依 driver 而定；可重複多行）
+##Options=isolate=true
+#
+## PodmanArgs=：補齊未提供 key 的 podman network create 參數（按需使用）
+##PodmanArgs=--ipv6
+#
+#[Install]
+#WantedBy=default.target
+

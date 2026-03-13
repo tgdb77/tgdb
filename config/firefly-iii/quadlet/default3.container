@@ -1,0 +1,29 @@
+[Unit]
+Description=Firefly III（Cron）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}.service container-${container_name}.service
+Wants=${container_name}.service container-${container_name}.service
+
+[Container]
+Image=docker.io/library/alpine:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-cron
+Label=app=firefly-iii
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+Exec=sh -c 'set -eu; echo "0 3 * * * wget -qO- http://127.0.0.1:8080/api/v1/cron/$STATIC_CRON_TOKEN" | crontab -; exec crond -f -L /dev/stdout'
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

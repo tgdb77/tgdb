@@ -1,0 +1,28 @@
+# Rclone 掛載預設參數（不含 remote 與 mount_point）
+#
+# 說明：
+# - 本檔案會在「掛載」時被讀取，並逐行拆成參數加入 rclone mount 後方。
+# - 你也可以改用自訂檔：$TGDB_DIR/rclone/mount.args（優先於本檔案）。
+# - 每行可以放一個或多個參數（以空白分隔）。
+# - 以 # 開頭的行會被忽略。
+#
+# 注意：
+# - 這不是 shell 腳本，不支援引號與變數展開；建議參數值不要包含空白。
+
+--vfs-cache-mode full
+--buffer-size 128M
+--vfs-read-chunk-size 16M
+--vfs-read-chunk-size-limit 521M
+--vfs-read-chunk-streams 4
+--vfs-cache-max-size 15G
+--vfs-cache-max-age 12h
+--dir-cache-time 12h
+--retries 5
+
+# 若需要讓其他系統使用者可讀掛載點，取消註解（並會嘗試啟用 /etc/fuse.conf 的 user_allow_other）
+--allow-other
+
+# 需要更多參數就直接在後面加，例如：
+# --cache-dir /home
+# --uid 1000
+# --gid 1000

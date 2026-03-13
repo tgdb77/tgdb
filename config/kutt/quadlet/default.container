@@ -1,0 +1,34 @@
+[Unit]
+Description=kutt
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=docker.io/kutt/kutt:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=kutt
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+# 自訂主題/樣式（選用）：將檔案放到 ${instance_dir}/custom
+Volume=${instance_dir}/custom:/kutt/custom
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

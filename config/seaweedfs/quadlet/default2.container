@@ -1,0 +1,38 @@
+[Unit]
+Description=seaweedfs volume
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-master.service container-${container_name}-master.service
+Wants=${container_name}-master.service container-${container_name}-master.service
+
+[Container]
+Image=docker.io/chrislusf/seaweedfs:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-volume
+Label=app=seaweedfs
+
+Pod=${container_name}.pod
+
+Volume=${volume_dir}:/data
+Volume=${instance_dir}/security.toml:/etc/seaweedfs/security.toml:ro
+UserNS=keep-id
+User=${user_id}:${user_id}
+
+EnvironmentFile=${instance_dir}/.env
+
+# 參考：上游建議預設埠
+# - Volume HTTP: 8080
+# - Volume gRPC: 18080（預設為 HTTP 埠 + 10000）
+Exec=volume -port=8080 -max=0 -mserver=127.0.0.1:9333
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

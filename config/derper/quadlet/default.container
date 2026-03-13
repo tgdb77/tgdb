@@ -1,0 +1,33 @@
+[Unit]
+Description=derper
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/fredliang/derper:a71fc43adf9fdea7e5ea6dc4fa1b570ab4010929
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=derper
+
+# DERP HTTPS
+PublishPort=${derp_port}:443/tcp
+
+# STUN（固定 3478/udp）
+PublishPort=3478:3478/udp
+
+# 憑證由 TGDB/Certbot 管理：$TGDB_DIR/nginx/certs/<fqdn>.crt/.key
+# derper manual 模式會讀 /app/certs/${DERP_DOMAIN}.crt 與 /app/certs/${DERP_DOMAIN}.key
+Volume=${TGDB_DIR}/nginx/certs:/app/certs:ro
+
+EnvironmentFile=${instance_dir}/derper.env
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

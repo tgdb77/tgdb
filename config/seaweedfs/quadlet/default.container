@@ -1,0 +1,35 @@
+[Unit]
+Description=seaweedfs master
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/chrislusf/seaweedfs:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-master
+Label=app=seaweedfs
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/master:/data
+Volume=${instance_dir}/security.toml:/etc/seaweedfs/security.toml:ro
+UserNS=keep-id
+User=${user_id}:${user_id}
+
+EnvironmentFile=${instance_dir}/.env
+
+# 參考：上游建議預設埠
+# - Master HTTP: 9333
+# - Master gRPC: 19333（預設為 HTTP 埠 + 10000）
+Exec=master -port=9333
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

@@ -1,0 +1,24 @@
+# SeaweedFS - security.toml（範例）
+#
+# 產生方式（參考上游文件）：
+#   weed scaffold -config=security
+#
+# 此檔案會被 master / volume / filer 讀取，用於：
+# - JWT 簽章（寫入操作授權）
+# - CORS（filer/s3 gateway 的跨網域存取）
+#
+# 請務必依你的環境修改，並避免直接對外開放過寬的 CORS 或弱密鑰。
+
+[cors.allowed_origins]
+# 建議明確列出允許的來源，例如：
+# values = "https://example.com,http://127.0.0.1:8888"
+values = "http://127.0.0.1:${host_port}"
+
+[jwt.signing]
+# 建議：使用足夠長度的隨機字串，並妥善保管。
+key = "${jwt_key}"
+
+# 若你要讓 filer（以及 s3 gateway 透過 filer）強制要求 JWT（提升安全性），可加上：
+#
+# [jwt.filer_signing]
+# key = "${jwt_key}"

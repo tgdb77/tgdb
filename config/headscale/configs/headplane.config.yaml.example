@@ -1,0 +1,50 @@
+# Headplane 設定範本（供 TGDB 生成到：$TGDB_DIR/headscale/headplane/etc/config.yaml）
+#
+# 參考：
+# - Headplane Configuration：https://headplane.net/configuration/
+# - Headplane Docker Install：https://headplane.net/install/docker/
+# - Integrated Mode（Network Management）：https://headplane.net/integrations/integrated-mode/
+#
+# 重點：
+# - Headplane UI 固定使用 /admin（Docker/容器模式下不可改）
+# - ACL：TGDB 預設採用 Headscale policy.mode=database，ACL 由 UI/Headscale API 寫入資料庫
+# - 若要讓 UI 可寫檔管理「部分設定 / DNS（依你的 Headscale 設定而定）」需要：
+#   1) 掛載 Headscale 的 /etc/headscale（且與 headscale 容器同路徑）
+#   2) 啟用 integration.docker.enabled（並提供 Docker/Podman API socket 給容器使用）
+#   3) 正確填入 headscale.config_path / headscale.dns_records_path
+
+server:
+  # 必填：Headplane 監聽位址（在 Pod/容器內請用 0.0.0.0）
+  host: "0.0.0.0"
+
+  # 同 Pod 建議沿用既有 UI 埠（預設 8081），避免修改 Pod PublishPort。
+  port: 8081
+
+  # 供 cookie/OIDC 等使用的外部 URL（不要包含 /admin）
+  # 本計畫預設不公開到網域，建議只用 SSH 轉發訪問。
+  base_url: "http://127.0.0.1:18081"
+
+  # 必填：部屬流程會自動產生（Headplane 0.6.x 要求長度「剛好 32」）
+  # 手動產生範例：openssl rand -hex 16
+  cookie_secret: "<請自行替換>"
+
+  # 僅本機/SSH 轉發（HTTP）建議為 false；若你自行改成 HTTPS 對外公開，再改為 true
+  cookie_secure: false
+
+headscale:
+  # 同 Pod：headscale 監聽 8080，因此可用 localhost 連線
+  url: "http://127.0.0.1:8080"
+
+  # Headplane 0.6.x 需求：必須存在（可為 true/false 或字串）
+  config_strict: false
+
+  # Integrated Mode（可寫檔管理）時需要（容器內路徑）
+  config_path: "/etc/headscale/config.yaml"
+  # 建議在 headscale config.yaml 啟用 dns.extra_records_path 後再填入
+  dns_records_path: "/etc/headscale/dns_records.json"
+
+integration:
+  docker:
+    # 關閉：僅提供 UI 查詢/管理（透過 API Key）；不會自動重載/控制容器
+    # 開啟：啟用 Integrated Mode（Settings/DNS/ACL 等），需要 Docker/Podman API socket
+    enabled: true

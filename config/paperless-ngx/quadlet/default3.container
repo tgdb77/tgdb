@@ -1,0 +1,26 @@
+[Unit]
+Description=paperless-ngx redis
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/redis:8
+#AutoUpdate=registry
+ContainerName=${container_name}-redis
+Label=app=paperless-ngx
+Label=tgdb_db=redis
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/rdata:/data
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

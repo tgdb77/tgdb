@@ -1,0 +1,111 @@
+---
+# Headscale v0.27.1（搭配 TGDB 的最小可用範本）
+#
+# 使用情境：
+# - TLS 由 TGDB/Nginx/Certbot 負責（Headscale 內建 TLS 關閉）
+# - 同 Pod Postgres（legacy 支援；由你測試後沿用）
+# - MagicDNS 啟用，base_domain 預設使用 dns.<root_domain>
+#
+# TGDB 會要求使用者輸入 root_domain（例：a.com）並衍生：
+# - server_url: https://hs.<root_domain>
+# - dns.base_domain: dns.<root_domain>
+#
+# 檔案建議放在：${TGDB_DIR}/headscale/etc/config.yaml
+
+server_url: "https://hs.<root_domain>"
+
+listen_addr: "0.0.0.0:8080"
+metrics_listen_addr: "127.0.0.1:9090"
+
+# 第一階段不走遠端 gRPC 控制，先維持回環且不對外 publish
+grpc_listen_addr: "127.0.0.1:50443"
+grpc_allow_insecure: false
+
+noise:
+  private_key_path: "/var/lib/headscale/keys/noise_private.key"
+
+prefixes:
+  v4: "100.64.0.0/10"
+  v6: "fd7a:115c:a1e0::/48"
+  allocation: "sequential"
+
+derp:
+  server:
+    enabled: false
+    region_id: 999
+    region_code: "headscale"
+    region_name: "Headscale Embedded DERP"
+    verify_clients: true
+    stun_listen_addr: "0.0.0.0:3478"
+    private_key_path: "/var/lib/headscale/keys/derp_server_private.key"
+    automatically_add_embedded_derp_region: true
+    ipv4: "198.51.100.1"
+    ipv6: "2001:db8::1"
+  urls:
+    - "https://controlplane.tailscale.com/derpmap/default"
+  paths: []
+  auto_update_enabled: true
+  update_frequency: "3h"
+
+disable_check_updates: false
+ephemeral_node_inactivity_timeout: "30m"
+
+database:
+  type: "postgres"
+  debug: false
+  gorm:
+    prepare_stmt: true
+    parameterized_queries: true
+    skip_err_record_not_found: true
+    slow_threshold: 1000
+  postgres:
+    host: "127.0.0.1"
+    port: 5432
+    name: "headscale"
+    user: "headscale"
+    pass: "<db_password>"
+    max_open_conns: 10
+    max_idle_conns: 10
+    conn_max_idle_time_secs: 3600
+    ssl: false
+
+# 本計畫採 Nginx TLS offload：Headscale 內建 TLS 全部留空
+acme_url: "https://acme-v02.api.letsencrypt.org/directory"
+acme_email: ""
+tls_letsencrypt_hostname: ""
+tls_letsencrypt_cache_dir: "/var/lib/headscale/cache"
+tls_letsencrypt_challenge_type: "HTTP-01"
+tls_letsencrypt_listen: ":http"
+tls_cert_path: ""
+tls_key_path: ""
+
+log:
+  level: "info"
+  format: "text"
+
+# ACL（TGDB 預設使用 database 模式，讓 Headplane 可直接透過 API 編輯）
+policy:
+  mode: "database"
+  # file 模式才需要 path（此專案預設不使用，避免 UI 顯示唯讀）
+  path: ""
+
+dns:
+  magic_dns: true
+  base_domain: "dns.<root_domain>"
+  override_local_dns: true
+  nameservers:
+    global:
+      - "1.1.1.1"
+      - "8.8.8.8"
+    split: {}
+  search_domains: []
+  extra_records: []
+  # extra_records_path: "/etc/headscale/extra-records.json"
+
+unix_socket: "/var/run/headscale/headscale.sock"
+unix_socket_permission: "0770"
+
+logtail:
+  enabled: false
+
+randomize_client_port: false

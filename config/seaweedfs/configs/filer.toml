@@ -1,0 +1,39 @@
+# SeaweedFS - filer.toml（範例）
+#
+# 產生方式（參考上游文件）：
+#   weed scaffold -config=filer
+#
+# 說明：
+# - 這份設定檔用於 `weed filer` 的 metadata store（檔案/資料夾的中繼資料）。
+# - 此範例預設使用 `postgres`（適合 S3 情境，並可搭配資料庫做持久化/擴充）。
+# - 依上游行為：在啟動 filer 前需先確保資料表 `filemeta` 已存在（本專案會在部署後自動建立）。
+# - 若你要單機/單 filer 且不想依賴資料庫，可改回 `leveldb2`。
+#
+# 建議路徑（容器內）：
+# - 設定檔：/etc/seaweedfs/filer.toml（唯讀掛載）
+# - 資料：/data（可寫入掛載）
+
+[filer.options]
+# 以 HTTP DELETE 刪除資料夾時，預設會檢查資料夾是否為空。
+# 若你希望像 `rm -rf` 一樣遞迴刪除，才改成 true（風險較高，請謹慎）。
+recursive_delete = false
+
+# 若你需要限制檔名長度，可自行設定。
+# max_file_name_length = 255
+
+[leveldb2]
+# local on disk，推薦用於「單機/單 filer」情境。
+enabled = false
+dir = "/data/filerldb2"
+
+# ---- PostgreSQL（推薦：S3 需求 + 需要持久化/可擴充）----
+[postgres]
+enabled = true
+hostname = "127.0.0.1"
+port = 5432
+database = "seaweedfs"
+username = "${user_name}"
+password = "${pass_word}"
+sslmode = "disable"
+connection_max_idle = 16
+connection_max_open = 64

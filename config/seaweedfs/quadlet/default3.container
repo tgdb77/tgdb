@@ -1,0 +1,41 @@
+[Unit]
+Description=seaweedfs filer
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+After=${container_name}-master.service container-${container_name}-master.service
+Wants=${container_name}-master.service container-${container_name}-master.service
+
+[Container]
+Image=docker.io/chrislusf/seaweedfs:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-filer
+Label=app=seaweedfs
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/filer:/data
+Volume=${instance_dir}/filer.toml:/etc/seaweedfs/filer.toml:ro
+Volume=${instance_dir}/security.toml:/etc/seaweedfs/security.toml:ro
+UserNS=keep-id
+User=${user_id}:${user_id}
+
+EnvironmentFile=${instance_dir}/.env
+
+# 參考：上游建議預設埠
+# - Filer HTTP: 8888
+# - Filer gRPC: 18888（預設為 HTTP 埠 + 10000）
+Exec=filer -port=8888 -master=127.0.0.1:9333
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

@@ -1,0 +1,66 @@
+# CLIProxyAPI 設定檔（TGDB 自動產生）
+#
+# 上游範本：
+# - https://github.com/router-for-me/CLIProxyAPI/blob/main/config.example.yaml
+#
+# 修改後請重啟（依你的容器名稱調整）：
+# - systemctl --user restart ${container_name}.service
+
+# Server host/interface to bind to.
+# - ""：綁定所有介面（容器內），實際對外範圍由 Quadlet 的 PublishPort 決定。
+# - "127.0.0.1"：僅允許容器內 localhost 存取（一般不建議，除非你用 Network=host）。
+host: ""
+
+# Server port（容器內固定 8317；對外由 PublishPort 映射成 ${host_port}）
+port: 8317
+
+tls:
+  enable: false
+  cert: ""
+  key: ""
+
+remote-management:
+  # 重要：在容器環境下，主機對容器的請求通常被視為「非 localhost」。
+  # 由於 Quadlet 預設只把 8317 綁到 127.0.0.1（本機回環），這裡預設開啟 allow-remote 以便在主機端使用管理介面。
+  # 若你打算把 8317 對外公開，請務必自行評估是否關閉 allow-remote 或加上額外存取控制。
+  allow-remote: true
+
+  # 管理金鑰（明文會在首次啟動後自動轉成 bcrypt 並覆寫回本檔案；請保留 secrets.env 的明文備份）
+  secret-key: "${management_key}"
+
+  disable-control-panel: false
+  panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+
+# 認證資料夾（容器內路徑；已由 Quadlet 掛載到 ${instance_dir}/auths）
+auth-dir: "/root/.cli-proxy-api"
+
+# 訪問 API Keys（用於代理服務的客戶端驗證）
+api-keys:
+  - "${api_key}"
+
+debug: false
+commercial-mode: false
+
+logging-to-file: false
+logs-max-total-size-mb: 0
+error-logs-max-files: 10
+
+usage-statistics-enabled: false
+
+proxy-url: ""
+
+force-model-prefix: false
+passthrough-headers: false
+
+request-retry: 3
+max-retry-interval: 30
+
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: true
+
+routing:
+  strategy: "round-robin"
+
+ws-auth: false
+nonstream-keepalive-interval: 0
