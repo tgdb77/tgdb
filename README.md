@@ -29,7 +29,7 @@
   <a href="#-特色亮點">特色亮點</a> •
   <a href="#-支援的應用">支援應用</a> •
   <a href="#-使用方式">使用方式</a> •
-  <a href="#-免責聲明">免責聲明</a>
+  <a href="#disclaimer">免責聲明</a>
 </p>
 
 ---
@@ -394,6 +394,7 @@ git pull --ff-only origin main
 
 ---
 
+<a id="disclaimer"></a>
 ## ⚠️ 免責聲明
 
 ### 重要警告

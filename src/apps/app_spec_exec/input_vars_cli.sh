@@ -126,6 +126,14 @@ _appspec_default_from_source() {
   [ -n "$source" ] || return 1
 
   case "$source" in
+    random_hex)
+      local len prefix hex
+      len="${opts_ref[len]:-32}"
+      prefix="${opts_ref[prefix]:-}"
+      hex="$(_appspec_random_hex "$len")"
+      printf '%s\n' "${prefix}${hex}"
+      return 0
+      ;;
     next_available_port)
       local start
       start="${opts_ref[start]:-}"

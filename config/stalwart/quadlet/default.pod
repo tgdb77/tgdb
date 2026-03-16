@@ -1,0 +1,42 @@
+[Unit]
+Description=stalwart Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PodName=${container_name}
+#Network=tgdb.network
+
+# Web 介面（初始設定用，建議僅本機回環）
+PublishPort=127.0.0.1:${host_port}:8080/tcp
+
+# Webmail（SnappyMail；建議僅本機回環）
+PublishPort=127.0.0.1:${SNAPPYMAIL_PORT}:8888/tcp
+
+# HTTPS（可選）：若要讓 Stalwart 自行處理 TLS/ACME/MTA-STS/autoconfig，請開放 443
+# 注意：若你已使用 Nginx 佔用 443，建議改用 Nginx 反向代理到本機 8080，或依官方文件調整。
+#PublishPort=443:443/tcp
+
+# SMTP（對外收信需要 25/tcp）
+PublishPort=25:25/tcp
+
+# Submission（建議至少開放其一）
+PublishPort=587:587/tcp
+PublishPort=465:465/tcp
+
+# IMAP（建議使用 993；不建議對外開放 143）
+PublishPort=993:993/tcp
+#PublishPort=143:143/tcp
+
+# ManageSieve（選填）
+PublishPort=4190:4190/tcp
+
+# POP3（選填；不建議對外開放 110）
+#PublishPort=995:995/tcp
+#PublishPort=110:110/tcp
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

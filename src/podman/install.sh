@@ -45,7 +45,7 @@ _apply_sysctl_unprivileged_ports() {
     if ! _tgdb_run_privileged tee "$sysctl_file" >/dev/null <<'EOF'
 # TGDB: podman rootless privileged-ports
 # 為何：允許非 root 使用者綁定特權埠；
-net.ipv4.ip_unprivileged_port_start=53
+net.ipv4.ip_unprivileged_port_start=25
 EOF
     then
         tgdb_err "無法寫入 $sysctl_file，略過特權埠設定。"
@@ -152,6 +152,6 @@ _install_podman() {
     _install_default_tgdb_network_quadlet
     _ensure_containers_configs
     _apply_sysctl_unprivileged_ports
-    tgdb_warn "注意：已將 net.ipv4.ip_unprivileged_port_start 調整為 53，允許非 root 綁定 53–65535 埠。"
+    tgdb_warn "注意：已將 net.ipv4.ip_unprivileged_port_start 調整為 25，允許非 root 綁定 25–65535 埠。"
     tgdb_warn "建議僅在『單一使用者』的 VPS 環境使用；如有多個系統帳號，請評估風險或考慮恢復預設值。"
 }

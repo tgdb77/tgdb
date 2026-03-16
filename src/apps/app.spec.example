@@ -69,6 +69,7 @@ require_podman_socket=0
 # - type=password：輸入時隱藏
 # - no_space=1：禁止空白（適合 EnvironmentFile 的值）
 # - default=...：預設值
+# - default_source=...：由系統產生預設值（例如 random_hex / next_available_port；可搭配 len= / start=）
 # - env=ENV_KEY：可用環境變數注入（CLI 自動化）
 # - ask=1：互動部署時即使有 default 仍會問一次（但若已由 env/ctx 提供就略過）
 #
