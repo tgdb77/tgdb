@@ -2,7 +2,7 @@ spec_version=1
 display_name=Navidrome
 image=docker.io/deluan/navidrome:latest
 doc_url=https://github.com/deluan/navidrome
-menu_order=3
+menu_order=9
 
 base_port=4545
 instance_subdirs=data

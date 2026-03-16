@@ -2,7 +2,7 @@ spec_version=1
 display_name=Redis
 image=docker.io/redis:7-alpine
 doc_url=https://github.com/redis/redis
-menu_order=9
+menu_order=3
 
 base_port=6379
 instance_subdirs=rdata
