@@ -210,7 +210,7 @@ _app_systemd_restart_by_unit_filename() {
       _systemctl_user_try restart -- "$unit_filename" "$base.service" "container-$base.service" || true
       ;;
     pod)
-      _systemctl_user_try restart -- "$unit_filename" "pod-$base.service" || true
+      _systemctl_user_try restart -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
       ;;
     *)
       _systemctl_user_try restart -- "$unit_filename" || true
@@ -230,7 +230,7 @@ _app_systemd_disable_now_by_unit_filename() {
       _systemctl_user_try disable --now -- "$unit_filename" "$base.service" "container-$base.service" || true
       ;;
     pod)
-      _systemctl_user_try disable --now -- "$unit_filename" "pod-$base.service" || true
+      _systemctl_user_try disable --now -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
       ;;
     *)
       _systemctl_user_try disable --now -- "$unit_filename" || true

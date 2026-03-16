@@ -2,7 +2,7 @@ spec_version=1
 display_name=PostgreSQL
 image=docker.io/library/postgres:16-alpine
 doc_url=https://github.com/postgres/postgres
-menu_order=7
+menu_order=2
 
 base_port=5432
 instance_subdirs=pgdata

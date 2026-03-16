@@ -231,10 +231,13 @@ _quadlet_enable_now_by_filename() {
       return 1
       ;;
     pod)
-      if _systemctl_user_try enable --now -- "$unit_filename" "pod-$base.service"; then
+      # 兼容不同 Quadlet/Podman 版本的 pod service 命名：
+      # - 新版常見：<name>-pod.service
+      # - 舊版/其他來源：pod-<name>.service
+      if _systemctl_user_try enable --now -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service"; then
         return 0
       fi
-      if _systemctl_user_try start --no-block -- "pod-$base.service"; then
+      if _systemctl_user_try start --no-block -- "$base-pod.service" "pod-$base.service" "podman-pod-$base.service"; then
         return 0
       fi
       tgdb_err "無法啟用/啟動 Pod 單元：$unit_filename"

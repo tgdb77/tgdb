@@ -2,7 +2,7 @@ spec_version=1
 display_name=AdGuard Home
 image=docker.io/adguard/adguardhome
 doc_url=https://github.com/AdguardTeam/AdGuardHome
-menu_order=2
+menu_order=7
 
 base_port=3333
 instance_subdirs=data conf
