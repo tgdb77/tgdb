@@ -29,7 +29,7 @@
   <a href="#-highlights">Highlights</a> •
   <a href="#-supported-applications">Supported Applications</a> •
   <a href="#-usage">Usage</a> •
-  <a href="#-disclaimer">Disclaimer</a>
+  <a href="#disclaimer">Disclaimer</a>
 </p>
 
 ---
@@ -395,6 +395,7 @@ git pull --ff-only origin main
 
 ---
 
+<a id="disclaimer"></a>
 ## ⚠️ Disclaimer
 
 ### Important Notice
