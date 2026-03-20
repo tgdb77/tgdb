@@ -1,0 +1,27 @@
+[Unit]
+Description=archivebox sonic
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/archivebox/sonic:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-sonic
+Label=app=archivebox
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/sonic:/var/lib/sonic/store
+Volume=${instance_dir}/sonic.cfg:/etc/sonic.cfg:ro
+EnvironmentFile=${instance_dir}/.env
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

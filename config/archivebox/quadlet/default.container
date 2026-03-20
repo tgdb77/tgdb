@@ -1,0 +1,31 @@
+[Unit]
+Description=archivebox
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-sonic.service container-${container_name}-sonic.service
+Wants=${container_name}-sonic.service container-${container_name}-sonic.service
+
+[Container]
+Image=docker.io/archivebox/archivebox:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=archivebox
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/data:/data
+EnvironmentFile=${instance_dir}/.env
+
+Exec=server --quick-init 0.0.0.0:8000
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
