@@ -29,20 +29,23 @@ _dbadmin_pick_tool() {
     echo "$prompt"
     echo "----------------------------------"
 
-    local s1 s2
+    local s1 s2 s3
     s1="pgAdmin（$(_dbadmin_podman_container_status_label "pgadmin")）"
     s2="RedisInsight（$(_dbadmin_podman_container_status_label "redisinsight")）"
+    s3="CloudBeaver（$(_dbadmin_podman_container_status_label "cloudbeaver")）"
 
     echo "1. $s1"
     echo "2. $s2"
+    echo "3. $s3"
     echo "----------------------------------"
     echo "0. 取消"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-2]: " choice
+    read -r -e -p "請輸入選擇 [0-3]: " choice
 
     case "$choice" in
       1) printf -v "$__outvar" '%s' "pgadmin"; return 0 ;;
       2) printf -v "$__outvar" '%s' "redisinsight"; return 0 ;;
+      3) printf -v "$__outvar" '%s' "cloudbeaver"; return 0 ;;
       0) return 2 ;;
       *) echo "無效選項，請重新輸入。"; sleep 1 ;;
     esac
@@ -92,13 +95,15 @@ _dbadmin_podman_container_status_label() {
 }
 
 _dbadmin_print_runtime_status() {
-  local pg_label ri_label
+  local pg_label ri_label cb_label
   pg_label="$(_dbadmin_podman_container_status_label "pgadmin")"
   ri_label="$(_dbadmin_podman_container_status_label "redisinsight")"
+  cb_label="$(_dbadmin_podman_container_status_label "cloudbeaver")"
 
   echo "狀態："
   echo " - pgAdmin：$pg_label"
   echo " - RedisInsight：$ri_label"
+  echo " - CloudBeaver：$cb_label"
   return 0
 }
 
