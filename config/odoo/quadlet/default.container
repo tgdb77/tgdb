@@ -1,0 +1,35 @@
+[Unit]
+Description=odoo
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=docker.io/odoo:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=odoo
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/data:/var/lib/odoo
+Volume=${instance_dir}/addons:/mnt/extra-addons
+Volume=${instance_dir}/odoo.conf:/etc/odoo/odoo.conf:ro
+
+UserNS=keep-id
+User=${user_id}:${group_id}
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

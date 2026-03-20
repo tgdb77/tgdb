@@ -101,5 +101,6 @@ _dbadmin_update_pick_and_run() {
   case "$picked" in
     pgadmin) _dbadmin_update_single_instance "pgadmin" "pgadmin" || true ;;
     redisinsight) _dbadmin_update_single_instance "redisinsight" "redisinsight" || true ;;
+    cloudbeaver) _dbadmin_update_single_instance "cloudbeaver" "cloudbeaver" || true ;;
   esac
 }
