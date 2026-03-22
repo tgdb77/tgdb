@@ -1,0 +1,29 @@
+[Unit]
+Description=LangBot Plugin Runtime
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/rockchin/langbot:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-plugin-runtime
+Label=app=langbot
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/data/plugins:/app/data/plugins
+
+EnvironmentFile=${instance_dir}/.env
+
+Exec=uv run --no-sync -m langbot_plugin.cli.__init__ rt
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

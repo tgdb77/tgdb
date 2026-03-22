@@ -1,0 +1,30 @@
+[Unit]
+Description=LangBot
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-plugin-runtime.service container-${container_name}-plugin-runtime.service
+Wants=${container_name}-plugin-runtime.service container-${container_name}-plugin-runtime.service
+
+[Container]
+Image=docker.io/rockchin/langbot:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=langbot
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/data:/app/data
+
+EnvironmentFile=${instance_dir}/.env
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

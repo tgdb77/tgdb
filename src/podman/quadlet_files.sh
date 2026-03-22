@@ -399,9 +399,118 @@ _podman_collect_app_instance_config_paths_from_appspec() {
     done
 }
 
+_podman_collect_app_instance_edit_files_from_appspec() {
+    local service="$1"
+    local instance="$2"
+
+    _podman_appspec_ensure_loaded || return 0
+    _podman_ensure_tgdb_dir || return 0
+
+    local instance_dir="$TGDB_DIR/$instance"
+    [ -d "$instance_dir" ] || return 0
+
+    local raw=""
+    raw="$(appspec_get_all "$service" "edit_files" 2>/dev/null || true)"
+    [ -n "$raw" ] || return 0
+
+    local line seg
+    while IFS= read -r line; do
+        line="$(_podman_trim_ws "$line")"
+        [ -n "$line" ] || continue
+        for seg in $line; do
+            seg="$(_podman_trim_ws "$seg")"
+            [ -n "$seg" ] || continue
+            _podman_instance_rel_path_is_safe "$seg" || continue
+
+            local path="$instance_dir/$seg"
+            mkdir -p "$(dirname "$path")" 2>/dev/null || true
+            printf '%s\n' "$path"
+        done
+    done <<< "$raw"
+}
+
+_podman_collect_env_files_from_unit_file() {
+    local unit_path="$1"
+    [ -n "${unit_path:-}" ] || return 0
+    [ -r "$unit_path" ] || return 0
+
+    awk '
+        /^[[:space:]]*EnvironmentFile[[:space:]]*=/ {
+          line=$0
+          sub(/^[[:space:]]*EnvironmentFile[[:space:]]*=[[:space:]]*/, "", line)
+          sub(/[[:space:]]*(#.*)?$/, "", line)
+          gsub(/^"|"$/, "", line)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+
+          n = split(line, parts, /[[:space:]]+/)
+          for (i = 1; i <= n; i++) {
+            p = parts[i]
+            if (p == "") continue
+            if (substr(p, 1, 1) == "-") p = substr(p, 2)
+            if (p == "") continue
+            if (p ~ /[*?\[]/) continue
+            if (p ~ /^\//) print p
+          }
+        }
+      ' "$unit_path" | awk 'NF && !seen[$0]++'
+}
+
+_podman_collect_env_files_for_service_instance() {
+    local service="$1"
+    local instance="$2"
+    local unit_path_hint="${3:-}"
+
+    _podman_appspec_ensure_loaded || return 0
+
+    local user_units_dir
+    user_units_dir="$(rm_user_units_dir)"
+    [ -d "$user_units_dir" ] || return 0
+
+    local -A unit_seen=()
+    local -a unit_paths=()
+    if [ -n "$unit_path_hint" ] && [ -f "$unit_path_hint" ]; then
+        unit_seen["$unit_path_hint"]=1
+        unit_paths+=("$unit_path_hint")
+    fi
+
+    local quadlet_type
+    quadlet_type="$(appspec_get "$service" "quadlet_type" "")"
+    if [ "$quadlet_type" = "multi" ]; then
+        local suffix path
+        while IFS= read -r suffix; do
+            [ -n "$suffix" ] || continue
+            path="$user_units_dir/${instance}${suffix}"
+            [ -f "$path" ] || continue
+            if [ -z "${unit_seen[$path]+x}" ]; then
+                unit_seen["$path"]=1
+                unit_paths+=("$path")
+            fi
+        done < <(_podman_appspec_collect_unit_suffixes "$service" 2>/dev/null || true)
+    else
+        local path="$user_units_dir/${instance}.container"
+        if [ -f "$path" ] && [ -z "${unit_seen[$path]+x}" ]; then
+            unit_seen["$path"]=1
+            unit_paths+=("$path")
+        fi
+    fi
+
+    local -A env_seen=()
+    local up env
+    for up in "${unit_paths[@]}"; do
+        while IFS= read -r env; do
+            [ -n "$env" ] || continue
+            if [ -z "${env_seen[$env]+x}" ]; then
+                env_seen["$env"]=1
+                printf '%s\n' "$env"
+            fi
+        done < <(_podman_collect_env_files_from_unit_file "$up" 2>/dev/null || true)
+    done
+}
+
 _podman_collect_app_config_paths_for_instance() {
     local service="$1"
     local instance="$2"
+    local unit_path="${3:-}"
 
     local -A seen=()
     local p
@@ -414,6 +523,8 @@ _podman_collect_app_config_paths_for_instance() {
         fi
     done < <(
         _podman_collect_app_instance_config_paths_from_appspec "$service" "$instance"
+        _podman_collect_app_instance_edit_files_from_appspec "$service" "$instance"
+        _podman_collect_env_files_for_service_instance "$service" "$instance" "$unit_path"
     )
 }
 
@@ -438,7 +549,7 @@ _edit_existing_unit_and_reload_restart() {
 
     if [ -n "$service" ] && [ -n "$instance" ]; then
         local -a cfg_files=()
-        mapfile -t cfg_files < <(_podman_collect_app_config_paths_for_instance "$service" "$instance")
+        mapfile -t cfg_files < <(_podman_collect_app_config_paths_for_instance "$service" "$instance" "$unit_path")
         if [ ${#cfg_files[@]} -gt 0 ]; then
             local prompt
             prompt="偵測到應用：$service / 實例：$instance；是否同時編輯設定檔（${#cfg_files[@]} 個）？(Y/n，預設 Y，輸入 0 取消): "
@@ -452,7 +563,7 @@ _edit_existing_unit_and_reload_restart() {
                 fi
             fi
 	        else
-	            tgdb_warn "已偵測到應用：$service，但找不到可編輯的設定檔：$instance（可能尚未部署、TGDB_DIR/$instance 不存在，或 app.spec 未定義 config=）"
+	            tgdb_warn "已偵測到應用：$service，但找不到可編輯的設定檔：$instance（可能尚未部署、TGDB_DIR/$instance 不存在、單元未設定 EnvironmentFile=，或 app.spec 未定義 config=/edit_files=）"
 	        fi
 	    fi
 
