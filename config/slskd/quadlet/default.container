@@ -1,0 +1,37 @@
+[Unit]
+Description=slskd
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/slskd/slskd:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=slskd
+#Network=tgdb.network
+UserNS=keep-id
+
+# Web UI（HTTP）
+PublishPort=127.0.0.1:${host_port}:5030
+
+# 內建 HTTPS（自簽憑證；選用）
+#PublishPort=127.0.0.1:5031:5031
+
+# Soulseek 連入埠（需要防火牆/NAT 轉發）
+PublishPort=${listen_port}:${listen_port}
+
+# 應用資料夾（包含 slskd.yml、資料庫、logs、downloads/incomplete 預設路徑）
+Volume=${instance_dir}/app:/app
+
+EnvironmentFile=${instance_dir}/.env
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

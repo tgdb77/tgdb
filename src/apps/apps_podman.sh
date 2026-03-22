@@ -171,10 +171,21 @@ select_instance() {
       [ -z "$cname" ] && continue
       local name="$cname"
       if _app_is_aux_instance_name "$service" "$name"; then
-        local base="${name%-*}"
-        if [ -n "$base" ] && [ "$base" != "$name" ]; then
-          name="$base"
-        fi
+        local candidate="$name" parent=""
+        while true; do
+          parent="${candidate%-*}"
+          if [ -z "$parent" ] || [ "$parent" = "$candidate" ]; then
+            break
+          fi
+          candidate="$parent"
+
+          if [ -f "$user_units_dir/$candidate.pod" ] || \
+             [ -f "$user_units_dir/$candidate.container" ] || \
+             { [ -d "$quad_dir" ] && { [ -f "$quad_dir/$candidate.pod" ] || [ -f "$quad_dir/$candidate.container" ]; }; }; then
+            name="$candidate"
+            break
+          fi
+        done
       fi
       if _app_is_aux_instance_name "$service" "$name"; then
         continue

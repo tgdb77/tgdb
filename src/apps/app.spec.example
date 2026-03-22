@@ -94,8 +94,20 @@ require_podman_socket=0
 # - template：相對於 config/<service>/ 的範本路徑
 # - mode：chmod（可省略）
 # - label：顯示用名稱（可省略）
-config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
+ config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
 #config=config.json|template=configs/default.conf|mode=600|label=config.json（應用設定）
+
+# ---- 編輯現有單元時要一併開啟的檔案（選填）----
+# 用途：
+# - 在「主選單 -> Podman 管理 -> 編輯現有單元」時，若偵測到 app= 與 instance，
+#   會提示是否同時編輯下列檔案。
+# - 適合放「容器執行後才會生成」或「不需要由模板產生」的設定檔（例如 data/config.yaml）。
+#
+# 規則：
+# - 以空白分隔多個路徑；可重複宣告多行 edit_files=
+# - 路徑相對於 instance_dir（~/.tgdb/app/<name>），不可使用絕對路徑或 ..
+#
+#edit_files=data/config.yaml
 
 # ---- Quadlet 類型與模板 ----
 quadlet_type=single

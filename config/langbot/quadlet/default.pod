@@ -1,0 +1,32 @@
+[Unit]
+Description=LangBot Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:${host_port}:5300
+PodName=${container_name}
+#Network=tgdb.network
+
+# 平台反向連線 WS 埠（選用：QQ/NapCat/Lagrange 等）
+# - 若需要讓外部程式連入，請取消註釋並視需求改成 0.0.0.0
+#PublishPort=127.0.0.1:2280:2280
+#PublishPort=127.0.0.1:2281:2281
+#PublishPort=127.0.0.1:2282:2282
+#PublishPort=127.0.0.1:2283:2283
+#PublishPort=127.0.0.1:2284:2284
+#PublishPort=127.0.0.1:2285:2285
+#PublishPort=127.0.0.1:2286:2286
+#PublishPort=127.0.0.1:2287:2287
+#PublishPort=127.0.0.1:2288:2288
+#PublishPort=127.0.0.1:2289:2289
+#PublishPort=127.0.0.1:2290:2290
+
+# Plugin Runtime 偵錯 WS 埠（選用）
+#PublishPort=127.0.0.1:5401:5401
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

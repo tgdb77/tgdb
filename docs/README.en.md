@@ -56,7 +56,7 @@
     <td align="center" width="25%">
       <img src="https://img.shields.io/badge/🌐-Cross%20Distro-orange?style=flat-square" alt="Cross-distro">
       <br><strong>Cross-distro Support</strong>
-      <br><sub>apt/dnf/yum/zypper/pacman/apk</sub>
+      <br><sub>apt/dnf/yum/zypper/pacman</sub>
     </td>
   </tr>
 </table>
@@ -89,7 +89,7 @@
 
 | Item | Requirement |
 |------|-------------|
-| **Operating System** | Linux (Debian 13 recommended; Debian/Ubuntu, RHEL/CentOS/Fedora, openSUSE, Arch, and Alpine are also supported) |
+| **Operating System** | Linux (Debian 13 recommended; Debian/Ubuntu, RHEL/CentOS/Fedora, openSUSE, Arch, are also supported) |
 | **Privileges** | Use a regular user with sudo privileges for system-level operations |
 | **Shell** | Bash 4.0+ |
 | **Podman** | 4.4+ recommended for containerized features; TGDB can help install it |

@@ -56,7 +56,7 @@
     <td align="center" width="25%">
       <img src="https://img.shields.io/badge/🌐-跨發行版-orange?style=flat-square" alt="Cross-distro">
       <br><strong>跨發行版支援</strong>
-      <br><sub>apt/dnf/yum/zypper/pacman/apk</sub>
+      <br><sub>apt/dnf/yum/zypper/pacman</sub>
     </td>
   </tr>
 </table>
@@ -89,7 +89,7 @@
 
 | 項目 | 需求 |
 |------|------|
-| **作業系統** | Linux（推薦 Debian 13；亦支援 Debian/Ubuntu、RHEL/CentOS/Fedora、openSUSE、Arch、Alpine） |
+| **作業系統** | Linux（推薦 Debian 13；亦支援 Debian/Ubuntu、RHEL/CentOS/Fedora、openSUSE、Arch） |
 | **權限** | 請使用具 sudo 權限的普通用戶執行（系統層級操作會透過 sudo 完成） |
 | **Shell** | Bash 4.0+ |
 | **Podman** | 4.4+（容器化功能建議版本，TGDB 可協助安裝） |
