@@ -1,0 +1,45 @@
+[Unit]
+Description=Stash
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/stashapp/stash:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=stash
+#Network=tgdb.network
+
+PublishPort=127.0.0.1:${host_port}:9999
+
+EnvironmentFile=${instance_dir}/.env
+
+# 時區（可選）
+Volume=/etc/localtime:/etc/localtime:ro
+
+# 設定 / 插件（Stash 會在此目錄生成資料庫與設定）
+Volume=${instance_dir}/config:/root/.stash
+
+# 媒體收藏（部署時指定 volume_dir）
+Volume=${volume_dir}:/data
+
+# Stash 產出與快取
+Volume=${instance_dir}/metadata:/metadata
+Volume=${instance_dir}/cache:/cache
+Volume=${instance_dir}/blobs:/blobs
+Volume=${instance_dir}/generated:/generated
+
+# 若要啟用 DLNA，請參考官方文件改用 host network
+#Network=host
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

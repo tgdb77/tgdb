@@ -6,9 +6,11 @@ set -euo pipefail
 if [ -L "$0" ]; then
   REAL_SCRIPT_PATH=$(readlink -f "$0")
   SCRIPT_DIR="$(dirname "$REAL_SCRIPT_PATH")"
+  # shellcheck disable=SC2034 # 供其他模組（例如 src/system.sh）使用
   SCRIPT_PATH="$REAL_SCRIPT_PATH"
 else
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck disable=SC2034 # 供其他模組（例如 src/system.sh）使用
   SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "$SCRIPT_DIR/tgdb.sh")"
 fi
 
@@ -124,6 +126,9 @@ load_modules() {
   fi
   if [ "$force" = "--force" ]; then
     unset TGDB_FORCE_RELOAD_LIBS 2>/dev/null || true
+    # 記錄本次為強制重載：後續透過 tgdb_load_module 載入的模組也需要一併重載，
+    # 避免「更新後」因各模組的載入守衛而沿用舊版本函式定義。
+    export TGDB_FORCE_RELOAD_MODULES=1
   fi
 
   # 不在執行時強制 chmod，避免在只讀或權限不足環境造成整體失敗
