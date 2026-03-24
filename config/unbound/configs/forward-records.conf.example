@@ -1,0 +1,15 @@
+forward-zone:
+    # 將所有查詢轉發到上游（並使用 DNS over TLS）。
+    # 你可以依需求替換或改用其他服務（例如 Quad9、CleanBrowsing）。
+    name: "."
+    forward-tls-upstream: yes
+
+    ## Cloudflare
+    forward-addr: 1.1.1.1@853#cloudflare-dns.com
+    forward-addr: 1.0.0.1@853#cloudflare-dns.com
+    #forward-addr: 2606:4700:4700::1111@853#cloudflare-dns.com
+    #forward-addr: 2606:4700:4700::1001@853#cloudflare-dns.com
+
+    ## Quad9（示例）
+    #forward-addr: 9.9.9.9@853#dns.quad9.net
+    #forward-addr: 149.112.112.112@853#dns.quad9.net

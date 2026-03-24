@@ -1,0 +1,3 @@
+# SRV records（示例）
+# _service._proto.name. | TTL | class | SRV | priority | weight | port | target.
+# _example._tcp.lan. 86400 IN SRV 0 10 1234 nas.lan.

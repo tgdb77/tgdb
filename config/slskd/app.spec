@@ -1,5 +1,5 @@
 spec_version=1
-display_name=slskd
+display_name=Slskd
 image=docker.io/slskd/slskd:latest
 doc_url=https://github.com/slskd/slskd
 menu_order=70

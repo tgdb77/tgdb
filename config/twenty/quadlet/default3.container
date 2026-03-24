@@ -1,0 +1,28 @@
+[Unit]
+Description=twenty redis
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/redis:7
+#AutoUpdate=registry
+ContainerName=${container_name}-redis
+Label=app=twenty
+Label=tgdb_db=redis
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/rdata:/data
+
+Exec=redis-server --maxmemory-policy noeviction
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

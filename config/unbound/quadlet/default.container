@@ -1,0 +1,31 @@
+[Unit]
+Description=Unbound DNS Resolver
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/klutchell/unbound:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=unbound
+#Network=host
+
+# 預設僅綁定本機回環埠，建議搭配系統 DNS 設定或上層 DNS（如 AdGuardHome）使用。
+PublishPort=127.0.0.1:${host_port}:53/udp
+PublishPort=127.0.0.1:${host_port}:53/tcp
+
+# 覆寫上游與本機自訂記錄
+Volume=${instance_dir}/forward-records.conf:/opt/unbound/etc/unbound/forward-records.conf:ro
+Volume=${instance_dir}/a-records.conf:/opt/unbound/etc/unbound/a-records.conf:ro
+Volume=${instance_dir}/srv-records.conf:/opt/unbound/etc/unbound/srv-records.conf:ro
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

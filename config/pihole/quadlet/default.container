@@ -1,0 +1,46 @@
+[Unit]
+Description=Pi-hole
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/pihole/pihole:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=pihole
+#Network=host
+
+EnvironmentFile=${instance_dir}/.env
+
+# DNS
+PublishPort=0.0.0.0:${dns_port}:53/udp
+PublishPort=0.0.0.0:${dns_port}:53/tcp
+
+# Web 管理介面（建議只綁本機回環埠，再用 Nginx 反代到域名/HTTPS）
+PublishPort=127.0.0.1:${host_port}:80/tcp
+
+# DHCP（需要能力與額外設定；若要啟用請自行調整並閱讀官方文件）
+#PublishPort=0.0.0.0:67:67/udp
+#AddCapability=NET_ADMIN
+
+# NTP（若需要）
+#PublishPort=0.0.0.0:123:123/udp
+#AddCapability=SYS_TIME
+
+# 資料持久化
+Volume=${instance_dir}/etc-pihole:/etc/pihole
+
+# Pi-hole v6 通常不需要掛載 /etc/dnsmasq.d；如需從 v5 升級/自訂 dnsmasq 設定可啟用
+#Volume=${instance_dir}/etc-dnsmasq.d:/etc/dnsmasq.d
+#Environment=FTLCONF_misc_etc_dnsmasq_d=true
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
