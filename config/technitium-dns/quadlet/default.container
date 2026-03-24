@@ -1,0 +1,40 @@
+[Unit]
+Description=Technitium DNS Server
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/technitium/dns-server:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=technitium-dns
+#Network=host
+
+EnvironmentFile=${instance_dir}/.env
+
+# Web Console（HTTP）
+PublishPort=127.0.0.1:${host_port}:5380/tcp
+
+# DNS（預設僅本機回環；如需內網使用請改成 0.0.0.0 或指定內網 IP）
+PublishPort=${dns_port}:53/udp
+PublishPort=${dns_port}:53/tcp
+
+# DNS-over-TLS / DNS-over-HTTPS / DNS-over-QUIC / DHCP 等可依需求自行開啟（請先閱讀官方文件）
+#PublishPort=853:853/tcp
+#PublishPort=853:853/udp
+#PublishPort=443:443/tcp
+#PublishPort=443:443/udp
+#PublishPort=67:67/udp
+
+Volume=${instance_dir}/config:/etc/dns
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

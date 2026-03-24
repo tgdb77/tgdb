@@ -4,6 +4,8 @@ image=docker.io/adguard/adguardhome
 doc_url=https://github.com/AdguardTeam/AdGuardHome
 menu_order=7
 
+access_policy=local_only
+
 base_port=3333
 instance_subdirs=data conf
 record_subdirs=data conf

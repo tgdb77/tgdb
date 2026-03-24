@@ -1,0 +1,5 @@
+# A Record（示例）
+# local-data: "nas.lan. A 192.168.1.10"
+
+# PTR Record（示例）
+# local-data-ptr: "192.168.1.10 nas.lan."
