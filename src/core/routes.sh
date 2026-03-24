@@ -72,8 +72,32 @@ tgdb_load_module() {
     fi
   fi
 
+  # 若剛完成「更新/強制重載」，需要在載入模組時一併強制重載其依賴 library，
+  # 否則模組本身的載入守衛（_TGDB_*_LOADED）會讓舊版函式定義留在同一個 shell 進程中。
+  local need_force_lib_reload=0
+  if [ "$force" = "--force" ] || [ "${TGDB_FORCE_RELOAD_MODULES:-0}" = "1" ]; then
+    need_force_lib_reload=1
+  fi
+  local old_force_set=0
+  local old_force="${TGDB_FORCE_RELOAD_LIBS:-0}"
+  if [ "${TGDB_FORCE_RELOAD_LIBS+x}" = "x" ]; then
+    old_force_set=1
+    old_force="$TGDB_FORCE_RELOAD_LIBS"
+  fi
+  if [ "$need_force_lib_reload" -eq 1 ]; then
+    export TGDB_FORCE_RELOAD_LIBS=1
+  fi
+
   # shellcheck disable=SC1090 # 模組由參數決定，於執行期載入
   source "$path"
+
+  if [ "$need_force_lib_reload" -eq 1 ]; then
+    if [ "$old_force_set" -eq 1 ]; then
+      export TGDB_FORCE_RELOAD_LIBS="$old_force"
+    else
+      unset TGDB_FORCE_RELOAD_LIBS 2>/dev/null || true
+    fi
+  fi
 
   if _tgdb_module_cache_support_assoc; then
     TGDB_LOADED_MODULES["$module"]=1

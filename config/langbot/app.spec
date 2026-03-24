@@ -2,7 +2,7 @@ spec_version=1
 display_name=LangBot
 image=docker.io/rockchin/langbot:latest
 doc_url=https://github.com/langbot-app/LangBot
-menu_order=69
+menu_order=79
 
 base_port=5353
 instance_subdirs=data data/plugins
