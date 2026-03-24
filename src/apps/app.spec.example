@@ -122,6 +122,21 @@ quadlet_template=quadlet/default.container
 #success_extra=🔐 帳號：${user_name}
 #success_extra=🔐 密碼：${pass_word}
 
+# ---- 部署前任務（宣告式，可重複）----
+# 用途：在 prepare_instance（設定檔範本產生後）、啟動單元前執行一次或多次腳本。
+# 適合：
+# - 需要「啟動前」就必須存在的檔案（例如：bcrypt htpasswd、憑證、授權檔）
+# - 修正目錄權限/擁有者
+#
+# 格式：
+#   pre_deploy=<rel_path>|runner=<bash|source>|allow_fail=<0|1>
+#
+# 注意：
+# - 若希望檔案能被「設定檔紀錄」一起保存，建議仍用 config= 宣告，並在 pre_deploy 覆寫內容，
+#   以避免 prepare_instance 輸出檔案數量與 record_config_paths 不一致。
+#
+#pre_deploy=scripts/pre_deploy_init.sh|runner=bash|allow_fail=0
+
 # ---- 部署後任務（宣告式，可重複）----
 # 用途：部署完成（單元 enable/start 後）執行一次或多次腳本，取代以往需要寫 hook 的情境。
 # 格式：

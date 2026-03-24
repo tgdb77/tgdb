@@ -1,0 +1,51 @@
+# Zot 設定檔範本（YAML）
+#
+# 檔案位置：${instance_dir}/etc/config.yml
+# 官方文件：https://zotregistry.dev/
+#
+# 安全提醒：
+# - TGDB 的 Quadlet 預設只把服務綁在 127.0.0.1:${host_port}（不對外公開）
+# - 若要對外提供服務，請務必啟用 TLS + 認證/授權（至少 htpasswd），或放在反向代理後面
+
+storage:
+  rootDirectory: /var/lib/registry
+
+http:
+  address: 0.0.0.0
+  port: "5000"
+  # 兼容 Docker v2 schema2（上游預設包含）
+  compat:
+    - docker2s2
+
+  # ----（建議）對外公開前啟用 TLS ----
+  # tls:
+  #   cert: /etc/zot/certs/server.cert
+  #   key: /etc/zot/certs/server.key
+
+  # ---- htpasswd（預設啟用；TGDB 會在部署時自動產生 bcrypt 檔案）----
+  auth:
+    htpasswd:
+      path: /etc/zot/htpasswd
+
+  # ----（選用）授權：以 repository path 做細粒度權限 ----
+  # accessControl:
+  #   repositories:
+  #     "**":
+  #       defaultPolicy:
+  #         - read
+
+log:
+  level: info
+
+# 上游 full image 預設會啟用 search/ui/mgmt。
+# 這裡預設保留 UI 與搜尋功能，但關閉 CVE 掃描（避免自動下載 Trivy DB）。
+extensions:
+  search:
+    enable: true
+    # 啟用 CVE 掃描（需要對外網路、磁碟空間與 /tmp 空間）
+    # cve:
+    #   updateInterval: 24h
+  ui:
+    enable: true
+  mgmt:
+    enable: true

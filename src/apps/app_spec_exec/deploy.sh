@@ -254,10 +254,6 @@ appspec_prepare_instance() {
   # shellcheck disable=SC2034 # cfg_labels 僅用於 _appspec_config_defs 回傳（此處不需要）
   local -a cfg_dests=() cfg_tpls=() cfg_modes=() cfg_labels=()
   _appspec_config_defs "$service" cfg_dests cfg_tpls cfg_modes cfg_labels || return 1
-  if [ ${#cfg_dests[@]} -eq 0 ]; then
-    printf '%s\n' ""
-    return 0
-  fi
 
   local user_name pass_word
   user_name="$(_appspec_ctx_get "$service" "$_name" "user_name" "")"
@@ -295,6 +291,8 @@ appspec_prepare_instance() {
 
     printf '%s\n' "$dest"
   done
+
+  _appspec_run_hook_scripts "$service" "$_name" "$instance_dir" "$_host_port" "pre_deploy" || return $?
   return 0
 }
 

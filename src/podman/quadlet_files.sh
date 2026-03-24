@@ -562,12 +562,49 @@ _edit_existing_unit_and_reload_restart() {
                     return 1
                 fi
             fi
-	        else
-	            tgdb_warn "已偵測到應用：$service，但找不到可編輯的設定檔：$instance（可能尚未部署、TGDB_DIR/$instance 不存在、單元未設定 EnvironmentFile=，或 app.spec 未定義 config=/edit_files=）"
-	        fi
-	    fi
+        else
+            tgdb_warn "已偵測到應用：$service，但找不到可編輯的設定檔：$instance（可能尚未部署、TGDB_DIR/$instance 不存在、單元未設定 EnvironmentFile=，或 app.spec 未定義 config=/edit_files=）"
+        fi
+    fi
 
-    "$EDITOR" "${edit_files[@]}"
+    local -a need_unshare=()
+    local -a owned_by_root=()
+    local p
+    for p in "${edit_files[@]}"; do
+        if [ -e "$p" ]; then
+            if [ ! -w "$p" ]; then
+                need_unshare+=("$p")
+                local uid
+                uid="$(stat -c '%u' "$p" 2>/dev/null || echo "")"
+                if [ "$uid" = "0" ]; then
+                    owned_by_root+=("$p")
+                fi
+            fi
+        else
+            local parent
+            parent="$(dirname "$p")"
+            if [ -d "$parent" ] && [ ! -w "$parent" ]; then
+                need_unshare+=("$p")
+            fi
+        fi
+    done
+
+    if [ ${#need_unshare[@]} -gt 0 ]; then
+        if [ ${#owned_by_root[@]} -gt 0 ]; then
+            tgdb_warn "偵測到以下檔案疑似由 root 擁有（uid=0），podman unshare 可能仍無法編輯："
+            printf ' - %s\n' "${owned_by_root[@]}" >&2
+            tgdb_warn "建議改用 sudoedit，或先調整檔案擁有者後再編輯。"
+        fi
+
+        tgdb_warn "偵測到部分檔案無法直接寫入，可能是 rootless UID 映射造成，將嘗試用 podman unshare 開啟編輯器："
+        printf ' - %s\n' "${need_unshare[@]}" >&2
+        if ! podman unshare "$EDITOR" "${edit_files[@]}"; then
+            tgdb_warn "podman unshare 開啟編輯器失敗，將直接開啟編輯器（可能仍無法儲存）。"
+            "$EDITOR" "${edit_files[@]}"
+        fi
+    else
+        "$EDITOR" "${edit_files[@]}"
+    fi
     _systemctl_user_try daemon-reload || true
     _unit_try_enable_now "$fname" || true
     if _unit_try_restart "$fname"; then
