@@ -1,0 +1,27 @@
+# Argus 設定檔範本（YAML）
+#
+# 檔案位置：${instance_dir}/etc/config.yml
+# 官方文件：
+# - https://release-argus.io/docs/getting-started/
+# - https://release-argus.io/docs/config/
+# - https://release-argus.io/docs/config/service/
+#
+# 說明：
+# - Argus 會依 config.yml 定義的 services 去查詢最新版本並在 UI 顯示
+# - 本範本先示範監控 Argus 自己（GitHub repo）
+
+service:
+  release-argus/argus:
+    options:
+      active: true
+      interval: 30m
+      semantic_versioning: true
+    latest_version:
+      type: github
+      url: release-argus/Argus
+      use_prerelease: false
+    dashboard:
+      icon: https://raw.githubusercontent.com/release-argus/Argus/master/web/ui/react-app/public/favicon.svg
+      icon_link-to: https://release-argus.io
+      web_url: https://github.com/release-argus/Argus/blob/master/CHANGELOG.md
+

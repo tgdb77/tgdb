@@ -141,130 +141,15 @@ appspec_print_deploy_success() {
   return 0
 }
 
-_appspec_post_deploy_export_env() {
-  local service="$1" name="$2"
-
-  _appspec_export_env "TGDB_SERVICE" "$service" || true
-  _appspec_export_env "TGDB_APP_NAME" "$name" || true
-
-  # 匯出 ctx 內的所有變數（包含 input/var 與保留鍵）
-  local prefix="${service}:${name}:"
-  local full key value
-  for full in "${!TGDB_APPSPEC_CTX[@]}"; do
-    case "$full" in
-      "${prefix}"*)
-        key="${full#"$prefix"}"
-        value="${TGDB_APPSPEC_CTX[$full]}"
-        if declare -F _env_key_is_valid >/dev/null 2>&1; then
-          _env_key_is_valid "$key" || continue
-        else
-          [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-        fi
-        _appspec_export_env "$key" "$value" || true
-        ;;
-    esac
-  done
-
-  # 另外把 input=/var= 宣告的 env= 鍵也補齊（方便腳本使用大寫 ENV_KEY，不必解析 .env）
-  local line def_key env_key
-  local -A opts=()
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    opts=()
-    _appspec_parse_pipe_def "$line" def_key opts || true
-    [ -n "$def_key" ] || continue
-    env_key="${opts[env]:-}"
-    [ -n "$env_key" ] || continue
-    value="$(_appspec_ctx_get "$service" "$name" "$def_key" "")"
-    [ -n "$value" ] || continue
-    _appspec_export_env "$env_key" "$value" || true
-  done < <(appspec_get_all "$service" "input" 2>/dev/null || true)
-
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    opts=()
-    _appspec_parse_pipe_def "$line" def_key opts || true
-    [ -n "$def_key" ] || continue
-    env_key="${opts[env]:-}"
-    [ -n "$env_key" ] || continue
-    value="$(_appspec_ctx_get "$service" "$name" "$def_key" "")"
-    [ -n "$value" ] || continue
-    _appspec_export_env "$env_key" "$value" || true
-  done < <(appspec_get_all "$service" "var" 2>/dev/null || true)
-}
-
 appspec_post_deploy() {
   local service="$1" name="$2"
-
-  local raw
-  raw="$(appspec_get_all "$service" "post_deploy" 2>/dev/null || true)"
-  [ -n "$raw" ] || return 0
 
   local instance_dir
   instance_dir="${TGDB_DIR:?}/$name"
 
   local host_port
   host_port="$(_appspec_ctx_get "$service" "$name" "host_port" "")"
-
-  local line script_rel
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-
-    local -A opts=()
-    _appspec_parse_pipe_def "$line" script_rel opts || true
-    [ -n "$script_rel" ] || continue
-
-    local allow_fail runner
-    allow_fail="${opts[allow_fail]:-0}"
-    runner="${opts[runner]:-bash}"
-
-    local script
-    script="$(_appspec_join_service_path "$service" "$script_rel")" || return 1
-    if [ ! -f "$script" ]; then
-      if _appspec_truthy "$allow_fail"; then
-        tgdb_warn "找不到 post_deploy 腳本，已略過（$service）：$script_rel"
-        continue
-      fi
-      tgdb_fail "找不到 post_deploy 腳本（$service）：$script_rel" 1 || true
-      return 1
-    fi
-
-    local rc=0
-    case "$runner" in
-      source)
-        (
-          _appspec_post_deploy_export_env "$service" "$name"
-          set -- "$service" "$name" "$instance_dir" "$host_port"
-          # shellcheck disable=SC1090 # 腳本由 app.spec 指定，於執行期載入
-          source "$script"
-        ) || rc=$?
-        ;;
-      bash|"")
-        (
-          _appspec_post_deploy_export_env "$service" "$name"
-          bash "$script" "$service" "$name" "$instance_dir" "$host_port"
-        ) || rc=$?
-        ;;
-      *)
-        tgdb_warn "不支援的 post_deploy runner（$service）：$runner，將改用 bash"
-        (
-          _appspec_post_deploy_export_env "$service" "$name"
-          bash "$script" "$service" "$name" "$instance_dir" "$host_port"
-        ) || rc=$?
-        ;;
-    esac
-
-    if [ "$rc" -ne 0 ]; then
-      if _appspec_truthy "$allow_fail"; then
-        tgdb_warn "post_deploy 執行失敗但已忽略（$service/$name）：$script_rel（rc=$rc）"
-        continue
-      fi
-      tgdb_fail "post_deploy 執行失敗（$service/$name）：$script_rel（rc=$rc）" 1 || true
-      return 1
-    fi
-  done <<< "$raw"
-
-  return 0
+  _appspec_run_hook_scripts "$service" "$name" "$instance_dir" "$host_port" "post_deploy"
 }
 
 appspec_update_and_restart_instance() {
