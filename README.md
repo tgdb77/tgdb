@@ -243,6 +243,16 @@ TGDB 使用 **Podman + Quadlet** 實現 Rootless 容器化部署，目前內建 
 ./tgdb.sh 6 <idx> 1 0 0 [額外參數...]  # 0 代表使用預設值
 ```
 
+### `主選單 6` 的 rootful Apps 說明
+
+- TGDB 目前在 `主選單 6` 已支援 **rootless / rootful** 兩種 Apps 部署模式，但仍以 rootless 為預設。
+- 只有 AppSpec 明確宣告支援 rootful 的應用，才會在部署流程中提供 rootful 選項。
+- rootful 部署會使用 `sudo`、system scope Quadlet 與獨立 runtime 目錄：
+  - 單元路徑：`/etc/containers/systemd`
+  - 資料路徑：`/var/lib/tgdb`
+  - Podman socket：`/run/podman/podman.sock`
+- 同一個實例名稱不可同時存在 rootless 與 rootful 版本，且實例建立後不可直接切換部署模式，尚未支援備份、.timer。
+
 ---
 
 ## 🛡️ 安全功能

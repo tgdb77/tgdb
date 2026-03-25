@@ -243,6 +243,18 @@ TGDB uses **Podman + Quadlet** for rootless container deployment and currently i
 ./tgdb.sh 6 <idx> 1 0 0 [extra args...]  # 0 means use the default value
 ```
 
+### Rootful Apps in `Main Menu 6`
+
+- TGDB now supports both **rootless** and **rootful** app deployment modes in `Main Menu 6`, with rootless still used as the default.
+- Only apps whose AppSpec explicitly declares rootful support will offer the rootful option during deployment.
+- Rootful deployment uses `sudo`, system-scope Quadlet units, and a separate runtime location:
+  - Unit path: `/etc/containers/systemd`
+  - Data path: `/var/lib/tgdb`
+  - Podman socket: `/run/podman/podman.sock`
+- The same instance name cannot exist in both rootless and rootful mode at the same time.
+- Once an instance is created, its deployment mode cannot be switched in place.
+- Rootful backup flows and `.timer` support are not included yet.
+
 ---
 
 ## 🛡️ Security Features

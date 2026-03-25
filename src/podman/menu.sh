@@ -15,7 +15,9 @@ podman_menu() {
         echo "❖ Podman/Quadlet 管理 ❖"
         echo "=================================="
         _print_overview_inline
-        podman ps -a || true
+        echo "提示：容器清單會分別用 podman ps / sudo podman ps 顯示 rootless 與 rootful。"
+        echo "註：映像 / 網路 / 卷等資源子選單目前仍以目前使用者的 Podman 為主。"
+        _podman_print_container_overview all
         echo "----------------------------------"
         echo "1. 安裝/更新 Podman "
         echo "2. 新增單元 "
@@ -311,7 +313,7 @@ _podman_pick_running_container() {
         tgdb_fail "Podman 未安裝" 1 || return $?
     fi
 
-    mapfile -t __containers < <(podman ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || true)
+    mapfile -t __containers < <(_podman_collect_container_records running)
     if [ "${#__containers[@]}" -eq 0 ]; then
         tgdb_warn "目前沒有任何運行中的容器"
         return 1
@@ -320,8 +322,8 @@ _podman_pick_running_container() {
     echo "--- 運行中的容器 ---" >&2
     local i
     for ((i=0; i<${#__containers[@]}; i++)); do
-        IFS=$'\t' read -r id name image status <<< "${__containers[$i]}"
-        printf "%2d) %s (%s) [%s]\n" $((i+1)) "$name" "$image" "$status" >&2
+        IFS=$'\t' read -r scope id name image status <<< "${__containers[$i]}"
+        printf "%2d) %s [%s] (%s) [%s]\n" $((i+1)) "$name" "$(_podman_scope_display_name "$scope")" "$image" "$status" >&2
     done
     echo " 0) 返回" >&2
 
@@ -339,22 +341,23 @@ podman_exec_container_menu() {
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
 
-    local row id name image status
+    local row scope id name image status
     row=$(_podman_pick_running_container) || { echo "返回上一層"; sleep 1; return 1; }
 
-    IFS=$'\t' read -r id name image status <<< "$row"
+    IFS=$'\t' read -r scope id name image status <<< "$row"
     clear
     echo "=================================="
     echo "❖ 進入容器 Shell ❖"
     echo "=================================="
     echo "容器名稱：$name"
+    echo "範圍：$(_podman_scope_display_name "$scope")"
     echo "映像：$image"
     echo "狀態：$status"
     echo "----------------------------------"
     echo "提示：已進入容器環境，輸入 exit 可退出並返回 TGDB。"
     echo "=================================="
 
-    if podman exec -it "$id" /bin/sh; then
+    if _podman_podman_cmd "$scope" exec -it "$id" /bin/sh; then
         echo
         echo "✅ 已離開容器：$name"
         ui_pause

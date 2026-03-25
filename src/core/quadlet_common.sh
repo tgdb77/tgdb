@@ -16,7 +16,74 @@ _esc() {
   printf '%s' "$1" | sed -e 's/[\\/&|]/\\&/g'
 }
 
-_systemctl_user_try() {
+tgdb_normalize_deploy_mode() {
+  local mode="${1:-rootless}"
+  case "${mode,,}" in
+    rootful|system) printf '%s\n' "rootful" ;;
+    rootless|user|"") printf '%s\n' "rootless" ;;
+    *) return 1 ;;
+  esac
+}
+
+tgdb_scope_for_deploy_mode() {
+  local mode
+  mode="$(tgdb_normalize_deploy_mode "${1:-rootless}")" || return 1
+  case "$mode" in
+    rootful) printf '%s\n' "system" ;;
+    rootless) printf '%s\n' "user" ;;
+  esac
+}
+
+tgdb_normalize_scope() {
+  local scope="${1:-user}"
+  case "${scope,,}" in
+    system|rootful) printf '%s\n' "system" ;;
+    user|rootless|"") printf '%s\n' "user" ;;
+    *) return 1 ;;
+  esac
+}
+
+tgdb_active_deploy_mode() {
+  local mode="${TGDB_APPS_ACTIVE_DEPLOY_MODE:-rootless}"
+  tgdb_normalize_deploy_mode "$mode" 2>/dev/null || printf '%s\n' "rootless"
+}
+
+tgdb_active_scope() {
+  local scope="${TGDB_APPS_ACTIVE_SCOPE:-}"
+  if [ -n "$scope" ]; then
+    tgdb_normalize_scope "$scope" 2>/dev/null || printf '%s\n' "user"
+    return 0
+  fi
+  tgdb_scope_for_deploy_mode "$(tgdb_active_deploy_mode)" 2>/dev/null || printf '%s\n' "user"
+}
+
+tgdb_scope_label() {
+  local scope
+  scope="$(tgdb_normalize_scope "${1:-user}")" || return 1
+  case "$scope" in
+    system) printf '%s\n' "systemd system" ;;
+    user) printf '%s\n' "systemd --user" ;;
+  esac
+}
+
+tgdb_podman() {
+  command -v podman >/dev/null 2>&1 || return 127
+
+  local mode
+  mode="$(tgdb_active_deploy_mode)"
+  if [ "$mode" = "rootful" ]; then
+    _tgdb_run_privileged podman "$@"
+    return $?
+  fi
+
+  podman "$@"
+}
+
+tgdb_systemctl_try() {
+  local scope="${1:-user}"
+  shift || true
+
+  scope="$(tgdb_normalize_scope "$scope")" || return 1
   command -v systemctl >/dev/null 2>&1 || return 1
 
   local want_no_block=0
@@ -35,7 +102,21 @@ _systemctl_user_try() {
     shift
   done
 
-  local -a cmd=(systemctl --user)
+  local -a cmd=()
+  case "$scope" in
+    system)
+      if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+        cmd=(systemctl)
+      elif command -v sudo >/dev/null 2>&1; then
+        cmd=(sudo systemctl)
+      else
+        return 1
+      fi
+      ;;
+    *)
+      cmd=(systemctl --user)
+      ;;
+  esac
   if [ "$want_no_block" -eq 1 ]; then
     # systemctl 的全域參數（例如：--no-block）放在命令（start/restart/enable...）之前才最保險。
     cmd+=(--no-block)
@@ -55,7 +136,23 @@ _systemctl_user_try() {
   return 1
 }
 
+_systemctl_user_try() {
+  tgdb_systemctl_try "$(tgdb_active_scope)" "$@"
+}
+
 _quadlet_user_units_dir() {
+  local scope
+  scope="$(tgdb_active_scope)"
+
+  if [ "$scope" = "system" ]; then
+    if declare -F rm_system_units_dir >/dev/null 2>&1; then
+      rm_system_units_dir
+      return 0
+    fi
+    printf '%s\n' "/etc/containers/systemd"
+    return 0
+  fi
+
   if declare -F rm_user_units_dir >/dev/null 2>&1; then
     rm_user_units_dir
     return 0
@@ -64,14 +161,29 @@ _quadlet_user_units_dir() {
 }
 
 _ensure_user_units_dir() {
-  mkdir -p "$(_quadlet_user_units_dir)"
+  local dir
+  dir="$(_quadlet_user_units_dir)"
+  if mkdir -p "$dir" 2>/dev/null; then
+    return 0
+  fi
+  _tgdb_run_privileged mkdir -p "$dir"
 }
 
 _write_file() {
   local path="$1"
   shift
-  mkdir -p "$(dirname "$path")"
-  printf '%s' "$*" >"$path"
+  local dir
+  dir="$(dirname "$path")"
+  if [ "$(tgdb_active_scope)" = "system" ]; then
+    _tgdb_run_privileged mkdir -p "$dir" || return 1
+    printf '%s' "$*" | _tgdb_run_privileged tee "$path" >/dev/null
+    return $?
+  fi
+  if mkdir -p "$dir" 2>/dev/null && printf '%s' "$*" >"$path" 2>/dev/null; then
+    return 0
+  fi
+  _tgdb_run_privileged mkdir -p "$dir" || return 1
+  printf '%s' "$*" | _tgdb_run_privileged tee "$path" >/dev/null
 }
 
 _quadlet_extract_images() {
@@ -110,7 +222,7 @@ _quadlet_pull_images() {
   fi
 
   local has_image_exists=0
-  podman image exists --help >/dev/null 2>&1 && has_image_exists=1
+  tgdb_podman image exists --help >/dev/null 2>&1 && has_image_exists=1
 
   local policy
   policy="$(_quadlet_podman_pull_policy)"
@@ -132,20 +244,20 @@ _quadlet_pull_images() {
 
     if [ "$policy" = "missing" ]; then
       if [ "$has_image_exists" -eq 1 ]; then
-        podman image exists "$img" >/dev/null 2>&1 && continue
+        tgdb_podman image exists "$img" >/dev/null 2>&1 && continue
       else
-        podman image inspect "$img" >/dev/null 2>&1 && continue
+        tgdb_podman image inspect "$img" >/dev/null 2>&1 && continue
       fi
     fi
 
     echo "   - $img"
-    if ! podman pull "$img"; then
+    if ! tgdb_podman pull "$img"; then
       # 拉取失敗時，若本機仍有既有映像可用，允許繼續（例如暫時性網路問題）。
       local exists_locally=1
       if [ "$has_image_exists" -eq 1 ]; then
-        podman image exists "$img" >/dev/null 2>&1 || exists_locally=0
+        tgdb_podman image exists "$img" >/dev/null 2>&1 || exists_locally=0
       else
-        podman image inspect "$img" >/dev/null 2>&1 || exists_locally=0
+        tgdb_podman image inspect "$img" >/dev/null 2>&1 || exists_locally=0
       fi
 
       if [ "$exists_locally" -eq 1 ]; then
@@ -193,12 +305,18 @@ _install_unit_and_enable() {
   _quadlet_pull_images_from_unit "$unit_content" || return $?
   echo "⏳ 正在套用佈署並啟動服務，請稍等..."
 
-  _ensure_user_units_dir
+  if ! _ensure_user_units_dir; then
+    tgdb_fail "無法建立 Quadlet 單元目錄：$(_quadlet_user_units_dir)" 1 || return $?
+    return 1
+  fi
   local unit_path
   unit_path="$(_quadlet_user_units_dir)/$name.container"
-  _write_file "$unit_path" "$unit_content"
+  if ! _write_file "$unit_path" "$unit_content"; then
+    tgdb_fail "寫入 Quadlet 單元失敗：$unit_path" 1 || return $?
+    return 1
+  fi
   if ! _systemctl_user_try daemon-reload; then
-    tgdb_fail "無法執行 systemctl --user daemon-reload，請確認使用者 systemd/DBus 環境可用。" 1 || return $?
+    tgdb_fail "無法執行 $(tgdb_scope_label "$(tgdb_active_scope)") daemon-reload，請確認對應 systemd/DBus 環境可用。" 1 || return $?
     return 1
   fi
 
@@ -210,7 +328,7 @@ _install_unit_and_enable() {
     return 0
   fi
 
-  tgdb_fail "無法啟用或啟動服務：$name（請檢查 systemctl --user 與單元日誌）。" 1 || return $?
+  tgdb_fail "無法啟用或啟動服務：$name（請檢查 $(tgdb_scope_label "$(tgdb_active_scope)") 與單元日誌）。" 1 || return $?
   return 1
 }
 
@@ -259,7 +377,7 @@ _quadlet_enable_now_bulk_by_filenames() {
   fi
 
   if command -v systemctl >/dev/null 2>&1; then
-    if systemctl --user enable --now "$@" 2>/dev/null; then
+    if tgdb_systemctl_try "$(tgdb_active_scope)" enable --now -- "$@" >/dev/null 2>&1; then
       return 0
     fi
   fi
@@ -311,16 +429,22 @@ _install_quadlet_units_from_files() {
 
   echo "⏳ 正在套用佈署並啟動服務，請稍等..."
 
-  _ensure_user_units_dir
+  if ! _ensure_user_units_dir; then
+    tgdb_fail "無法建立 Quadlet 單元目錄：$(_quadlet_user_units_dir)" 1 || return $?
+    return 1
+  fi
 
   for f in "${files[@]}"; do
     local dest
     dest="$(_quadlet_user_units_dir)/$(basename "$f")"
-    _write_file "$dest" "$(cat "$f")"
+    if ! _write_file "$dest" "$(cat "$f")"; then
+      tgdb_fail "寫入 Quadlet 單元失敗：$dest" 1 || return $?
+      return 1
+    fi
   done
 
   if ! _systemctl_user_try daemon-reload; then
-    tgdb_fail "無法執行 systemctl --user daemon-reload，請確認使用者 systemd/DBus 環境可用。" 1 || return $?
+    tgdb_fail "無法執行 $(tgdb_scope_label "$(tgdb_active_scope)") daemon-reload，請確認對應 systemd/DBus 環境可用。" 1 || return $?
     return 1
   fi
 

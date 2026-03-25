@@ -90,6 +90,20 @@ _apps_collect_publish_ports_from_unit_content() {
   done <<< "$unit_content"
 }
 
+_apps_write_staging_file() {
+  local path="$1" content="$2"
+  local dir
+  dir="$(dirname "$path")"
+
+  mkdir -p "$dir" 2>/dev/null || {
+    tgdb_fail "無法建立暫存目錄：$dir" 1 || return $?
+  }
+
+  if ! printf '%s' "$content" >"$path"; then
+    tgdb_fail "無法寫入暫存檔案：$path" 1 || return $?
+  fi
+}
+
 _apps_fail_if_publish_ports_in_use() {
   local service="$1"
   shift || true
@@ -183,27 +197,31 @@ _post_deploy_app() {
 
 _instance_publish_is_loopback() {
   local service="$1" name="$2"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+
   local d
   d="$(_service_quadlet_dir "$service")"
 
-  [ -d "$d" ] || return 2
+  _apps_test "$deploy_mode" -d "$d" || return 2
 
   local -a files=()
-  if [ -f "$d/$name.container" ]; then
+  if _apps_test "$deploy_mode" -f "$d/$name.container"; then
     files+=("$d/$name.container")
   fi
 
   local f=""
-  while IFS= read -r -d $'\0' f; do
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
     files+=("$f")
-  done < <(find "$d" -maxdepth 1 -type f \( -name "$name.pod" -o -name "$name.container" -o -name "$name-*.container" \) -print0 2>/dev/null)
+  done < <(_apps_find_lines "$deploy_mode" "$d" -maxdepth 1 -type f \( -name "$name.pod" -o -name "$name.container" -o -name "$name-*.container" \) 2>/dev/null)
 
   if [ ${#files[@]} -eq 0 ]; then
     return 2
   fi
 
   for f in "${files[@]}"; do
-    if grep -q '^PublishPort=127\.0\.0\.1:' "$f" 2>/dev/null; then
+    if _apps_read_file "$deploy_mode" "$f" 2>/dev/null | grep -q '^PublishPort=127\.0\.0\.1:'; then
       return 0
     fi
   done
@@ -288,33 +306,7 @@ _print_deploy_success() {
 
 _is_app_name_duplicate() {
   local name="$1"
-
-  if [ -d "$TGDB_DIR/$name" ]; then
-    return 0
-  fi
-
-  local user_units_dir
-  user_units_dir="$(rm_user_units_dir)"
-  if [ -d "$user_units_dir" ]; then
-    if [ -f "$user_units_dir/$name.container" ] || \
-       [ -f "$user_units_dir/$name.service" ] || \
-       [ -f "$user_units_dir/container-$name.service" ]; then
-      return 0
-    fi
-  fi
-
-  local persist_dir
-  persist_dir="$(rm_persist_config_dir)"
-  if [ -d "$persist_dir" ]; then
-    if find "$persist_dir" -maxdepth 3 -type f \( \
-        -path "*/quadlet/$name.container" -o \
-        -path "*/configs/$name.*" \
-      \) -print -quit 2>/dev/null | grep -q .; then
-      return 0
-    fi
-  fi
-
-  return 1
+  _apps_name_exists_any_mode "$name"
 }
 
 get_next_available_app_name() {
@@ -390,6 +382,8 @@ _apps_get_mount_options_line() {
 
 _apps_ensure_volume_subdirs() {
   local service="$1" volume_dir="$2"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
 
   [ -n "${volume_dir:-}" ] || return 0
   [ "${volume_dir:-}" != "0" ] || return 0
@@ -416,10 +410,10 @@ _apps_ensure_volume_subdirs() {
     fi
 
     local target="$volume_dir/$seg"
-    if [ -e "$target" ] && [ ! -d "$target" ]; then
+    if _apps_test "$deploy_mode" -e "$target" && ! _apps_test "$deploy_mode" -d "$target"; then
       tgdb_fail "volume_subdirs 目標不是資料夾（$service）：$target" 1 || return $?
     fi
-    if ! mkdir -p "$target" 2>/dev/null; then
+    if ! _apps_mkdir_p "$deploy_mode" "$target"; then
       tgdb_fail "無法建立 volume_subdirs 目錄（$service）：$target（請確認路徑權限）" 1 || return $?
     fi
   done
@@ -427,6 +421,8 @@ _apps_ensure_volume_subdirs() {
 
 _deploy_app_core() {
   local service="$1" name="$2" host_port="$3" instance_dir="$4" propagation="${5:-none}" selinux_flag="${6:-none}" volume_dir="${7:-}"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode)"
 
   # volume_dir：由 AppSpec 決定是否啟用（uses_volume_dir=1）。
   local needs_volume_dir=0
@@ -454,15 +450,15 @@ _deploy_app_core() {
 
     if [ -n "${volume_dir:-}" ] && [ "${volume_dir:-}" != "0" ]; then
       # 若是自訂路徑，仍嘗試建立（避免第一次部署就因目錄不存在而失敗）
-      if [ -e "$volume_dir" ] && [ ! -d "$volume_dir" ]; then
+      if _apps_test "$deploy_mode" -e "$volume_dir" && ! _apps_test "$deploy_mode" -d "$volume_dir"; then
         tgdb_fail "volume_dir 不是資料夾：$volume_dir" 1 || return $?
       fi
-      if [ ! -d "$volume_dir" ]; then
-        if ! mkdir -p "$volume_dir" 2>/dev/null; then
+      if ! _apps_test "$deploy_mode" -d "$volume_dir"; then
+        if ! _apps_mkdir_p "$deploy_mode" "$volume_dir"; then
           tgdb_fail "無法建立 volume_dir：$volume_dir（請確認路徑權限）" 1 || return $?
         fi
       fi
-      if [ -d "$volume_dir" ] && { [ ! -r "$volume_dir" ] || [ ! -w "$volume_dir" ]; }; then
+      if _apps_test "$deploy_mode" -d "$volume_dir" && { ! _apps_test "$deploy_mode" -r "$volume_dir" || ! _apps_test "$deploy_mode" -w "$volume_dir"; }; then
         tgdb_fail "目前使用者對 $volume_dir 沒有讀寫權限，請調整權限或改用其他目錄。" 1 || return $?
       fi
 
@@ -548,7 +544,12 @@ _deploy_app_core() {
     else
       local tmp_quad
       tmp_quad="$(mktemp "${TMPDIR:-/tmp}/tgdb_${service}_${name}.XXXXXX.container")"
-      _write_file "$tmp_quad" "$unit"
+      _apps_write_staging_file "$tmp_quad" "$unit" || {
+        local write_rc=$?
+        rm -f "$tmp_quad" 2>/dev/null || true
+        _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
+        return "$write_rc"
+      }
       _maybe_edit_app_record "$service" "$tmp_quad" unit "${config_paths[@]}" || {
         local edit_rc=$?
         rm -f "$tmp_quad" 2>/dev/null || true
@@ -592,10 +593,15 @@ _deploy_app_core() {
     }
   fi
 
-  mkdir -p "$instance_dir"
+  _apps_mkdir_p "$deploy_mode" "$instance_dir" || {
+    _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
+    tgdb_fail "無法建立實例資料目錄：$instance_dir" 1 || return $?
+  }
   if [ -d "$staging_instance_dir" ]; then
-    cp -a "$staging_instance_dir/." "$instance_dir/" 2>/dev/null || \
-      cp -r "$staging_instance_dir/." "$instance_dir/" 2>/dev/null || true
+    if ! _apps_copy_dir_contents_to_mode "$deploy_mode" "$staging_instance_dir" "$instance_dir"; then
+      _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
+      tgdb_fail "無法同步實例資料到：$instance_dir" 1 || return $?
+    fi
   fi
 
   local unit_files=()
@@ -615,6 +621,9 @@ _deploy_app_core() {
     fi
   fi
   _post_deploy_app "$service" "$name"
+  _apps_write_instance_metadata "$service" "$name" "$deploy_mode" "$instance_dir" || {
+    tgdb_warn "無法寫入實例部署 metadata：$name"
+  }
 
   if [ "$is_multi" -eq 1 ]; then
     local record_dir
@@ -623,12 +632,18 @@ _deploy_app_core() {
     for rf in "${unit_files[@]}"; do
       local record_path
       record_path="$record_dir/$(basename "$rf")"
-      _write_file "$record_path" "$(cat "$rf")"
+      _write_file "$record_path" "$(cat "$rf")" || {
+        _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
+        tgdb_fail "寫入 Quadlet 紀錄失敗：$record_path" 1 || return $?
+      }
     done
   else
     local record_quad
     record_quad="$(_service_quadlet_dir "$service")/$name.container"
-    _write_file "$record_quad" "$unit"
+    _write_file "$record_quad" "$unit" || {
+      _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
+      tgdb_fail "寫入 Quadlet 紀錄失敗：$record_quad" 1 || return $?
+    }
   fi
   if [ ${#config_paths[@]} -gt 0 ]; then
     local -a record_cfgs=()
@@ -657,8 +672,10 @@ _deploy_app_core() {
         continue
       fi
       [ -n "$dst" ] || continue
-      mkdir -p "$(dirname "$dst")"
-      cp "$src" "$dst"
+      if ! _apps_copy_file_to_mode "$deploy_mode" "$src" "$dst"; then
+        _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
+        tgdb_fail "寫入設定檔紀錄失敗：$dst" 1 || return $?
+      fi
     done
   fi
 
@@ -673,9 +690,12 @@ _deploy_app_core() {
 _deploy_app_cli_quick() {
   local service="$1" name="$2" host_port="$3" instance_dir="$4"
   shift 4 || true
+  local deploy_mode
+  deploy_mode="$(_apps_resolve_deploy_mode "$service" "${TGDB_DEPLOY_MODE:-}")" || return $?
+  instance_dir="$(_apps_instance_dir_for_mode "$deploy_mode" "$name")"
 
   if _app_fn_exists "$service" cli_quick; then
-    _app_invoke "$service" cli_quick "$name" "$host_port" "$instance_dir" "$@"
+    _apps_with_deploy_mode "$deploy_mode" _app_invoke "$service" cli_quick "$name" "$host_port" "$instance_dir" "$@"
     return $?
   fi
 
@@ -697,11 +717,20 @@ _deploy_app_cli_quick() {
     volume_dir="${1:-}"
   fi
 
-  _deploy_app_core "$service" "$name" "$host_port" "$instance_dir" "$propagation" "$selinux_flag" "$volume_dir"
+  _apps_with_deploy_mode "$deploy_mode" _deploy_app_core "$service" "$name" "$host_port" "$instance_dir" "$propagation" "$selinux_flag" "$volume_dir"
 }
 
 _deploy_app_quick() {
   local service="$1"
+  local deploy_mode
+  deploy_mode="$(_apps_prompt_deploy_mode "$service")" || {
+    local rc=$?
+    if [ "$rc" -eq 2 ]; then
+      echo "操作已取消。"
+      return 0
+    fi
+    return "$rc"
+  }
 
   local default_name
   default_name=$(get_next_available_app_name "$service")
@@ -735,7 +764,7 @@ _deploy_app_quick() {
   }
 
   local instance_dir
-  instance_dir="$TGDB_DIR/$name"
+  instance_dir="$(_apps_instance_dir_for_mode "$deploy_mode" "$name")"
   echo "資料目錄：$instance_dir"
 
   local propagation="none" selinux_flag="none"
@@ -758,7 +787,7 @@ _deploy_app_quick() {
     # 會導致其內部設定的狀態（例如 AppSpec 記錄的 volume_dir_propagation）無法傳遞到後續 render_quadlet。
     local vol_out_file vol_out=""
     vol_out_file="$(mktemp "${TMPDIR:-/tmp}/tgdb_${service}_${name}.volume.XXXXXX.out")"
-    _app_invoke "$service" ask_volume_dir "$instance_dir" "$name" >"$vol_out_file"
+    _apps_with_deploy_mode "$deploy_mode" _app_invoke "$service" ask_volume_dir "$instance_dir" "$name" >"$vol_out_file"
     local vol_rc=$?
     vol_out="$(cat "$vol_out_file" 2>/dev/null || true)"
     rm -f "$vol_out_file" 2>/dev/null || true
@@ -773,5 +802,5 @@ _deploy_app_quick() {
     volume_dir="$(_extract_last_nonempty_line_from_output "$vol_out")"
   fi
 
-  _deploy_app_core "$service" "$name" "$host_port" "$instance_dir" "$propagation" "$selinux_flag" "$volume_dir"
+  _apps_with_deploy_mode "$deploy_mode" _deploy_app_core "$service" "$name" "$host_port" "$instance_dir" "$propagation" "$selinux_flag" "$volume_dir"
 }

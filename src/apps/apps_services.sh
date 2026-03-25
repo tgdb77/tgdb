@@ -371,15 +371,123 @@ _apps_service_default_image() {
 _apps_list_instances_by_label() {
   local service="$1"
   [ -z "$service" ] && return 0
-  command -v podman >/dev/null 2>&1 || return 0
+  local mode quad_dir runtime_dir seen=""
 
-  podman ps -aq --filter "label=app=${service}" 2>/dev/null || true
+  for mode in rootless rootful; do
+    quad_dir="$(rm_service_quadlet_dir_by_mode "$service" "$mode" 2>/dev/null || echo "")"
+    if [ -n "$quad_dir" ] && _apps_dir_exists "$mode" "$quad_dir"; then
+      local f=""
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        local base name
+        base="${f##*/}"
+        case "$base" in
+          *.container) name="${base%.container}" ;;
+          *.pod) name="${base%.pod}" ;;
+          *) continue ;;
+        esac
+        if _app_is_aux_instance_name "$service" "$name"; then
+          continue
+        fi
+        case ",$seen," in
+          *,"$mode:$name",*) ;;
+          *)
+            printf '%s\t%s\n' "$name" "$mode"
+            seen="$seen,$mode:$name"
+            ;;
+        esac
+      done < <(_apps_find_lines "$mode" "$quad_dir" -maxdepth 1 -type f \( -name "*.container" -o -name "*.pod" \) 2>/dev/null)
+    fi
+
+    runtime_dir="$(_apps_runtime_dir_for_mode "$mode" 2>/dev/null || echo "")"
+    if [ -n "$runtime_dir" ] && _apps_dir_exists "$mode" "$runtime_dir"; then
+      local d=""
+      while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        local name
+        name="$(basename "$d")"
+        if _app_is_aux_instance_name "$service" "$name"; then
+          continue
+        fi
+        case ",$seen," in
+          *,"$mode:$name",*) ;;
+          *)
+            printf '%s\t%s\n' "$name" "$mode"
+            seen="$seen,$mode:$name"
+            ;;
+        esac
+      done < <(_apps_find_lines "$mode" "$runtime_dir" -mindepth 1 -maxdepth 1 -type d -name "${service}*" 2>/dev/null)
+    fi
+  done
+}
+
+_apps_has_podman_instances_by_mode() {
+  local service="$1" mode="$2"
+  [ -n "$service" ] || return 1
+  command -v podman >/dev/null 2>&1 || return 1
+
+  case "$mode" in
+    rootful)
+      _tgdb_run_privileged podman ps -aq --filter "label=app=${service}" 2>/dev/null | grep -q .
+      ;;
+    *)
+      podman ps -aq --filter "label=app=${service}" 2>/dev/null | grep -q .
+      ;;
+  esac
+}
+
+_apps_print_podman_instances_by_mode() {
+  local service="$1" mode="$2"
+  [ -n "$service" ] || return 1
+  command -v podman >/dev/null 2>&1 || return 1
+
+  local label
+  case "$mode" in
+    rootful) label="rootful" ;;
+    *) label="rootless" ;;
+  esac
+
+  if ! _apps_has_podman_instances_by_mode "$service" "$mode"; then
+    return 1
+  fi
+
+  echo "--- ${label} ---"
+  case "$mode" in
+    rootful)
+      _tgdb_run_privileged podman ps -a --filter "label=app=${service}" 2>/dev/null || return 1
+      ;;
+    *)
+      podman ps -a --filter "label=app=${service}" 2>/dev/null || return 1
+      ;;
+  esac
+  return 0
 }
 
 _apps_print_instances_by_label() {
   local service="$1"
   [ -z "$service" ] && return 0
-  command -v podman >/dev/null 2>&1 || return 0
+  local printed=0
 
-  podman ps -a --filter "label=app=${service}" 2>/dev/null || true
+  if _apps_print_podman_instances_by_mode "$service" "rootless"; then
+    printed=1
+  fi
+
+  if _apps_has_podman_instances_by_mode "$service" "rootful"; then
+    if [ "$printed" -eq 1 ]; then
+      echo
+    fi
+    if _apps_print_podman_instances_by_mode "$service" "rootful"; then
+      printed=1
+    fi
+  fi
+
+  if [ "$printed" -eq 1 ]; then
+    return 0
+  fi
+
+  local name mode
+  while IFS=$'\t' read -r name mode; do
+    [ -n "$name" ] || continue
+    printf -- '- %s [%s]\n' "$name" "$mode"
+  done < <(_apps_list_instances_by_label "$service")
 }
