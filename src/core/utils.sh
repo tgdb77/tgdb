@@ -308,6 +308,7 @@ tgdb_backup_root() {
 ensure_app_volume_dir() {
   local service="$1"
   local name="${2:-}"
+  local deploy_mode="rootless"
   if [ -z "${service:-}" ] || [ -z "${name:-}" ]; then
     tgdb_fail "未提供 service/name，無法建立 volume_dir。" 1 || return $?
   fi
@@ -322,6 +323,27 @@ ensure_app_volume_dir() {
   backup_root="$(tgdb_backup_root)"
   volume_root="$backup_root/volume/$service"
   target_dir="$volume_root/$name"
+
+  if declare -F tgdb_active_deploy_mode >/dev/null 2>&1; then
+    deploy_mode="$(tgdb_active_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  fi
+
+  if [ "$deploy_mode" = "rootful" ]; then
+    if _tgdb_run_privileged test -e "$target_dir" && ! _tgdb_run_privileged test -d "$target_dir"; then
+      tgdb_fail "volume_dir 不是資料夾：$target_dir" 1 || return $?
+    fi
+    if ! _tgdb_run_privileged mkdir -p "$target_dir" 2>/dev/null; then
+      tgdb_fail "無法建立 volume_dir：$target_dir（請確認路徑權限）" 1 || return $?
+    fi
+    if ! _tgdb_run_privileged test -d "$target_dir" 2>/dev/null; then
+      tgdb_fail "無法建立 volume_dir：$target_dir" 1 || return $?
+    fi
+    if ! _tgdb_run_privileged test -r "$target_dir" 2>/dev/null || ! _tgdb_run_privileged test -w "$target_dir" 2>/dev/null; then
+      tgdb_fail "目前使用者對 $target_dir 沒有讀寫權限，請調整權限或改用其他目錄。" 1 || return $?
+    fi
+    printf '%s\n' "$target_dir"
+    return 0
+  fi
 
   if [ -e "$target_dir" ] && [ ! -d "$target_dir" ]; then
     tgdb_fail "volume_dir 不是資料夾：$target_dir" 1 || return $?

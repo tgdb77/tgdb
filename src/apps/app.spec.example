@@ -37,6 +37,23 @@ record_subdirs=data config
 # require_podman_socket：若 Quadlet 會掛載 podman.sock（例如 docker socket），可在部署時自動 enable podman.socket
 require_podman_socket=0
 
+# deploy_mode（選填）：此 App 的預設部署模式
+# - inherit：跟隨全域預設
+# - rootless：使用者 scope（預設）
+# - rootful：system scope + root Podman
+#deploy_mode_default=inherit
+#
+# compat_deploy_modes（選填）：宣告此 App 支援哪些部署模式
+# - 未宣告時，預設視為 rootless-only
+# - 若支援 rootful，可寫成 rootless rootful
+#compat_deploy_modes=rootless
+#
+# podman_api_socket_path（選填）：當 Quadlet 需要掛載 Podman API socket 時可覆寫
+# - rootless 預設：/run/user/${user_id}/podman/podman.sock
+# - rootful 預設：/run/podman/podman.sock
+# - 建議模板改用 ${podman_sock_host_path}，避免硬編碼 rootless 路徑
+#podman_api_socket_path=/run/user/${user_id}/podman/podman.sock
+
 # volume_dir（選填）：若服務需要額外掛載外部目錄（例如下載目錄、媒體目錄）
 # - 需要在 Quadlet 範本使用 ${volume_dir}（Volume=${volume_dir}:...）才會生效
 # - cli_quick_args 可加入 volume_dir，讓 CLI 模式能直接傳入
@@ -164,7 +181,11 @@ quadlet_template=quadlet/default.container
 #update_pull_images=docker.io/postgres:16-alpine
 #update_pull_images=docker.io/redis:7-alpine
 #
-# full_remove_delete_method：完全移除刪資料夾方式（rm/unshare；預設 unshare）
+# full_remove_delete_method：完全移除刪資料夾方式
+# - auto：由 TGDB 依 deploy_mode 自動選擇
+# - unshare：使用 podman unshare rm -rf（rootless 建議）
+# - rm：直接以 root 權限刪除（rootful 建議）
+#full_remove_delete_method=auto
 #full_remove_delete_method=unshare
 # full_remove_purge_record：完全移除時是否一併刪除該實例的紀錄檔（1/0）
 #full_remove_purge_record=0

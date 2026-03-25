@@ -4,17 +4,21 @@
 # 注意：此檔案會被 source，請避免在此更改 shell options（例如 set -euo pipefail）。
 
 _service_config_dir() {
-  rm_service_configs_dir "$1"
+  local service="$1" mode="${2:-$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")}"
+  rm_service_configs_dir_by_mode "$service" "$mode"
 }
 
 _service_quadlet_dir() {
-  rm_service_quadlet_dir "$1"
+  local service="$1" mode="${2:-$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")}"
+  rm_service_quadlet_dir_by_mode "$service" "$mode"
 }
 
 _find_quadlet_path() {
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
   local d
   d=$(_service_quadlet_dir "$1")
-  if [ -f "$d/$2.container" ]; then
+  if _apps_path_exists "$deploy_mode" "$d/$2.container"; then
     echo "$d/$2.container"
     return 0
   fi
@@ -24,27 +28,29 @@ _find_quadlet_path() {
 _app_deploy_from_record_single() {
   local service="$1" name="$2"
   shift 2 || true
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode)"
 
   local quad
   quad=$(_find_quadlet_path "$service" "$name") || { tgdb_err "找不到 Quadlet 紀錄"; ui_pause; return 1; }
   local unit_content
-  unit_content="$(cat "$quad")"
+  unit_content="$(_apps_read_file "$deploy_mode" "$quad")"
 
   local instance_dir="$TGDB_DIR/$name"
   if [ "$#" -gt 0 ]; then
     local sub
     for sub in "$@"; do
-      [ -n "$sub" ] && mkdir -p "$instance_dir/$sub"
+      [ -n "$sub" ] && _apps_mkdir_p "$deploy_mode" "$instance_dir/$sub"
     done
   else
-    mkdir -p "$instance_dir"
+    _apps_mkdir_p "$deploy_mode" "$instance_dir"
   fi
 
   local -a cfgs=()
   if _app_fn_exists "$service" record_config_paths; then
     local line
     while IFS= read -r line; do
-      [ -n "$line" ] && [ -f "$line" ] && cfgs+=("$line")
+      [ -n "$line" ] && _apps_test "$deploy_mode" -f "$line" && cfgs+=("$line")
     done < <(_app_invoke "$service" record_config_paths "$name" 2>/dev/null || true)
   fi
 
@@ -57,7 +63,7 @@ _app_deploy_from_record_single() {
     else
       local cfg
       for cfg in "${cfgs[@]}"; do
-        cp "$cfg" "$instance_dir/" 2>/dev/null || true
+        _apps_copy_file_to_mode "$deploy_mode" "$cfg" "$instance_dir/$(basename "$cfg")" 2>/dev/null || true
       done
     fi
   fi
@@ -82,6 +88,8 @@ _app_deploy_from_record_single() {
 _app_deploy_from_record_multi() {
   local service="$1" name="$2"
   shift 2 || true
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode)"
 
   local -a unit_basenames=()
   local -a mkdir_subdirs=()
@@ -133,7 +141,7 @@ _app_deploy_from_record_multi() {
   for base in "${unit_basenames[@]}"; do
     [ -z "$base" ] && continue
     local path="$qdir/$base"
-    if [ -f "$path" ]; then
+    if _apps_test "$deploy_mode" -f "$path"; then
       unit_files+=("$path")
     else
       missing+=("$base")
@@ -147,18 +155,22 @@ _app_deploy_from_record_multi() {
   fi
 
   local instance_dir="$TGDB_DIR/$name"
-  mkdir -p "$instance_dir"
+  _apps_mkdir_p "$deploy_mode" "$instance_dir"
 
   if [ ${#mkdir_subdirs[@]} -gt 0 ]; then
     for base in "${mkdir_subdirs[@]}"; do
-      [ -n "$base" ] && mkdir -p "$instance_dir/$base"
+      [ -n "$base" ] && _apps_mkdir_p "$deploy_mode" "$instance_dir/$base"
     done
   fi
 
   if [ -n "$chown_uidgid" ] && [ ${#chown_subdirs[@]} -gt 0 ]; then
     for base in "${chown_subdirs[@]}"; do
       [ -z "$base" ] && continue
-      chown -R "$chown_uidgid" "$instance_dir/$base" 2>/dev/null || true
+      if [ "$deploy_mode" = "rootful" ]; then
+        _tgdb_run_privileged chown -R "$chown_uidgid" "$instance_dir/$base" 2>/dev/null || true
+      else
+        chown -R "$chown_uidgid" "$instance_dir/$base" 2>/dev/null || true
+      fi
     done
   fi
 
@@ -166,7 +178,7 @@ _app_deploy_from_record_multi() {
   if _app_fn_exists "$service" record_config_paths; then
     local line
     while IFS= read -r line; do
-      [ -n "$line" ] && [ -f "$line" ] && cfgs+=("$line")
+      [ -n "$line" ] && _apps_test "$deploy_mode" -f "$line" && cfgs+=("$line")
     done < <(_app_invoke "$service" record_config_paths "$name" 2>/dev/null || true)
   fi
 
@@ -179,7 +191,7 @@ _app_deploy_from_record_multi() {
     else
       local cfg
       for cfg in "${cfgs[@]}"; do
-        cp "$cfg" "$instance_dir/" 2>/dev/null || true
+        _apps_copy_file_to_mode "$deploy_mode" "$cfg" "$instance_dir/$(basename "$cfg")" 2>/dev/null || true
       done
     fi
   else
@@ -204,16 +216,18 @@ _app_systemd_restart_by_unit_filename() {
 
   local base="${unit_filename%.*}"
   local ext="${unit_filename##*.}"
+  local scope
+  scope="$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")"
 
   case "$ext" in
     container)
-      _systemctl_user_try restart -- "$unit_filename" "$base.service" "container-$base.service" || true
+      tgdb_systemctl_try "$scope" restart -- "$unit_filename" "$base.service" "container-$base.service" || true
       ;;
     pod)
-      _systemctl_user_try restart -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
+      tgdb_systemctl_try "$scope" restart -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
       ;;
     *)
-      _systemctl_user_try restart -- "$unit_filename" || true
+      tgdb_systemctl_try "$scope" restart -- "$unit_filename" || true
       ;;
   esac
 }
@@ -224,16 +238,18 @@ _app_systemd_disable_now_by_unit_filename() {
 
   local base="${unit_filename%.*}"
   local ext="${unit_filename##*.}"
+  local scope
+  scope="$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")"
 
   case "$ext" in
     container)
-      _systemctl_user_try disable --now -- "$unit_filename" "$base.service" "container-$base.service" || true
+      tgdb_systemctl_try "$scope" disable --now -- "$unit_filename" "$base.service" "container-$base.service" || true
       ;;
     pod)
-      _systemctl_user_try disable --now -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
+      tgdb_systemctl_try "$scope" disable --now -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
       ;;
     *)
-      _systemctl_user_try disable --now -- "$unit_filename" || true
+      tgdb_systemctl_try "$scope" disable --now -- "$unit_filename" || true
       ;;
   esac
 }
@@ -255,6 +271,9 @@ _app_full_remove_units_by_filenames() {
   fi
 
   local unit base
+  local deploy_mode unit_dir
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  unit_dir="$(_apps_unit_dir_for_mode "$deploy_mode" 2>/dev/null || rm_user_units_dir)"
 
   for unit in "$@"; do
     case "$unit" in
@@ -271,7 +290,7 @@ _app_full_remove_units_by_filenames() {
     case "$unit" in
       *.container)
         base="${unit%.container}"
-        podman rm -f "$base" 2>/dev/null || true
+        tgdb_podman rm -f "$base" 2>/dev/null || true
         ;;
     esac
   done
@@ -279,34 +298,55 @@ _app_full_remove_units_by_filenames() {
     case "$unit" in
       *.pod)
         base="${unit%.pod}"
-        podman pod rm -f "$base" 2>/dev/null || true
+        tgdb_podman pod rm -f "$base" 2>/dev/null || true
         ;;
     esac
   done
 
-  local user_units_dir
-  user_units_dir="$(rm_user_units_dir)"
   for unit in "$@"; do
-    rm -f "$user_units_dir/$unit" 2>/dev/null || true
+    _apps_remove_file "$deploy_mode" "$unit_dir/$unit" 2>/dev/null || true
   done
 }
 
 _app_try_delete_path() {
   local delete_path="$1" method="${2:-unshare}"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+
+  if [ "$method" = "auto" ] || [ -z "$method" ]; then
+    if [ "$deploy_mode" = "rootful" ]; then
+      method="rm"
+    else
+      method="unshare"
+    fi
+  fi
 
   case "$method" in
     rm)
-      if ! rm -rf "$delete_path" 2>/dev/null; then
-        if [ -d "$delete_path" ]; then
-          tgdb_warn "無法刪除實例資料夾：$delete_path"
-          tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
-          return 1
-        fi
+      if _apps_mode_is_rootful "$deploy_mode"; then
+        _tgdb_run_privileged rm -rf "$delete_path" 2>/dev/null || true
+      else
+        rm -rf "$delete_path" 2>/dev/null || true
+      fi
+      if [ -d "$delete_path" ] || { _apps_mode_is_rootful "$deploy_mode" && _tgdb_run_privileged test -d "$delete_path" 2>/dev/null; }; then
+        tgdb_warn "無法刪除實例資料夾：$delete_path"
+        tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
+        return 1
       fi
       return 0
       ;;
     unshare|*)
-      if ! podman unshare rm -rf "$delete_path" 2>/dev/null; then
+      if [ "$deploy_mode" = "rootful" ]; then
+        if ! _tgdb_run_privileged rm -rf "$delete_path" 2>/dev/null; then
+          if _tgdb_run_privileged test -d "$delete_path" 2>/dev/null; then
+            tgdb_warn "無法刪除實例資料夾：$delete_path"
+            tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
+            return 1
+          fi
+        fi
+        return 0
+      fi
+      if ! tgdb_podman unshare rm -rf "$delete_path" 2>/dev/null; then
         if [ -d "$delete_path" ]; then
           tgdb_warn "無法刪除實例資料夾：$delete_path"
           tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
@@ -323,55 +363,64 @@ _app_record_files() {
   _app_invoke "$service" record_files "$name"
 }
 
+_app_record_files_for_mode() {
+  local service="$1" name="$2" mode="${3:-rootless}"
+  _apps_with_deploy_mode "$mode" _app_record_files "$service" "$name"
+}
+
 _list_record_names() {
   local service="$1"
-  local cdir qdir
-  cdir=$(_service_config_dir "$service")
-  qdir=$(_service_quadlet_dir "$service")
+  local mode cdir qdir
   local names=()
-  if [ -d "$cdir" ]; then
-    while IFS= read -r -d $'\0' f; do
-      local b="${f##*/}"
-      [ "$b" = "default.conf" ] && continue
-      local n="${b%.*}"
-      # AppSpec 多設定檔紀錄：檔名為 ${name}__${dest_basename}
-      # 這裡只取 name 部分，避免記錄清單出現多筆同名實例。
-      if [[ "$n" == *__* ]]; then
-        n="${n%%__*}"
-      fi
-      if _app_is_aux_instance_name "$service" "$n"; then
-        continue
-      fi
-      names+=("$n")
-    done < <(find "$cdir" -maxdepth 1 -type f \( -name "*.json" -o -name "*.toml" -o -name "*.conf" -o -name "*.env" \) -print0 2>/dev/null)
-  fi
-  if [ -d "$qdir" ]; then
-    while IFS= read -r -d $'\0' f; do
-      local b="${f##*/}"
-      local n="${b%.container}"
-      if _app_is_aux_instance_name "$service" "$n"; then
-        continue
-      fi
-      names+=("$n")
-    done < <(find "$qdir" -maxdepth 1 -type f -name "*.container" -print0 2>/dev/null)
-    while IFS= read -r -d $'\0' f; do
-      local b="${f##*/}"
-      local n="${b%.pod}"
-      if _app_is_aux_instance_name "$service" "$n"; then
-        continue
-      fi
-      names+=("$n")
-    done < <(find "$qdir" -maxdepth 1 -type f -name "*.pod" -print0 2>/dev/null)
-  fi
+
+  for mode in rootless rootful; do
+    cdir="$(_service_config_dir "$service" "$mode")"
+    qdir="$(_service_quadlet_dir "$service" "$mode")"
+    if _apps_dir_exists "$mode" "$cdir"; then
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        local b="${f##*/}"
+        [ "$b" = "default.conf" ] && continue
+        local n="${b%.*}"
+        if [[ "$n" == *__* ]]; then
+          n="${n%%__*}"
+        fi
+        if _app_is_aux_instance_name "$service" "$n"; then
+          continue
+        fi
+        names+=("${mode}:${n}")
+      done < <(_apps_find_lines "$mode" "$cdir" -maxdepth 1 -type f \( -name "*.json" -o -name "*.toml" -o -name "*.conf" -o -name "*.env" \) 2>/dev/null)
+    fi
+    if _apps_dir_exists "$mode" "$qdir"; then
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        local b="${f##*/}"
+        local n=""
+        case "$b" in
+          *.container) n="${b%.container}" ;;
+          *.pod) n="${b%.pod}" ;;
+          *) continue ;;
+        esac
+        if _app_is_aux_instance_name "$service" "$n"; then
+          continue
+        fi
+        names+=("${mode}:${n}")
+      done < <(_apps_find_lines "$mode" "$qdir" -maxdepth 1 -type f \( -name "*.container" -o -name "*.pod" \) 2>/dev/null)
+    fi
+  done
   printf "%s\n" "${names[@]}" | sort -u
 }
 
 _select_record() {
   local service="$1"
   SELECTED_RECORD=""
+  SELECTED_RECORD_MODE=""
   local arr=()
+  local arr_modes=()
   while IFS= read -r n; do
-    [ -n "$n" ] && arr+=("$n")
+    [ -n "$n" ] || continue
+    arr+=("${n#*:}")
+    arr_modes+=("${n%%:*}")
   done < <(_list_record_names "$service")
   if [ ${#arr[@]} -eq 0 ]; then
     echo "尚無 '$service' 紀錄，請先透過『快速部署』保存紀錄。"
@@ -385,7 +434,7 @@ _select_record() {
     echo "----------------------------------"
     local i=1
     for n in "${arr[@]}"; do
-      echo "$i. $n"
+      echo "$i. $n [${arr_modes[$((i - 1))]}]"
       i=$((i + 1))
     done
     echo "----------------------------------"
@@ -395,6 +444,7 @@ _select_record() {
       return 1
     fi
     SELECTED_RECORD=${arr[$((choice - 1))]}
+    SELECTED_RECORD_MODE=${arr_modes[$((choice - 1))]}
     return 0
   done
 }
@@ -607,7 +657,15 @@ config_quadlet_custom_menu() {
 
 deploy_from_record_p() {
   local service="$1" name="$2"
-  _app_invoke "$service" deploy_from_record "$name"
+  local mode
+  mode="$(_apps_detect_instance_deploy_mode "$name" 2>/dev/null || true)"
+  if [ -z "$mode" ]; then
+    local tagged
+    tagged="$(_list_record_names "$service" | awk -F: -v target="$name" '$2 == target { print; exit }' 2>/dev/null || true)"
+    mode="${tagged%%:*}"
+  fi
+  [ -n "$mode" ] || mode="rootless"
+  _apps_with_deploy_mode "$mode" _app_invoke "$service" deploy_from_record "$name"
 }
 
 edit_record_cli() {
@@ -619,10 +677,19 @@ edit_record_cli() {
     tgdb_fail "名稱不合法：$name" 2 || return $?
   fi
 
+  local mode
+  mode="$(_apps_detect_instance_deploy_mode "$name" 2>/dev/null || true)"
+  if [ -z "$mode" ]; then
+    local tagged
+    tagged="$(_list_record_names "$service" | awk -F: -v target="$name" '$2 == target { print; exit }' 2>/dev/null || true)"
+    mode="${tagged%%:*}"
+  fi
+  [ -n "$mode" ] || mode="rootless"
+
   local files=() p
   while IFS= read -r p; do
-    [ -n "$p" ] && [ -f "$p" ] && files+=("$p")
-  done < <(_app_record_files "$service" "$name")
+    [ -n "$p" ] && _apps_test "$mode" -f "$p" && files+=("$p")
+  done < <(_app_record_files_for_mode "$service" "$name" "$mode")
 
   if [ ${#files[@]} -eq 0 ]; then
     tgdb_fail "找不到可編輯的紀錄檔：$service/$name" 1 || return $?
@@ -631,7 +698,11 @@ edit_record_cli() {
   if ! ensure_editor; then
     tgdb_fail "找不到可用的文字編輯器（nano/vim/vi），請先安裝或設定 EDITOR。" 1 || return $?
   fi
-  "$EDITOR" "${files[@]}"
+  if [ "$mode" = "rootful" ] && command -v sudo >/dev/null 2>&1; then
+    sudoedit "${files[@]}"
+  else
+    "$EDITOR" "${files[@]}"
+  fi
 
   echo "✅ 已完成編輯：$service/$name"
 }
@@ -645,10 +716,19 @@ delete_record_cli() {
     tgdb_fail "名稱不合法：$name" 2 || return $?
   fi
 
+  local mode
+  mode="$(_apps_detect_instance_deploy_mode "$name" 2>/dev/null || true)"
+  if [ -z "$mode" ]; then
+    local tagged
+    tagged="$(_list_record_names "$service" | awk -F: -v target="$name" '$2 == target { print; exit }' 2>/dev/null || true)"
+    mode="${tagged%%:*}"
+  fi
+  [ -n "$mode" ] || mode="rootless"
+
   local files=() p
   while IFS= read -r p; do
-    [ -n "$p" ] && [ -f "$p" ] && files+=("$p")
-  done < <(_app_record_files "$service" "$name")
+    [ -n "$p" ] && _apps_test "$mode" -f "$p" && files+=("$p")
+  done < <(_app_record_files_for_mode "$service" "$name" "$mode")
 
   if [ ${#files[@]} -eq 0 ]; then
     tgdb_fail "找不到可刪除的紀錄檔：$service/$name" 1 || return $?
@@ -656,7 +736,7 @@ delete_record_cli() {
 
   local f
   for f in "${files[@]}"; do
-    rm -f "$f"
+    _apps_remove_file "$mode" "$f"
   done
   echo "✅ 已刪除紀錄：$service/$name"
 }
@@ -670,8 +750,8 @@ edit_record_p() {
 
   local files=() p
   while IFS= read -r p; do
-    [ -n "$p" ] && [ -f "$p" ] && files+=("$p")
-  done < <(_app_record_files "$service" "$name")
+    [ -n "$p" ] && _apps_test "${SELECTED_RECORD_MODE:-rootless}" -f "$p" && files+=("$p")
+  done < <(_app_record_files_for_mode "$service" "$name" "${SELECTED_RECORD_MODE:-rootless}")
 
   if [ ${#files[@]} -eq 0 ]; then
     tgdb_err "找不到可編輯的紀錄檔"
@@ -684,7 +764,11 @@ edit_record_p() {
     ui_pause
     return 1
   fi
-  "$EDITOR" "${files[@]}"
+  if [ "${SELECTED_RECORD_MODE:-rootless}" = "rootful" ] && command -v sudo >/dev/null 2>&1; then
+    sudoedit "${files[@]}"
+  else
+    "$EDITOR" "${files[@]}"
+  fi
 
   echo "✅ 已完成編輯：$service/$name"
   ui_pause
@@ -700,8 +784,8 @@ delete_record_p() {
   local files=()
   local p
   while IFS= read -r p; do
-    [ -n "$p" ] && [ -f "$p" ] && files+=("$p")
-  done < <(_app_record_files "$service" "$name")
+    [ -n "$p" ] && _apps_test "${SELECTED_RECORD_MODE:-rootless}" -f "$p" && files+=("$p")
+  done < <(_app_record_files_for_mode "$service" "$name" "${SELECTED_RECORD_MODE:-rootless}")
 
   if [ ${#files[@]} -eq 0 ]; then
     tgdb_err "找不到可刪除的紀錄檔"
@@ -713,7 +797,7 @@ delete_record_p() {
   if ui_confirm_yn "確認刪除？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
     local f
     for f in "${files[@]}"; do
-      rm -f "$f"
+      _apps_remove_file "${SELECTED_RECORD_MODE:-rootless}" "$f"
     done
     echo "✅ 已刪除：$service/$name"
   else
@@ -769,13 +853,15 @@ config_p_deployment_flow() {
     echo "❖ $service 配置管理（Quadlet）❖"
     echo "=================================="
     echo "現有紀錄（輸入編號直接部屬）："
-    local arr=() n
+    local arr=() arr_modes=() n
     while IFS= read -r n; do
-      [ -n "$n" ] && arr+=("$n")
+      [ -n "$n" ] || continue
+      arr+=("${n#*:}")
+      arr_modes+=("${n%%:*}")
     done < <(_list_record_names "$service")
     local i
     for i in "${!arr[@]}"; do
-      printf "  %d. %s\n" "$((i + 1))" "${arr[$i]}"
+      printf "  %d. %s [%s]\n" "$((i + 1))" "${arr[$i]}" "${arr_modes[$i]}"
     done
     echo "----------------------------------"
     echo "0. 返回"

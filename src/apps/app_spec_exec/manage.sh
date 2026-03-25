@@ -158,14 +158,14 @@ appspec_update_and_restart_instance() {
   _appspec_maybe_enable_podman_socket "$service" || true
 
   if [ -n "${main_image:-}" ] && command -v podman >/dev/null 2>&1; then
-    podman pull "$main_image" || true
+    tgdb_podman pull "$main_image" || true
 
     local raw img
     raw="$(appspec_get_all "$service" "update_pull_images" 2>/dev/null || true)"
     if [ -n "$raw" ]; then
       while IFS= read -r img; do
         [ -n "$img" ] || continue
-        podman pull "$img" || true
+        tgdb_podman pull "$img" || true
       done <<< "$raw"
     fi
   fi
@@ -179,14 +179,17 @@ appspec_update_and_restart_instance() {
   if [ ${#units[@]} -gt 0 ] && declare -F _app_restart_units_by_filenames >/dev/null 2>&1; then
     _app_restart_units_by_filenames "${units[@]}"
   else
-    _systemctl_user_try restart -- "${name}.container" "${name}.service" "container-${name}.service" || true
+    tgdb_systemctl_try "$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")" restart -- "${name}.container" "${name}.service" "container-${name}.service" || true
   fi
 }
 
 appspec_full_remove_instance() {
   local service="$1" name="$2" deld="${3:-n}" delv="${4:-n}"
+  local deploy_mode unit_dir
 
   _appspec_maybe_enable_podman_socket "$service" || true
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  unit_dir="$(_apps_unit_dir_for_mode "$deploy_mode" 2>/dev/null || rm_user_units_dir)"
 
   local -a units=()
   local u
@@ -197,19 +200,19 @@ appspec_full_remove_instance() {
   if [ ${#units[@]} -gt 0 ] && declare -F _app_full_remove_units_by_filenames >/dev/null 2>&1; then
     _app_full_remove_units_by_filenames "${units[@]}"
   else
-    _systemctl_user_try disable --now -- "${name}.container" "${name}.service" "container-${name}.service" || true
-    podman rm -f "$name" 2>/dev/null || true
-    rm -f "$(rm_user_units_dir)/${name}.container" 2>/dev/null || true
+    tgdb_systemctl_try "$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")" disable --now -- "${name}.container" "${name}.service" "container-${name}.service" || true
+    tgdb_podman rm -f "$name" 2>/dev/null || true
+    _apps_remove_file "$deploy_mode" "$unit_dir/${name}.container" 2>/dev/null || true
   fi
 
   if [[ "${deld:-n}" =~ ^[Yy]$ ]]; then
     local delete_path method
     delete_path="${TGDB_DIR:?}/$name"
-    method="$(appspec_get "$service" "full_remove_delete_method" "unshare")"
+    method="$(appspec_get "$service" "full_remove_delete_method" "auto")"
     if declare -F _app_try_delete_path >/dev/null 2>&1; then
       _app_try_delete_path "$delete_path" "$method" || true
     else
-      podman unshare rm -rf "$delete_path" 2>/dev/null || true
+      tgdb_podman unshare rm -rf "$delete_path" 2>/dev/null || true
     fi
   fi
 
@@ -229,11 +232,11 @@ appspec_full_remove_instance() {
       backup_root="${TGDB_BACKUP_ROOT:-$(dirname "${TGDB_DIR:-$HOME/.tgdb/app}")}"
     fi
     volume_dir="$backup_root/volume/$service/$name"
-    method="$(appspec_get "$service" "full_remove_delete_method" "unshare")"
+    method="$(appspec_get "$service" "full_remove_delete_method" "auto")"
     if declare -F _app_try_delete_path >/dev/null 2>&1; then
       _app_try_delete_path "$volume_dir" "$method" || true
     else
-      podman unshare rm -rf "$volume_dir" 2>/dev/null || true
+      tgdb_podman unshare rm -rf "$volume_dir" 2>/dev/null || true
     fi
   fi
 
@@ -242,7 +245,7 @@ appspec_full_remove_instance() {
   if _appspec_truthy "$purge"; then
     local f
     while IFS= read -r f; do
-      [ -n "$f" ] && rm -f "$f" 2>/dev/null || true
+      [ -n "$f" ] && _apps_remove_file "$deploy_mode" "$f" 2>/dev/null || true
     done < <(appspec_record_files "$service" "$name" 2>/dev/null || true)
   fi
 

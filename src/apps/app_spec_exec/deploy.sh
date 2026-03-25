@@ -17,6 +17,22 @@ appspec_default_base_port() {
   fi
 }
 
+_appspec_write_staging_unit_file() {
+  local path="$1" content="$2"
+  local dir
+  dir="$(dirname "$path")"
+
+  if ! mkdir -p "$dir" 2>/dev/null; then
+    tgdb_fail "無法建立暫存單元目錄：$dir" 1 || true
+    return 1
+  fi
+
+  if ! printf '%s' "$content" >"$path"; then
+    tgdb_fail "無法寫入暫存單元檔：$path" 1 || true
+    return 1
+  fi
+}
+
 _appspec_parse_subdirs() {
   # shellcheck disable=SC2178 # out_ref 透過 nameref 回傳（shellcheck 誤判）
   local -n out_ref="$1"
@@ -52,16 +68,20 @@ _appspec_touch_files() {
       return 1
     fi
     local dest="$instance_dir/$seg"
-    mkdir -p "$(dirname "$dest")" 2>/dev/null || true
+    if ! mkdir -p "$(dirname "$dest")" 2>/dev/null; then
+      _tgdb_run_privileged mkdir -p "$(dirname "$dest")" 2>/dev/null || true
+    fi
     if [ -e "$dest" ] && [ ! -f "$dest" ]; then
       tgdb_fail "AppSpec ${label} 目標必須是檔案，但目前不是：$dest（$service）" 1 || true
       return 1
     fi
     if [ ! -f "$dest" ]; then
-      : >"$dest" 2>/dev/null || {
-        tgdb_fail "建立檔案失敗：$dest（$service）" 1 || true
-        return 1
-      }
+      if ! : >"$dest" 2>/dev/null; then
+        if ! _tgdb_run_privileged touch "$dest" 2>/dev/null; then
+          tgdb_fail "建立檔案失敗：$dest（$service）" 1 || true
+          return 1
+        fi
+      fi
     fi
   done
 }
@@ -224,8 +244,13 @@ _appspec_unit_defs() {
 
 appspec_prepare_instance() {
   local service="$1" _name="$2" _host_port="$3" instance_dir="$4"
+  local deploy_mode scope podman_sock_host_path
 
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  scope="$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")"
+  podman_sock_host_path="$(_appspec_podman_sock_host_path "$service")"
   _appspec_maybe_enable_podman_socket "$service" || true
+  _appspec_require_podman_socket_ready "$service" || return 1
 
   mkdir -p "$instance_dir"
 
@@ -233,6 +258,9 @@ appspec_prepare_instance() {
   _appspec_ctx_set "$service" "$_name" "container_name" "$_name"
   _appspec_ctx_set "$service" "$_name" "host_port" "$_host_port"
   _appspec_ctx_set "$service" "$_name" "instance_dir" "$instance_dir"
+  _appspec_ctx_set "$service" "$_name" "tgdb_deploy_mode" "$deploy_mode"
+  _appspec_ctx_set "$service" "$_name" "tgdb_scope" "$scope"
+  _appspec_ctx_set "$service" "$_name" "podman_sock_host_path" "$podman_sock_host_path"
 
   local subdirs_raw
   subdirs_raw="$(appspec_get "$service" "instance_subdirs" "")"
@@ -389,7 +417,7 @@ appspec_render_quadlet() {
           content=$(_quadlet_apply_rshared_to_volumes "$content" "$vol_prop" "$pat")
         fi
 
-        _write_file "$out_path" "$content"
+        _appspec_write_staging_unit_file "$out_path" "$content" || return 1
       done
 
       printf '%s\n' "$_units_dir"
@@ -525,6 +553,8 @@ appspec_ask_mount_options() {
 
 appspec_ask_volume_dir() {
   local service="$1" _instance_dir="$2" name="${3:-}"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
 
   local prompt
   prompt="$(appspec_get "$service" "volume_dir_prompt" "")"
@@ -550,12 +580,12 @@ appspec_ask_volume_dir() {
       break
     fi
 
-    if [ -e "$volume_dir" ] && [ ! -d "$volume_dir" ]; then
+    if _apps_test "$deploy_mode" -e "$volume_dir" && ! _apps_test "$deploy_mode" -d "$volume_dir"; then
       tgdb_err "$volume_dir 不是資料夾，請重新輸入。"
       continue
     fi
 
-    if [ -d "$volume_dir" ] && { [ ! -r "$volume_dir" ] || [ ! -w "$volume_dir" ]; }; then
+    if _apps_test "$deploy_mode" -d "$volume_dir" && { ! _apps_test "$deploy_mode" -r "$volume_dir" || ! _apps_test "$deploy_mode" -w "$volume_dir"; }; then
       tgdb_err "目前使用者對 $volume_dir 沒有讀寫權限，請調整權限或輸入其他目錄。"
       continue
     fi

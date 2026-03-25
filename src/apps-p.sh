@@ -15,6 +15,9 @@ source "$SCRIPT_DIR/core/quadlet_common.sh"
 # shellcheck source=src/apps/app_spec.sh
 source "$APPS_LIB_DIR/app_spec.sh"
 
+# shellcheck source=src/apps/apps_scope.sh
+source "$APPS_LIB_DIR/apps_scope.sh"
+
 # shellcheck source=src/apps/app_spec_exec.sh
 source "$APPS_LIB_DIR/app_spec_exec.sh"
 
