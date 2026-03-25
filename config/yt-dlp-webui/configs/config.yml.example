@@ -1,0 +1,29 @@
+# yt-dlp-webui 設定檔
+#
+# 檔案位置：${instance_dir}/config/config.yml（容器內對應 /config/config.yml）
+# 文件：https://hub.docker.com/r/marcobaobao/yt-dlp-webui
+#
+# 注意：此檔內容會覆蓋部分 CLI 參數；設定完成後請重啟單元
+
+---
+
+# 伺服器監聽位址（預設 0.0.0.0）
+#host: 0.0.0.0
+
+# 伺服器監聽埠（預設 3033）
+port: 3033
+
+# 下載輸出路徑（容器內路徑；預設 "."）
+downloadPath: /downloads
+
+# [可選] 啟用 RPC 認證（需要帳號密碼）
+require_auth: true
+username: ${user_name}
+password: ${pass_word}
+
+# [可選] 下載佇列大小（同時下載數；最小 2）
+queue_size: 2
+
+# [可選] yt-dlp 執行檔路徑（預設 "yt-dlp"）
+#downloaderPath: yt-dlp
+
