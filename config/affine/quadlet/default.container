@@ -1,0 +1,32 @@
+[Unit]
+Description=AFFiNE
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-migration.service container-${container_name}-migration.service
+Wants=${container_name}-migration.service container-${container_name}-migration.service
+
+[Container]
+Image=ghcr.io/toeverything/affine:stable
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=affine
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/storage:/root/.affine/storage
+Volume=${instance_dir}/config:/root/.affine/config
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

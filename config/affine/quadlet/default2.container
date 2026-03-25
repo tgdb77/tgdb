@@ -1,0 +1,37 @@
+[Unit]
+Description=AFFiNE migration
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service ${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service ${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=ghcr.io/toeverything/affine:stable
+#AutoUpdate=registry
+ContainerName=${container_name}-migration
+Label=app=affine
+
+Pod=${container_name}.pod
+
+Exec=node ./scripts/self-host-predeploy.js
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/storage:/root/.affine/storage
+Volume=${instance_dir}/config:/root/.affine/config
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 90 ]; do /usr/bin/podman exec ${container_name}-postgres pg_isready -h 127.0.0.1 -p 5432 -U ${db_user} -d affine >/dev/null 2>&1 && /usr/bin/podman exec ${container_name}-redis redis-cli ping >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "PostgreSQL/Redis 尚未就緒，取消執行 AFFiNE migration" >&2; exit 1'
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=30
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

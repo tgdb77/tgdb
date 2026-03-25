@@ -1,0 +1,38 @@
+[Unit]
+Description=Manyfold
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service ${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service ${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=ghcr.io/manyfold3d/manyfold:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=manyfold
+UserNS=keep-id
+User=0
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+# 模型庫（建議掛載一個「總資料夾」，在 Manyfold 裡再用 /libraries/... 設定多個 Library）
+Volume=${volume_dir}:/libraries
+
+# 安全加固（官方 docker-compose 建議）
+NoNewPrivileges=true
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 90 ]; do /usr/bin/podman exec ${container_name}-postgres pg_isready -h 127.0.0.1 -p 5432 -U ${db_user} >/dev/null 2>&1 && /usr/bin/podman exec ${container_name}-redis redis-cli ping >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "PostgreSQL/Redis 尚未就緒，取消啟動 Manyfold" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

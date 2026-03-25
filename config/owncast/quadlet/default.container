@@ -1,0 +1,32 @@
+[Unit]
+Description=Owncast
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/owncast/owncast:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=owncast
+#Network=tgdb.network
+
+# Web UI
+PublishPort=127.0.0.1:${host_port}:8080/tcp
+# RTMP ingest（OBS 推流）
+PublishPort=127.0.0.1:${rtmp_port}:1935/tcp
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}:/app/data
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+
