@@ -1,0 +1,29 @@
+[Unit]
+Description=Domain Locker（Updater/Cron）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}.service container-${container_name}.service
+Wants=${container_name}.service container-${container_name}.service
+
+[Container]
+Image=docker.io/library/alpine:3.20
+#AutoUpdate=registry
+ContainerName=${container_name}-updater
+Label=app=domain-locker
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+Exec=sh -c 'set -eu; echo "0 3 * * * wget -qO- --post-data=\"\" http://127.0.0.1:3000/api/domain-updater >/dev/null || echo \"ERROR: domain-updater failed at \$(date)\" >&2" > /etc/crontabs/root; echo "0 4 * * * wget -qO- --post-data=\"\" http://127.0.0.1:3000/api/expiration-reminders >/dev/null || echo \"ERROR: expiration-reminders failed at \$(date)\" >&2" >> /etc/crontabs/root; echo "*/15 * * * * wget -qO- --post-data=\"\" http://127.0.0.1:3000/api/domain-monitor >/dev/null || echo \"ERROR: domain-monitor failed at \$(date)\" >&2" >> /etc/crontabs/root; echo "0 2 * * 0 wget -qO- --post-data=\"\" http://127.0.0.1:3000/api/cleanup-monitor-data >/dev/null || echo \"ERROR: cleanup-monitor-data failed at \$(date)\" >&2" >> /etc/crontabs/root; exec crond -f -L /dev/stdout'
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

@@ -6,14 +6,13 @@
 # 檢視連接埠佔用狀態
 view_port_status() {
     maybe_clear
-    echo "正在檢視所有監聽中的連接埠 (TCP 和 UDP)..."
+    echo "正在檢視所有監聽中的連接埠 (TCP 和 UDP)，並顯示使用該連接埠的進程（PID/程式名）..."
     if command -v ss >/dev/null 2>&1; then
-        sudo ss -tuln
+        sudo ss -tulpn
     elif command -v netstat >/dev/null 2>&1; then
-        sudo netstat -tuln
+        sudo netstat -tulnp
     else
         echo "未找到 ss 或 netstat，請安裝 iproute2 或 net-tools。"
     fi
     pause
 }
-
