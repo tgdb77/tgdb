@@ -1,0 +1,35 @@
+[Unit]
+Description=LibreTranslate
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/libretranslate/libretranslate:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=libretranslate
+#Network=tgdb.network
+
+UserNS=keep-id
+
+PublishPort=127.0.0.1:${host_port}:5000/tcp
+
+EnvironmentFile=${instance_dir}/.env
+
+# API Keys DB（啟用 LT_API_KEYS 時才會用到）
+Volume=${instance_dir}/db:/app/db:rw
+
+# 模型快取（避免每次重啟都重新下載）
+Volume=${volume_dir}/models:/home/libretranslate/.local:rw
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

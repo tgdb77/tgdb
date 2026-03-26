@@ -166,12 +166,8 @@ modify_swap_size() {
         fi
 
         if virtual_memory_apply_swap_size "$new_size"; then
-            if [ "$new_size" = "0" ]; then
-                manage_virtual_memory
-                return
-            fi
             pause
-            break
+            return 0
         fi
 
         pause
