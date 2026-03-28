@@ -1,0 +1,33 @@
+[Unit]
+Description=Invoice Ninja（Nginx）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-app.service container-${container_name}-app.service
+Wants=${container_name}-app.service container-${container_name}-app.service
+
+[Container]
+Image=docker.io/library/nginx:1.27-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=invoiceninja
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/nginx:/etc/nginx/conf.d:ro
+Volume=${instance_dir}/public:/var/www/html/public:ro
+Volume=${instance_dir}/storage:/var/www/html/storage:ro
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+
