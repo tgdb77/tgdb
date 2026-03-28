@@ -1,0 +1,37 @@
+[Unit]
+Description=Invoice Ninja（App）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mysql.service container-${container_name}-mysql.service
+Wants=${container_name}-mysql.service container-${container_name}-mysql.service
+
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=docker.io/invoiceninja/invoiceninja-debian:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-app
+Label=app=invoiceninja
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/public:/var/www/html/public
+Volume=${instance_dir}/storage:/var/www/html/storage
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

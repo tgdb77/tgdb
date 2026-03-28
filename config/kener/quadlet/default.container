@@ -1,0 +1,36 @@
+[Unit]
+Description=Kener
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=docker.io/rajnandan1/kener:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=kener
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/database:/app/database
+Volume=${instance_dir}/uploads:/app/uploads
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
