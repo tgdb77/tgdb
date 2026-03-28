@@ -1,0 +1,34 @@
+[Unit]
+Description=MySpeed
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/germannewsmaker/myspeed:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=myspeed
+#Network=tgdb.network
+
+# HTTP（預設）
+PublishPort=127.0.0.1:${host_port}:5216
+
+# HTTPS（可選；需自行準備憑證並放到 ${instance_dir}/data/certs）
+#PublishPort=127.0.0.1:5217:5217
+
+Volume=${instance_dir}/data:/myspeed/data
+Volume=${instance_dir}/bin:/myspeed/bin
+
+EnvironmentFile=${instance_dir}/.env
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

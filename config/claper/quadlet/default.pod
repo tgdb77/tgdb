@@ -1,0 +1,16 @@
+[Unit]
+Description=Claper Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PodName=${container_name}
+PublishPort=127.0.0.1:${host_port}:4000/tcp
+#Network=tgdb.network
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+
