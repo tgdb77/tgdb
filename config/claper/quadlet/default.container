@@ -1,0 +1,31 @@
+[Unit]
+Description=Claper
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=ghcr.io/claperco/claper:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=claper
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/uploads:/app/uploads
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

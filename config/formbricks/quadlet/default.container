@@ -1,0 +1,34 @@
+[Unit]
+Description=Formbricks
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+After=${container_name}-valkey.service container-${container_name}-valkey.service
+Wants=${container_name}-valkey.service container-${container_name}-valkey.service
+
+[Container]
+Image=ghcr.io/formbricks/formbricks:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=formbricks
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/saml-connection:/home/nextjs/apps/web/saml-connection
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

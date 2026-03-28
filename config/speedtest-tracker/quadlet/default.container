@@ -1,0 +1,30 @@
+[Unit]
+Description=Speedtest Tracker
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=lscr.io/linuxserver/speedtest-tracker:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=speedtest-tracker
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/config:/config
+
+EnvironmentFile=${instance_dir}/.env
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
