@@ -1,0 +1,36 @@
+[Unit]
+Description=libredesk
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=docker.io/libredesk/libredesk:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=libredesk
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/uploads:/libredesk/uploads
+Volume=${instance_dir}/config.toml:/libredesk/config.toml
+
+EnvironmentFile=${instance_dir}/.env
+
+Entrypoint=["/bin/sh","-c"]
+Exec="set -eu; ./libredesk --install --idempotent-install --yes --config /libredesk/config.toml && ./libredesk --upgrade --yes --config /libredesk/config.toml && exec ./libredesk --config /libredesk/config.toml"
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

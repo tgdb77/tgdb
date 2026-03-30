@@ -65,7 +65,7 @@
 
 | Feature Area | Details |
 |:------------:|:--------|
-| **Containerized Apps** | Built-in support for 55 app specs across media, AI, knowledge management, monitoring, databases, and network services |
+| **Containerized Apps** | Built-in support for 100+ app specs across media, AI, knowledge management, monitoring, databases, and network services |
 | **Security Stack** | nftables firewall + Fail2ban intrusion protection |
 | **Automated Backups** | Cold backup/restore, Kopia hot backup, Rclone sync, and systemd timer scheduling |
 | **Cloud Storage** | Rclone integration for mounting and syncing cloud storage |
@@ -97,7 +97,6 @@
 ### Installation and Launch
 
 ```bash
-# One-line quick install: install git -> sync project -> chmod -> run
 bash <(curl -fsSL https://raw.githubusercontent.com/tgdb77/tgdb/main/install.sh)
 ```
 
@@ -196,7 +195,7 @@ Use TGDB directly from the terminal for scripting and automation:
 
 ## 📱 Supported Applications
 
-TGDB uses **Podman + Quadlet** for rootless container deployment and currently includes **55 app specs**:
+TGDB uses **Podman + Quadlet** for rootless container deployment and currently includes **100+ app specs**:
 
 <table>
   <tr>

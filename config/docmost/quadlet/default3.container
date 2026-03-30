@@ -1,0 +1,28 @@
+[Unit]
+Description=docmost redis
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/redis:8-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}-redis
+Label=app=docmost
+Label=tgdb_db=redis
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/rdata:/data
+
+Exec=redis-server --appendonly yes --maxmemory-policy noeviction
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

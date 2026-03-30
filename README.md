@@ -65,7 +65,7 @@
 
 | 🎯 功能類別 | 📝 具體說明 |
 |:----------:|:----------|
-| **容器化應用** | 內建 55 個 App Spec，涵蓋媒體、AI、知識管理、監控、資料庫與網路服務 |
+| **容器化應用** | 內建 100+ 個 App Spec，涵蓋媒體、AI、知識管理、監控、資料庫與網路服務 |
 | **安全堆疊** | nftables 防火牆 + Fail2ban 入侵防護，完整安全防護 |
 | **自動備份** | 冷備份/還原、Kopia 熱備、Rclone 遠端同步、systemd timer 排程 |
 | **雲端儲存** | Rclone 整合，支援各大雲端服務掛載 |
@@ -97,7 +97,6 @@
 ### 安裝與執行
 
 ```bash
-# 一行快速安裝：安裝 git → 同步專案 → 進入目錄並賦權限 → 直接執行
 bash <(curl -fsSL https://raw.githubusercontent.com/tgdb77/tgdb/main/install.sh)
 ```
 
@@ -196,7 +195,7 @@ t
 
 ## 📱 支援的應用
 
-TGDB 使用 **Podman + Quadlet** 實現 Rootless 容器化部署，目前內建 **55 個 App Spec**：
+TGDB 使用 **Podman + Quadlet** 實現 Rootless 容器化部署，目前內建 **100+ 個 App Spec**：
 
 <table>
   <tr>
