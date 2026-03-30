@@ -38,6 +38,40 @@ _appspec_input_validate_value() {
   local service="$1" name="$2" input_key="$3" value="$4"
   local -n opts_ref="$5"
 
+  local min_len max_len
+  min_len="${opts_ref[min_len]:-}"
+  max_len="${opts_ref[max_len]:-}"
+
+  if [[ "$min_len" =~ ^[0-9]+$ ]] && [ "${#value}" -lt "$min_len" ]; then
+    tgdb_fail "輸入 '$input_key' 長度不足（$service；至少 ${min_len} 個字元）。" 1 || true
+    return 1
+  fi
+
+  if [[ "$max_len" =~ ^[0-9]+$ ]] && [ "${#value}" -gt "$max_len" ]; then
+    tgdb_fail "輸入 '$input_key' 長度過長（$service；最多 ${max_len} 個字元）。" 1 || true
+    return 1
+  fi
+
+  if _appspec_truthy "${opts_ref[require_upper]:-0}" && [[ ! "$value" =~ [A-Z] ]]; then
+    tgdb_fail "輸入 '$input_key' 必須至少包含一個大寫英文字母（$service）。" 1 || true
+    return 1
+  fi
+
+  if _appspec_truthy "${opts_ref[require_lower]:-0}" && [[ ! "$value" =~ [a-z] ]]; then
+    tgdb_fail "輸入 '$input_key' 必須至少包含一個小寫英文字母（$service）。" 1 || true
+    return 1
+  fi
+
+  if _appspec_truthy "${opts_ref[require_digit]:-0}" && [[ ! "$value" =~ [0-9] ]]; then
+    tgdb_fail "輸入 '$input_key' 必須至少包含一個數字（$service）。" 1 || true
+    return 1
+  fi
+
+  if _appspec_truthy "${opts_ref[require_special]:-0}" && [[ ! "$value" =~ [^[:alnum:]] ]]; then
+    tgdb_fail "輸入 '$input_key' 必須至少包含一個特殊字元（$service）。" 1 || true
+    return 1
+  fi
+
   local pattern
   pattern="${opts_ref[pattern]:-}"
   if [ -n "${pattern:-}" ]; then
@@ -132,6 +166,14 @@ _appspec_default_from_source() {
       prefix="${opts_ref[prefix]:-}"
       hex="$(_appspec_random_hex "$len")"
       printf '%s\n' "${prefix}${hex}"
+      return 0
+      ;;
+    strong_password)
+      local pw_len prefix pw
+      pw_len="${opts_ref[len]:-20}"
+      prefix="${opts_ref[prefix]:-}"
+      pw="$(_appspec_random_password "$pw_len")"
+      printf '%s\n' "${prefix}${pw}"
       return 0
       ;;
     next_available_port)
@@ -348,6 +390,64 @@ _appspec_random_hex() {
     return 0
   fi
   date +%s%N | sha1sum | cut -c1-"$want_len"
+}
+
+_appspec_random_chars_from_set() {
+  local charset="$1" want_len="${2:-1}"
+  local out=""
+
+  if [ -z "$charset" ]; then
+    return 1
+  fi
+  if [[ ! "$want_len" =~ ^[0-9]+$ ]] || [ "$want_len" -le 0 ] 2>/dev/null; then
+    want_len=1
+  fi
+
+  while [ "${#out}" -lt "$want_len" ]; do
+    local need chunk
+    need=$((want_len - ${#out}))
+    chunk=""
+
+    if [ -r /dev/urandom ]; then
+      chunk="$(LC_ALL=C tr -dc "$charset" </dev/urandom 2>/dev/null | dd bs=1 count="$need" 2>/dev/null || true)"
+    elif command -v openssl >/dev/null 2>&1; then
+      chunk="$(openssl rand -base64 $((need * 8 + 16)) 2>/dev/null | tr -dc "$charset" | cut -c1-"$need")"
+    fi
+
+    if [ -z "$chunk" ]; then
+      while [ "${#chunk}" -lt "$need" ]; do
+        chunk+="${charset:$((RANDOM % ${#charset})):1}"
+      done
+    fi
+
+    out+="$chunk"
+  done
+
+  printf '%s\n' "$out"
+}
+
+_appspec_random_password() {
+  local want_len="${1:-20}"
+  local upper='ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  local lower='abcdefghijklmnopqrstuvwxyz'
+  local digits='0123456789'
+  local special='@%_+=' 
+  local charset="${upper}${lower}${digits}${special}"
+  local password=""
+
+  if [[ ! "$want_len" =~ ^[0-9]+$ ]] || [ "$want_len" -lt 10 ] 2>/dev/null; then
+    want_len=20
+  fi
+
+  while true; do
+    password="$(_appspec_random_chars_from_set "$charset" "$want_len")" || return 1
+    [[ "$password" =~ [A-Z] ]] || continue
+    [[ "$password" =~ [a-z] ]] || continue
+    [[ "$password" =~ [0-9] ]] || continue
+    [[ "$password" =~ [^[:alnum:]] ]] || continue
+    printf '%s\n' "$password"
+    return 0
+  done
 }
 
 _appspec_collect_vars() {

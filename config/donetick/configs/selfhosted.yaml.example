@@ -1,0 +1,94 @@
+# Donetick 自託管設定檔（TGDB 產生）
+#
+# 檔案位置：${instance_dir}/config/selfhosted.yaml
+# 官方範本：
+# - https://github.com/donetick/donetick/blob/main/config/selfhosted.yaml
+#
+# 修改後請重啟（依你的容器名稱調整）：
+# - systemctl --user restart ${container_name}.service
+
+name: "selfhosted"
+is_done_tick_dot_com: false
+is_user_creation_disabled: false
+
+telegram:
+  token: ""
+
+pushover:
+  token: ""
+
+database:
+  type: "sqlite"
+  migration: true
+  # 下列欄位僅在改用 PostgreSQL 時需要
+  host: "secret"
+  port: 5432
+  user: "secret"
+  password: "secret"
+  name: "secret"
+
+jwt:
+  # 依官方要求需為 32 字元；TGDB 已預先產生隨機值
+  secret: "${jwt_secret}"
+  session_time: 168h
+  max_refresh: 1440h
+
+server:
+  # 容器內固定 2021；主機對外埠由 Quadlet 的 PublishPort 映射成 ${host_port}
+  port: 2021
+  read_timeout: 10s
+  write_timeout: 10s
+  rate_period: 60s
+  rate_limit: 300
+  cors_allow_origins:
+    - "http://localhost:5173"
+    - "http://localhost:7926"
+    - "https://localhost"
+    - "http://localhost"
+    - "capacitor://localhost"
+  serve_frontend: true
+  serve_swagger: true
+  # 例：https://tasks.example.com
+  public_host: ""
+
+logging:
+  level: "info"
+  encoding: "json"
+  development: false
+
+scheduler_jobs:
+  due_job: 30m
+  overdue_job: 3h
+  pre_due_job: 3h
+
+email:
+  host:
+  port:
+  key:
+  email:
+  user:
+  appHost:
+
+oauth2:
+  client_id:
+  client_secret:
+  auth_url:
+  token_url:
+  user_info_url:
+  redirect_url:
+  name:
+
+realtime:
+  enabled: true
+  sse_enabled: true
+  heartbeat_interval: 60s
+  connection_timeout: 120s
+  max_connections: 1000
+  max_connections_per_user: 5
+  event_queue_size: 2048
+  cleanup_interval: 2m
+  stale_threshold: 5m
+  enable_compression: true
+  enable_stats: true
+  allowed_origins:
+    - "*"
