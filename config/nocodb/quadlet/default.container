@@ -1,0 +1,34 @@
+[Unit]
+Description=NocoDB
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=docker.io/nocodb/nocodb:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=nocodb
+
+Pod=${container_name}.pod
+
+#Network=tgdb.network
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/data:/usr/app/data
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
