@@ -1,0 +1,33 @@
+[Unit]
+Description=listmonk
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=docker.io/listmonk/listmonk:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=listmonk
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${volume_dir}:/uploads:rw
+
+Entrypoint=["/bin/sh","-c"]
+Exec="set -eu; ./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && exec ./listmonk --config ''"
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

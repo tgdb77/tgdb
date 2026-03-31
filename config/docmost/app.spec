@@ -4,7 +4,7 @@ image=docker.io/docmost/docmost:latest
 doc_url=https://docmost.com/docs/installation
 menu_order=105
 
-base_port=3000
+base_port=3345
 
 instance_subdirs=storage pgdata rdata
 record_subdirs=storage pgdata rdata
