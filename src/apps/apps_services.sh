@@ -372,8 +372,15 @@ _apps_list_instances_by_label() {
   local service="$1"
   [ -z "$service" ] && return 0
   local mode quad_dir runtime_dir seen=""
+  local -a modes=()
+  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
+    _apps_service_supports_deploy_mode "$service" "rootful" && modes+=("rootful")
+  fi
+  # fallback：避免在意外缺少 helper 時行為改變
+  [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
 
-  for mode in rootless rootful; do
+  for mode in "${modes[@]}"; do
     quad_dir="$(rm_service_quadlet_dir_by_mode "$service" "$mode" 2>/dev/null || echo "")"
     if [ -n "$quad_dir" ] && _apps_dir_exists "$mode" "$quad_dir"; then
       local f=""
@@ -426,6 +433,13 @@ _apps_has_podman_instances_by_mode() {
   [ -n "$service" ] || return 1
   command -v podman >/dev/null 2>&1 || return 1
 
+  # 若此 service 未宣告支援 rootful，避免為了「顯示」而觸發 sudo 密碼提示。
+  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    if ! _apps_service_supports_deploy_mode "$service" "$mode"; then
+      return 1
+    fi
+  fi
+
   case "$mode" in
     rootful)
       _tgdb_run_privileged podman ps -aq --filter "label=app=${service}" 2>/dev/null | grep -q .
@@ -440,6 +454,12 @@ _apps_print_podman_instances_by_mode() {
   local service="$1" mode="$2"
   [ -n "$service" ] || return 1
   command -v podman >/dev/null 2>&1 || return 1
+
+  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    if ! _apps_service_supports_deploy_mode "$service" "$mode"; then
+      return 1
+    fi
+  fi
 
   local label
   case "$mode" in

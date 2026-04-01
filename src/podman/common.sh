@@ -347,6 +347,13 @@ _podman_collect_unit_records() {
     done
     find_args+=( \) -printf '%f\t%p\n' )
 
+    if [ "$scope" = "system" ] && ! _podman_is_root; then
+        _podman_run_scope_cmd "$scope" find "${find_args[@]}" 2>/dev/null \
+          | awk -v scope="$scope" -F'\t' 'NF>=2 {print scope "\t" $1 "\t" $2}' \
+          | sort -t$'\t' -k2,2 -k1,1
+        return 0
+    fi
+
     find "${find_args[@]}" 2>/dev/null \
       | awk -v scope="$scope" -F'\t' 'NF>=2 {print scope "\t" $1 "\t" $2}' \
       | sort -t$'\t' -k2,2 -k1,1
@@ -521,21 +528,38 @@ _print_overview_inline() {
 }
 
 _podman_cleanup_resources() {
-    podman container prune -f || true
-    podman network prune -f || true
-    podman image prune -a -f || true
-    podman volume prune -f || true
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    _podman_podman_cmd "$scope" container prune -f || true
+    _podman_podman_cmd "$scope" network prune -f || true
+    _podman_podman_cmd "$scope" image prune -a -f || true
+    _podman_podman_cmd "$scope" volume prune -f || true
 }
 
 _podman_collect_container_records() {
     local mode="${1:-all}"
+    local scope_filter="${2:-user}"
     local -a ps_args=()
     if [ "$mode" = "all" ]; then
         ps_args=(-a)
     fi
 
+    local -a scopes=()
+    case "${scope_filter,,}" in
+        all|both)
+            scopes=(user system)
+            ;;
+        system|rootful)
+            scopes=(system)
+            ;;
+        user|rootless|""|*)
+            # 預設僅列 rootless，避免在一般情境下觸發 sudo 密碼提示。
+            scopes=(user)
+            ;;
+    esac
+
     local scope row
-    for scope in user system; do
+    for scope in "${scopes[@]}"; do
         if [ "$scope" = "system" ] && ! _podman_is_root && ! command -v sudo >/dev/null 2>&1; then
             continue
         fi
@@ -571,17 +595,31 @@ _podman_print_scope_ps_table() {
 
 _podman_print_container_overview() {
     local mode="${1:-all}"
+    local scope_filter="${2:-user}"
     local printed_any=0
 
-    if _podman_print_scope_ps_table user "$mode"; then
-        printed_any=1
-    fi
+    local -a scopes=()
+    case "${scope_filter,,}" in
+        all|both)
+            scopes=(user system)
+            ;;
+        system|rootful)
+            scopes=(system)
+            ;;
+        user|rootless|*)
+            scopes=(user)
+            ;;
+    esac
 
-    echo
-
-    if _podman_print_scope_ps_table system "$mode"; then
-        printed_any=1
-    fi
+    local scope
+    for scope in "${scopes[@]}"; do
+        if [ "$printed_any" -eq 1 ]; then
+            echo
+        fi
+        if _podman_print_scope_ps_table "$scope" "$mode"; then
+            printed_any=1
+        fi
+    done
 
     if [ "$printed_any" -eq 0 ]; then
         echo "目前沒有可顯示的容器。"

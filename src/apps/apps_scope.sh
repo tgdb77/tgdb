@@ -446,11 +446,22 @@ _apps_name_exists_any_mode() {
 }
 
 _apps_detect_instance_deploy_mode() {
-  local name="$1"
+  local name="$1" service="${2:-}"
   local has_rootless=0 has_rootful=0
 
-  _apps_instance_exists_in_mode "$name" "rootless" && has_rootless=1
-  _apps_instance_exists_in_mode "$name" "rootful" && has_rootful=1
+  # 若提供 service，僅檢查其宣告支援的部署模式。
+  # 目的：避免在大多數 rootless-only 的 app 流程中，為了偵測/顯示而觸發 sudo 密碼提示。
+  if [ -n "$service" ] && declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    if _apps_service_supports_deploy_mode "$service" "rootless"; then
+      _apps_instance_exists_in_mode "$name" "rootless" && has_rootless=1
+    fi
+    if _apps_service_supports_deploy_mode "$service" "rootful"; then
+      _apps_instance_exists_in_mode "$name" "rootful" && has_rootful=1
+    fi
+  else
+    _apps_instance_exists_in_mode "$name" "rootless" && has_rootless=1
+    _apps_instance_exists_in_mode "$name" "rootful" && has_rootful=1
+  fi
 
   if [ "$has_rootless" -eq 1 ] && [ "$has_rootful" -eq 1 ]; then
     tgdb_fail "偵測到跨 scope 同名實例：$name，請先人工清理衝突。" 1 || return $?

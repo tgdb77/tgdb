@@ -85,7 +85,14 @@ select_instance() {
   local seen=""
   local mode quad_dir runtime_dir
 
-  for mode in rootless rootful; do
+  local -a modes=()
+  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
+    _apps_service_supports_deploy_mode "$service" "rootful" && modes+=("rootful")
+  fi
+  [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
+
+  for mode in "${modes[@]}"; do
     quad_dir="$(rm_service_quadlet_dir_by_mode "$service" "$mode" 2>/dev/null || echo "")"
     if [ -n "$quad_dir" ] && _apps_dir_exists "$mode" "$quad_dir"; then
       local f=""
