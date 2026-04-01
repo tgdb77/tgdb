@@ -19,14 +19,31 @@ _sync_quadlet_unit_to_config() {
     local dest_dir
     dest_dir="$(rm_persist_quadlet_subdir_dir "$subdir")"
     mkdir -p "$dest_dir"
-    if cp "$src" "$dest_dir/$name"; then
-        echo "✅ 已同步單元到設定目錄：$dest_dir/$name"
+
+    local dest
+    dest="$dest_dir/$name"
+    if [ "$scope" = "system" ]; then
+        # 用 sudo 讀取 system scope 單元，再以目前使用者寫入設定目錄（避免產生 root 擁有檔案）。
+        if _podman_run_scope_cmd "$scope" cat "$src" 2>/dev/null | tee "$dest" >/dev/null 2>&1; then
+            echo "✅ 已同步單元到設定目錄：$dest"
+        else
+            tgdb_warn "無法同步單元到設定目錄：$dest_dir"
+        fi
+        return 0
+    fi
+
+    if cp "$src" "$dest"; then
+        echo "✅ 已同步單元到設定目錄：$dest"
     else
         tgdb_warn "無法同步單元到設定目錄：$dest_dir"
     fi
 }
 
 _create_or_edit_quadlet_unit() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    shift || true
+
     local name type_idx ext fname
     read -r -e -p "請輸入單元檔名（不含副檔名，如 myapp）: " name
     if [ -z "$name" ]; then tgdb_fail "檔名不可為空" 1 || return $?; fi
@@ -50,17 +67,31 @@ _create_or_edit_quadlet_unit() {
     fname="$name.$ext"
 
     if [ "$ext" = "container" ]; then
-        if [ -z "${TGDB_DIR:-}" ]; then
+        local runtime_dir
+        runtime_dir="$(_podman_runtime_dir_for_scope "$scope")"
+        if [ -z "${runtime_dir:-}" ]; then
             tgdb_warn "無法取得 TGDB 目錄設定，略過實例資料夾建立。"
         else
-            local instance_dir="$TGDB_DIR/$name"
-            if [ -d "$instance_dir" ]; then
-                echo "ℹ️ 實例資料夾已存在：$instance_dir"
-            else
-                if mkdir -p "$instance_dir" 2>/dev/null; then
-                    echo "✅ 已建立實例資料夾：$instance_dir"
+            local instance_dir="$runtime_dir/$name"
+            if [ "$scope" = "system" ]; then
+                if _podman_run_scope_cmd "$scope" test -d "$instance_dir" 2>/dev/null; then
+                    echo "ℹ️ 實例資料夾已存在：$instance_dir"
                 else
-                    tgdb_warn "無法建立實例資料夾：$instance_dir（請確認權限）"
+                    if _podman_run_scope_cmd "$scope" mkdir -p "$instance_dir" 2>/dev/null; then
+                        echo "✅ 已建立實例資料夾：$instance_dir"
+                    else
+                        tgdb_warn "無法建立實例資料夾：$instance_dir（請確認權限）"
+                    fi
+                fi
+            else
+                if [ -d "$instance_dir" ]; then
+                    echo "ℹ️ 實例資料夾已存在：$instance_dir"
+                else
+                    if mkdir -p "$instance_dir" 2>/dev/null; then
+                        echo "✅ 已建立實例資料夾：$instance_dir"
+                    else
+                        tgdb_warn "無法建立實例資料夾：$instance_dir（請確認權限）"
+                    fi
                 fi
             fi
         fi
@@ -69,19 +100,50 @@ _create_or_edit_quadlet_unit() {
     if ! ensure_editor; then
         tgdb_fail "找不到可用的文字編輯器（nano/vim/vi），請先安裝或設定 EDITOR。" 1 || return $?
     fi
-    "$EDITOR" "$(rm_user_unit_path "$fname")"
-    _systemctl_user_try daemon-reload || true
-    if _unit_try_enable_now "$fname"; then
-        _sync_quadlet_unit_to_config "$fname"
+
+    local unit_path
+    unit_path="$(_podman_unit_path "$scope" "$fname")"
+    _podman_run_scope_cmd "$scope" mkdir -p "$(dirname "$unit_path")" >/dev/null 2>&1 || true
+
+    if [ "$scope" = "system" ]; then
+        tgdb_warn "此單元屬於 rootful/system scope，將以 sudoedit 開啟。"
+        if command -v sudoedit >/dev/null 2>&1; then
+            if ! sudoedit "$unit_path"; then
+                tgdb_warn "sudoedit 失敗，改以直接開啟編輯器（可能無法儲存）。"
+                "$EDITOR" "$unit_path"
+            fi
+        elif command -v sudo >/dev/null 2>&1; then
+            if ! sudo "$EDITOR" "$unit_path"; then
+                tgdb_warn "無法透過 sudo 開啟編輯器，改以直接開啟。"
+                "$EDITOR" "$unit_path"
+            fi
+        else
+            tgdb_warn "找不到 sudoedit / sudo，改以直接開啟編輯器（可能無法儲存）。"
+            "$EDITOR" "$unit_path"
+        fi
+    else
+        "$EDITOR" "$unit_path"
+    fi
+
+    local unit_token
+    unit_token="$(_podman_token_from_record "$scope" "$fname")"
+
+    _podman_systemctl "$scope" daemon-reload || true
+    if _unit_try_enable_now "$unit_token"; then
+        _sync_quadlet_unit_to_config "$unit_token"
         echo "✅ 已啟用並送出啟動：$fname（啟動中，可用「查看單元日誌」追蹤）"
     else
-        _sync_quadlet_unit_to_config "$fname"
+        _sync_quadlet_unit_to_config "$unit_token"
         tgdb_warn "已保存，但啟用/啟動可能失敗，請檢查單元內容或日誌。"
     fi
 }
 
 _pick_existing_unit_file() {
-    mapfile -t __units < <(_podman_collect_all_unit_records "$@")
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    shift || true
+
+    mapfile -t __units < <(_podman_collect_unit_records "$scope" "$@")
     if [ "${#__units[@]}" -eq 0 ]; then
         tgdb_warn "目前沒有任何單元檔可編輯"
         return 1
@@ -107,29 +169,37 @@ _pick_existing_unit_file() {
         fi
         tgdb_fail "序號超出範圍" 1 || return $?
     fi
+
+    local bare
+    bare="$(_podman_token_name "$pick")"
     local rec
     for rec in "${__units[@]}"; do
         IFS=$'\t' read -r scope name path <<< "$rec"
-        if [ "$pick" = "$name" ] || [ "$pick" = "$path" ] || [ "$pick" = "$(_podman_token_from_record "$scope" "$name")" ]; then
+        if [ "$bare" = "$name" ] || [ "$pick" = "$path" ] || [ "$pick" = "$(_podman_token_from_record "$scope" "$name")" ]; then
             printf '%s\n' "$(_podman_token_from_record "$scope" "$name")"
             return 0
         fi
     done
-    record="$(_podman_resolve_unit_records "$pick" 2>/dev/null | head -n 1 || true)"
+
+    record="$(_podman_resolve_unit_records "$(_podman_token_from_record "$scope" "$bare")" 2>/dev/null | head -n 1 || true)"
     if [ -n "$record" ]; then
         IFS=$'\t' read -r scope name path <<< "$record"
         printf '%s\n' "$(_podman_token_from_record "$scope" "$name")"
         return 0
     fi
-    printf '%s\n' "$pick"
+
+    # 保險：即使找不到，仍以選單 scope 回傳，避免跨 scope 誤操作。
+    printf '%s\n' "$(_podman_token_from_record "$scope" "$bare")"
 }
 
 _pick_existing_unit_files_multi() {
-    local action_label="$1"
-    shift
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    local action_label="$2"
+    shift 2
 
     local -a units=()
-    mapfile -t units < <(_podman_collect_all_unit_records "$@")
+    mapfile -t units < <(_podman_collect_unit_records "$scope" "$@")
     if [ "${#units[@]}" -eq 0 ]; then
         tgdb_warn "目前沒有任何單元檔可操作"
         return 1
@@ -176,18 +246,20 @@ _pick_existing_unit_files_multi() {
             IFS=$'\t' read -r scope name path <<< "${units[$idx]}"
             resolved="$(_podman_token_from_record "$scope" "$name")"
         else
+            local bare
+            bare="$(_podman_token_name "$token")"
             resolved=""
             local u
             for u in "${units[@]}"; do
                 IFS=$'\t' read -r scope name path <<< "$u"
-                if [ "$token" = "$name" ] || [ "$token" = "$path" ] || [ "$token" = "$(_podman_token_from_record "$scope" "$name")" ]; then
+                if [ "$bare" = "$name" ] || [ "$token" = "$path" ] || [ "$token" = "$(_podman_token_from_record "$scope" "$name")" ]; then
                     resolved="$(_podman_token_from_record "$scope" "$name")"
                     break
                 fi
             done
             if [ -z "$resolved" ]; then
                 local record
-                record="$(_podman_resolve_unit_records "$token" 2>/dev/null | head -n 1 || true)"
+                record="$(_podman_resolve_unit_records "$(_podman_token_from_record "$scope" "$bare")" 2>/dev/null | head -n 1 || true)"
                 if [ -n "$record" ]; then
                     IFS=$'\t' read -r scope name path <<< "$record"
                     resolved="$(_podman_token_from_record "$scope" "$name")"
@@ -575,8 +647,12 @@ _podman_collect_app_config_paths_for_instance() {
 }
 
 _edit_existing_unit_and_reload_restart() {
+    local scope_filter
+    scope_filter="$(_podman_scope_normalize "${1:-user}")"
+    shift || true
+
     local fname
-    fname=$(_pick_existing_unit_file container network volume pod device kube) || return 1
+    fname=$(_pick_existing_unit_file "$scope_filter" container network volume pod device kube) || return 1
     if [ -z "$fname" ]; then tgdb_fail "檔名不可為空" 1 || return $?; fi
     if ! ensure_editor; then
         tgdb_fail "找不到可用的文字編輯器（nano/vim/vi），請先安裝或設定 EDITOR。" 1 || return $?
@@ -587,9 +663,9 @@ _edit_existing_unit_and_reload_restart() {
     if [ -n "$record" ]; then
         IFS=$'\t' read -r scope unit_name unit_path <<< "$record"
     else
-        scope="user"
-        unit_name="$fname"
-        unit_path="$(_podman_unit_path user "$fname")"
+        scope="$scope_filter"
+        unit_name="$(_podman_token_name "$fname")"
+        unit_path="$(_podman_unit_path "$scope_filter" "$unit_name")"
     fi
 
     local -a edit_files=("$unit_path")
@@ -701,9 +777,12 @@ _remove_quadlet_unit() {
     if [ -n "$record" ]; then
         IFS=$'\t' read -r scope name target_file <<< "$record"
     else
-        scope="user"
-        name="$token"
-        target_file="$(_podman_unit_path user "$token")"
+        scope="$(_podman_token_scope "$token")"
+        [ -n "${scope:-}" ] || scope="user"
+        scope="$(_podman_scope_normalize "$scope")"
+        name="$(_podman_token_name "$token")"
+        name="${name%%$'\n'*}"
+        target_file="$(_podman_unit_path "$scope" "$name")"
     fi
 
     if [ ! -e "$target_file" ]; then

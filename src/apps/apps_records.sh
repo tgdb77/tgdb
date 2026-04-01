@@ -373,7 +373,14 @@ _list_record_names() {
   local mode cdir qdir
   local names=()
 
-  for mode in rootless rootful; do
+  local -a modes=()
+  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
+    _apps_service_supports_deploy_mode "$service" "rootful" && modes+=("rootful")
+  fi
+  [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
+
+  for mode in "${modes[@]}"; do
     cdir="$(_service_config_dir "$service" "$mode")"
     qdir="$(_service_quadlet_dir "$service" "$mode")"
     if _apps_dir_exists "$mode" "$cdir"; then
@@ -658,7 +665,7 @@ config_quadlet_custom_menu() {
 deploy_from_record_p() {
   local service="$1" name="$2"
   local mode
-  mode="$(_apps_detect_instance_deploy_mode "$name" 2>/dev/null || true)"
+  mode="$(_apps_detect_instance_deploy_mode "$name" "$service" 2>/dev/null || true)"
   if [ -z "$mode" ]; then
     local tagged
     tagged="$(_list_record_names "$service" | awk -F: -v target="$name" '$2 == target { print; exit }' 2>/dev/null || true)"
@@ -678,7 +685,7 @@ edit_record_cli() {
   fi
 
   local mode
-  mode="$(_apps_detect_instance_deploy_mode "$name" 2>/dev/null || true)"
+  mode="$(_apps_detect_instance_deploy_mode "$name" "$service" 2>/dev/null || true)"
   if [ -z "$mode" ]; then
     local tagged
     tagged="$(_list_record_names "$service" | awk -F: -v target="$name" '$2 == target { print; exit }' 2>/dev/null || true)"
@@ -717,7 +724,7 @@ delete_record_cli() {
   fi
 
   local mode
-  mode="$(_apps_detect_instance_deploy_mode "$name" 2>/dev/null || true)"
+  mode="$(_apps_detect_instance_deploy_mode "$name" "$service" 2>/dev/null || true)"
   if [ -z "$mode" ]; then
     local tagged
     tagged="$(_list_record_names "$service" | awk -F: -v target="$name" '$2 == target { print; exit }' 2>/dev/null || true)"

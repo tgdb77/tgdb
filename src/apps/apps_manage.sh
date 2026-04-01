@@ -24,7 +24,7 @@ _service_update_and_restart() {
 
   if [ -n "$forced_instance" ]; then
     n="$forced_instance"
-    selected_mode="$(_apps_detect_instance_deploy_mode "$n" 2>/dev/null || true)"
+    selected_mode="$(_apps_detect_instance_deploy_mode "$n" "$service" 2>/dev/null || true)"
     if [ -z "$selected_mode" ]; then
       tgdb_fail "找不到實例：$n" 1 || return $?
       return 1
@@ -39,7 +39,7 @@ _service_update_and_restart() {
       return
     fi
     n="$SELECTED_INSTANCE"
-    selected_mode="${SELECTED_INSTANCE_MODE:-$(_apps_detect_instance_deploy_mode "$n" 2>/dev/null || echo rootless)}"
+    selected_mode="${SELECTED_INSTANCE_MODE:-$(_apps_detect_instance_deploy_mode "$n" "$service" 2>/dev/null || echo rootless)}"
 
     if [ -n "$default_image" ]; then
       read -r -e -p "要使用的映像（預設: $default_image）: " image
@@ -72,7 +72,7 @@ _full_remove_instance() {
 
   if [ -n "$forced_instance" ]; then
     n="$forced_instance"
-    selected_mode="$(_apps_detect_instance_deploy_mode "$n" 2>/dev/null || true)"
+    selected_mode="$(_apps_detect_instance_deploy_mode "$n" "$service" 2>/dev/null || true)"
     if [ -z "$selected_mode" ]; then
       tgdb_fail "找不到實例：$n" 1 || return $?
       return 1
@@ -149,7 +149,7 @@ _full_remove_instance() {
       return
     fi
     n="$SELECTED_INSTANCE"
-    selected_mode="${SELECTED_INSTANCE_MODE:-$(_apps_detect_instance_deploy_mode "$n" 2>/dev/null || echo rootless)}"
+    selected_mode="${SELECTED_INSTANCE_MODE:-$(_apps_detect_instance_deploy_mode "$n" "$service" 2>/dev/null || echo rootless)}"
     instance_dir="$(_apps_instance_dir_for_mode "$selected_mode" "$n")"
     if ui_confirm_yn "是否同時刪除實例資料夾（$instance_dir）？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
       deld="y"

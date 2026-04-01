@@ -330,6 +330,16 @@ _appspec_hook_export_env() {
 _appspec_run_hook_scripts() {
   local service="$1" name="$2" instance_dir="$3" host_port="$4" hook_key="$5"
 
+  # hook 腳本預設以「目前使用者」執行；但若是 rootful 部署，
+  # 腳本內直接呼叫 podman 時應改走 root Podman（system scope）。
+  # 這裡用「只覆寫 podman 指令」的方式提供最小提權面（避免整支腳本都用 sudo 執行）。
+  local deploy_mode podman_bin
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  podman_bin=""
+  if [ "$deploy_mode" = "rootful" ]; then
+    podman_bin="$(command -v podman 2>/dev/null || true)"
+  fi
+
   local raw
   raw="$(appspec_get_all "$service" "$hook_key" 2>/dev/null || true)"
   [ -n "$raw" ] || return 0
@@ -362,6 +372,27 @@ _appspec_run_hook_scripts() {
       source)
         (
           _appspec_hook_export_env "$service" "$name"
+
+          if [ "$deploy_mode" = "rootful" ] && [ -n "$podman_bin" ]; then
+            # 讓 hook 腳本可直接使用 podman 操作 rootful 容器。
+            # 注意：export -f 只對 bash 子行程有效；source runner 直接在本 subshell 生效。
+            TGDB_HOOK_PODMAN_BIN="$podman_bin"
+            export TGDB_HOOK_PODMAN_BIN
+            podman() {
+              if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+                "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              if command -v sudo >/dev/null 2>&1; then
+                sudo "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              echo "❌ 本操作需要 root 權限，且系統未安裝 sudo。" >&2
+              return 1
+            }
+            export -f podman 2>/dev/null || true
+          fi
+
           set -- "$service" "$name" "$instance_dir" "$host_port"
           # shellcheck disable=SC1090 # 腳本由 app.spec 指定，於執行期載入
           source "$script"
@@ -370,6 +401,26 @@ _appspec_run_hook_scripts() {
       bash|"")
         (
           _appspec_hook_export_env "$service" "$name"
+
+          if [ "$deploy_mode" = "rootful" ] && [ -n "$podman_bin" ]; then
+            # 同 source runner：在 bash 子行程內覆寫 podman，改以 sudo/root 執行。
+            TGDB_HOOK_PODMAN_BIN="$podman_bin"
+            export TGDB_HOOK_PODMAN_BIN
+            podman() {
+              if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+                "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              if command -v sudo >/dev/null 2>&1; then
+                sudo "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              echo "❌ 本操作需要 root 權限，且系統未安裝 sudo。" >&2
+              return 1
+            }
+            export -f podman 2>/dev/null || true
+          fi
+
           bash "$script" "$service" "$name" "$instance_dir" "$host_port"
         ) || rc=$?
         ;;
@@ -377,6 +428,25 @@ _appspec_run_hook_scripts() {
         tgdb_warn "不支援的 ${hook_key} runner（$service）：$runner，將改用 bash"
         (
           _appspec_hook_export_env "$service" "$name"
+
+          if [ "$deploy_mode" = "rootful" ] && [ -n "$podman_bin" ]; then
+            TGDB_HOOK_PODMAN_BIN="$podman_bin"
+            export TGDB_HOOK_PODMAN_BIN
+            podman() {
+              if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+                "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              if command -v sudo >/dev/null 2>&1; then
+                sudo "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              echo "❌ 本操作需要 root 權限，且系統未安裝 sudo。" >&2
+              return 1
+            }
+            export -f podman 2>/dev/null || true
+          fi
+
           bash "$script" "$service" "$name" "$instance_dir" "$host_port"
         ) || rc=$?
         ;;
