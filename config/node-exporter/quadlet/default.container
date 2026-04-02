@@ -1,0 +1,34 @@
+[Unit]
+Description=node-exporter
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/prom/node-exporter:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=node-exporter
+
+PublishPort=127.0.0.1:${host_port}:9100
+
+PodmanArgs=--pid=host
+
+# 盡量採集主機指標（容器化做法：把 host 的 proc/sys/rootfs 掛進來，並指定 path）
+Volume=/proc:/host/proc:ro,rslave
+Volume=/sys:/host/sys:ro,rslave
+Volume=/:/host:ro,rslave
+
+NoNewPrivileges=true
+
+Exec=--web.listen-address=:9100 --path.procfs=/host/proc --path.sysfs=/host/sys --path.rootfs=/host --collector.filesystem.mount-points-exclude="^/(sys|proc|dev|host|etc)($$|/)"
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

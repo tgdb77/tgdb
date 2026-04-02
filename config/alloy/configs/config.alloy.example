@@ -1,0 +1,70 @@
+// ----------------------------------------------------------------------------
+// Grafana Alloy 設定檔（TGDB 產生）
+// ----------------------------------------------------------------------------
+// 說明：
+// - 本範本預設會收集「宿主機日誌」並送到 Loki
+// - 若你不想收集日誌，請把下方 loki.source.* 區塊註解或移除
+//
+// 重要提醒（安全/權限）：
+// - 讀取宿主機 /var/log 與 journald 通常需要 rootful（或至少宿主機上有對應讀取權限）
+// - 不建議把 Loki/Alloy 直接曝露到公網；請用內網（Tailscale）或防火牆白名單保護
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// 將收集到的 logs 寫入 Loki（同 Pod 內預設用 127.0.0.1:3100），若跨機自行設定ip
+loki.write "local" {
+  endpoint {
+    url = "http://127.0.0.1:3100/loki/api/v1/push"
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 收集：journald（systemd journal）
+// ----------------------------------------------------------------------------
+// 注意：要讀 journald 通常需要：
+// - rootful 部署
+// - Quadlet 掛載 /run/log/journal（及視情況掛載 /var/log/journal）
+
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+}
+
+loki.source.journal "read" {
+  forward_to    = [loki.write.local.receiver]
+  relabel_rules = loki.relabel.journal.rules
+  labels        = {job = "journal"}
+}
+
+// ----------------------------------------------------------------------------
+// 收集：/var/log 檔案（含常見 syslog/messages 與 *.log）
+// ----------------------------------------------------------------------------
+loki.source.file "varlog" {
+  targets = [
+    {__path__ = "/var/log/syslog", job = "varlog"},
+    {__path__ = "/var/log/messages", job = "varlog"},
+    {__path__ = "/var/log/*.log", job = "varlog"},
+    {__path__ = "/var/log/*/*.log", job = "varlog"},
+  ]
+
+  forward_to = [loki.write.local.receiver]
+
+  // 檔案 globbing（建議啟用；當檔案新增/消失會自動更新 targets）
+  file_match {
+    enabled     = true
+    sync_period = "10s"
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 參考：
+// - https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.journal/
+// - https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.file/
+// - https://grafana.com/docs/alloy/latest/reference/components/loki/loki.write/

@@ -1,0 +1,22 @@
+# -----------------------------------------------------------------------------
+# Alertmanager 設定檔（TGDB 範本）
+# -----------------------------------------------------------------------------
+# 說明：
+# - 這是「最小可跑」的範例，預設只會把告警送到名為 default 的 receiver（無實際通知）
+# - 請依你的需求新增 email / slack / telegram / webhook 等 receiver
+#
+# 參考：
+# - https://github.com/prometheus/alertmanager
+
+global: {}
+
+route:
+  receiver: default
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: default
+

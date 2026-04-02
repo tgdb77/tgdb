@@ -1,0 +1,54 @@
+# -----------------------------------------------------------------------------
+# Loki 設定檔（TGDB 產生）
+# -----------------------------------------------------------------------------
+# 說明：
+# - 這是一份「單機/單節點」的 Loki 參考設定，方便你先快速跑起來，再按需求擴充
+# - 若你打算正式對外提供服務，請務必加上網路隔離、驗證（例如反向代理 Basic Auth/mTLS）與防火牆白名單
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+
+schema_config:
+  configs:
+    - from: 2026-04-02
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/index_cache
+  filesystem:
+    directory: /loki/chunks
+
+compactor:
+  working_directory: /loki/compactor
+
+limits_config:
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-tmp
+
