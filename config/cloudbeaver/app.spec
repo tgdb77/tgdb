@@ -5,6 +5,7 @@ doc_url=https://dbeaver.com/docs/cloudbeaver/Server-configuration/
 menu_order=9002
 
 hidden=1
+access_policy=local_only
 
 base_port=8978
 instance_subdirs=workspace

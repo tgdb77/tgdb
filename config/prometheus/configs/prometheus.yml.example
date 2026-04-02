@@ -1,0 +1,58 @@
+# -----------------------------------------------------------------------------
+# Prometheus 設定檔（TGDB 產生）
+# -----------------------------------------------------------------------------
+# 說明：
+# - 本服務預設加入 Grafana Pod，建議先維持最小設定，再自行添加 scrape_configs
+# - 若你新增 node-exporter/cadvisor 等容器也加入同一個 Pod，可用 127.0.0.1:<port> 直接抓取
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - 0.0.0.0:9090
+
+  # 範例：加入 node-exporter（9100），可解除註解更改成你的ip
+  #- job_name: node
+  #  static_configs:
+  #    - targets:
+  #        - 127.0.0.1:9100
+
+  # 範例：加入 podman-exporter（9882），可解除註解更改成你的ip
+  #- job_name: podman
+  #  static_configs:
+  #    - targets:
+  #        - 127.0.0.1:9882
+
+  # 範例：加入 blackbox_exporter（/probe），可解除註解更改成你的ip
+  # - 下面 targets 填「你要探測的目標」（例如 https://example.com）
+  #- job_name: blackbox
+  #  metrics_path: /probe
+  #  params:
+  #    module: [http_2xx]
+  #  static_configs:
+  #    - targets:
+  #        - https://www.google.com
+  #  relabel_configs:
+  #    - source_labels: [__address__]
+  #      target_label: __param_target
+  #    - source_labels: [__param_target]
+  #      target_label: instance
+  #    - target_label: __address__
+  #      replacement: 127.0.0.1:9115
+
+# -----------------------------------------------------------------------------
+# 範例：啟用 Alertmanager（請依你的實際需求調整）
+# -----------------------------------------------------------------------------
+#alerting:
+#  alertmanagers:
+#    - static_configs:
+#        - targets:
+#            - 127.0.0.1:9093
+#
+## 告警規則（示意）
+##rule_files:
+##  - /etc/prometheus/rules/*.yml

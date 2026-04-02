@@ -5,6 +5,7 @@ doc_url=https://redis.io/docs/latest/develop/tools/redisinsight/
 menu_order=9001
 
 hidden=1
+access_policy=local_only
 
 base_port=5540
 instance_subdirs=data

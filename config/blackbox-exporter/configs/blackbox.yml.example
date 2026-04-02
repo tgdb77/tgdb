@@ -1,0 +1,30 @@
+# -----------------------------------------------------------------------------
+# Blackbox Exporter 設定檔（TGDB 範本）
+# -----------------------------------------------------------------------------
+# 說明：
+# - Prometheus 會「抓取 Blackbox Exporter 的 /probe」，並透過 querystring 傳入 target/module
+# - modules 用來定義探測行為（HTTP/TCP/ICMP/DNS/gRPC...）
+#
+# 參考：
+# - https://github.com/prometheus/blackbox_exporter
+
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: "ip4"
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      follow_redirects: true
+
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+
+  # icmp:
+  #   prober: icmp
+  #   timeout: 5s
+  #   icmp:
+  #     preferred_ip_protocol: "ip4"
+

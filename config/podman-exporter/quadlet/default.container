@@ -1,0 +1,34 @@
+[Unit]
+Description=Podman Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=quay.io/navidys/prometheus-podman-exporter:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=podman-exporter
+
+PublishPort=127.0.0.1:${host_port}:9882
+
+Environment=CONTAINER_HOST=unix:///run/podman/podman.sock
+Volume=/run/user/${user_id}/podman/podman.sock:/run/podman/podman.sock
+
+# 需要掛載宿主機 Podman socket；若你的系統有 SELinux，建議停用 label（避免被拒絕存取）
+SecurityLabelDisable=true
+
+Exec=--web.listen-address=0.0.0.0:9882 --web.telemetry-path=/metrics --collector.enable-all
+
+User=0
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

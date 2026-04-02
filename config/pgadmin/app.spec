@@ -5,6 +5,7 @@ doc_url=https://www.pgadmin.org/
 menu_order=9000
 
 hidden=1
+access_policy=local_only
 
 base_port=5050
 instance_subdirs=data

@@ -1,0 +1,40 @@
+[Unit]
+Description=Grafana Alloy
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/grafana/alloy:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=alloy
+
+# - 若你的 Grafana 實例名稱不是 grafana（例如 grafana2），請把 grafana_pod 改成對應的 Pod 名稱
+Pod=${grafana_pod}.pod
+
+Environment=TZ=Asia/Taipei
+
+Exec=run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+
+Volume=${instance_dir}/config.alloy:/etc/alloy/config.alloy
+Volume=${instance_dir}/data:/var/lib/alloy/data
+
+User=0:0
+
+Volume=/var/log:/var/log:ro
+Volume=/etc/machine-id:/etc/machine-id:ro
+Volume=/run/log/journal:/run/log/journal:ro
+Volume=/var/log/journal:/var/log/journal:ro
+
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
