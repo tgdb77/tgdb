@@ -4,7 +4,6 @@ image=docker.io/prom/alertmanager:latest
 doc_url=https://github.com/prometheus/alertmanager
 menu_order=117
 
-hidden=1
 access_policy=local_only
 
 base_port=9093
@@ -23,4 +22,3 @@ success_warn=你仍需自行在 Prometheus 設定檔加入 alerting.alertmanager
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

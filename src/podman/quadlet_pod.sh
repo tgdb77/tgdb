@@ -101,27 +101,33 @@ _unit_try_stop_pod_with_members() {
     local -a members=()
     mapfile -t members < <(_list_pod_member_container_unit_files_by_scope "$scope" "$pod_base")
 
-    local -a all_units=()
+    # 停止 Pod 時需同時停用/停止其成員容器，避免只停到其中一個 unit（同名 alias）造成殘留。
+    # 先把「實際存在的 systemd units」收斂出來，再逐一 disable/stop。
+    local -a units=()
     local u m
 
     while IFS= read -r u; do
-        [ -n "$u" ] && all_units+=("$u")
-    done < <(_resolve_unit_candidates "${pod_base}.pod")
+        [ -n "$u" ] && units+=("$u")
+    done < <(_podman_existing_action_units "$scope" "${pod_base}.pod" 2>/dev/null || true)
 
     for m in "${members[@]}"; do
         while IFS= read -r u; do
-            [ -n "$u" ] && all_units+=("$u")
-        done < <(_resolve_unit_candidates "$m")
+            [ -n "$u" ] && units+=("$u")
+        done < <(_podman_existing_action_units "$scope" "$m" 2>/dev/null || true)
     done
 
-    mapfile -t all_units < <(printf "%s\n" "${all_units[@]}" | awk 'NF && !seen[$0]++')
+    mapfile -t units < <(printf "%s\n" "${units[@]}" | awk 'NF && !seen[$0]++')
 
     local any=false
-    if _podman_systemctl_try_candidates "$scope" disable --now -- "${all_units[@]}" >/dev/null 2>&1; then
-        any=true
-    elif _podman_systemctl_try_candidates "$scope" stop -- "${all_units[@]}" >/dev/null 2>&1; then
-        any=true
-    fi
+    for u in "${units[@]}"; do
+        if _podman_systemctl "$scope" disable --now -- "$u" >/dev/null 2>&1; then
+            any=true
+            continue
+        fi
+        if _podman_systemctl "$scope" stop -- "$u" >/dev/null 2>&1; then
+            any=true
+        fi
+    done
 
     if [ "$any" = true ]; then
         if [ "${#members[@]}" -gt 0 ]; then

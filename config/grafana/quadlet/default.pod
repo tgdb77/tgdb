@@ -6,8 +6,9 @@ After=network-online.target
 [Pod]
 # 僅綁定本機回環埠，請搭配 Nginx 反向代理提供 HTTPS 對外訪問
 PublishPort=127.0.0.1:${host_port}:3000
-# 若你也部署 Prometheus 並需要瀏覽 Prometheus Web UI，可自行加上：
-#PublishPort=127.0.0.1:9090:9090
+PublishPort=127.0.0.1:9090:9090
+PublishPort=127.0.0.1:3100:3100
+PublishPort=127.0.0.1:9093:9093
 PodName=${container_name}
 #Network=tgdb.network
 

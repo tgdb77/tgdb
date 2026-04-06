@@ -9,17 +9,24 @@ Image=docker.io/grafana/alloy:latest
 ContainerName=${container_name}
 Label=app=alloy
 
-# - 若你的 Grafana 實例名稱不是 grafana（例如 grafana2），請把 grafana_pod 改成對應的 Pod 名稱
-Pod=${grafana_pod}.pod
-
 Environment=TZ=Asia/Taipei
 
-Exec=run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+PublishPort=127.0.0.1:${host_port}:12345
 
-Volume=${instance_dir}/config.alloy:/etc/alloy/config.alloy
+# 取用 host PID namespace，讓 /proc 類指標更貼近宿主機（對齊 node-exporter 容器做法）
+PodmanArgs=--pid=host
+
+Exec=run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/alloy.config
+
+Volume=${instance_dir}/alloy.config:/etc/alloy/alloy.config
 Volume=${instance_dir}/data:/var/lib/alloy/data
 
 User=0:0
+
+Volume=/run/udev:/run/udev:ro
+Volume=/proc:/host/proc:ro,rslave
+Volume=/sys:/host/sys:ro,rslave
+Volume=/:/host:ro,rslave
 
 Volume=/var/log:/var/log:ro
 Volume=/etc/machine-id:/etc/machine-id:ro

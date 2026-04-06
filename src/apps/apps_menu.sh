@@ -62,9 +62,7 @@ _service_menu() {
       echo "教學與文件：$doc_url"
     fi
 
-    local ids=""
-    ids="$(_apps_list_instances_by_label "$service" | head -n 1 2>/dev/null || true)"
-    if [ -n "$ids" ]; then
+    if _apps_has_instances_by_label "$service"; then
       echo "已部署實例："
       _apps_print_instances_by_label "$service"
     fi

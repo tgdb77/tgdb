@@ -368,10 +368,41 @@ _apps_service_default_image() {
   printf '%s\n' "$line"
 }
 
+_apps_unit_container_has_app_label() {
+  local mode="$1" unit_path="$2" service="$3"
+  [ -n "${mode:-}" ] || return 1
+  [ -n "${unit_path:-}" ] || return 1
+  [ -n "${service:-}" ] || return 1
+
+  _apps_test "$mode" -r "$unit_path" 2>/dev/null || return 1
+
+  awk -v target="$service" '
+    BEGIN { found=0 }
+    /^[[:space:]]*Label[[:space:]]*=/ {
+      line=$0
+      sub(/^[[:space:]]*Label[[:space:]]*=[[:space:]]*/, "", line)
+      sub(/[[:space:]]*(#.*)?$/, "", line)
+      gsub(/^"|"$/, "", line)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+
+      n = split(line, parts, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) {
+        p = parts[i]
+        gsub(/^"|"$/, "", p)
+        if (p ~ /^app=/) {
+          sub(/^app=/, "", p)
+          if (p == target) { found=1; exit }
+        }
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' < <(_apps_read_file "$mode" "$unit_path" 2>/dev/null || true)
+}
+
 _apps_list_instances_by_label() {
   local service="$1"
   [ -z "$service" ] && return 0
-  local mode quad_dir runtime_dir seen=""
+  local mode unit_dir seen=""
   local -a modes=()
   if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
     _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
@@ -381,8 +412,8 @@ _apps_list_instances_by_label() {
   [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
 
   for mode in "${modes[@]}"; do
-    quad_dir="$(rm_service_quadlet_dir_by_mode "$service" "$mode" 2>/dev/null || echo "")"
-    if [ -n "$quad_dir" ] && _apps_dir_exists "$mode" "$quad_dir"; then
+    unit_dir="$(_apps_unit_dir_for_mode "$mode" 2>/dev/null || echo "")"
+    if [ -n "$unit_dir" ] && _apps_dir_exists "$mode" "$unit_dir"; then
       local f=""
       while IFS= read -r f; do
         [ -n "$f" ] || continue
@@ -390,29 +421,13 @@ _apps_list_instances_by_label() {
         base="${f##*/}"
         case "$base" in
           *.container) name="${base%.container}" ;;
-          *.pod) name="${base%.pod}" ;;
           *) continue ;;
         esac
-        if _app_is_aux_instance_name "$service" "$name"; then
-          continue
-        fi
-        case ",$seen," in
-          *,"$mode:$name",*) ;;
-          *)
-            printf '%s\t%s\n' "$name" "$mode"
-            seen="$seen,$mode:$name"
-            ;;
-        esac
-      done < <(_apps_find_lines "$mode" "$quad_dir" -maxdepth 1 -type f \( -name "*.container" -o -name "*.pod" \) 2>/dev/null)
-    fi
 
-    runtime_dir="$(_apps_runtime_dir_for_mode "$mode" 2>/dev/null || echo "")"
-    if [ -n "$runtime_dir" ] && _apps_dir_exists "$mode" "$runtime_dir"; then
-      local d=""
-      while IFS= read -r d; do
-        [ -n "$d" ] || continue
-        local name
-        name="$(basename "$d")"
+        # 以 Quadlet unit 內的 Label=app=<service> 判斷歸屬，避免「僅剩紀錄檔」被誤判為已部署。
+        if ! _apps_unit_container_has_app_label "$mode" "$f" "$service"; then
+          continue
+        fi
         if _app_is_aux_instance_name "$service" "$name"; then
           continue
         fi
@@ -423,9 +438,23 @@ _apps_list_instances_by_label() {
             seen="$seen,$mode:$name"
             ;;
         esac
-      done < <(_apps_find_lines "$mode" "$runtime_dir" -mindepth 1 -maxdepth 1 -type d -name "${service}*" 2>/dev/null)
+      done < <(_apps_find_lines "$mode" "$unit_dir" -maxdepth 1 -type f -name "*.container" 2>/dev/null)
     fi
   done
+}
+
+_apps_has_instances_by_label() {
+  local service="$1"
+  [ -n "${service:-}" ] || return 1
+
+  if _apps_has_podman_instances_by_mode "$service" "rootless"; then
+    return 0
+  fi
+  if _apps_has_podman_instances_by_mode "$service" "rootful"; then
+    return 0
+  fi
+
+  _apps_list_instances_by_label "$service" 2>/dev/null | head -n 1 | grep -q .
 }
 
 _apps_has_podman_instances_by_mode() {

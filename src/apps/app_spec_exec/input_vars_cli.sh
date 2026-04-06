@@ -176,6 +176,24 @@ _appspec_default_from_source() {
       printf '%s\n' "${prefix}${pw}"
       return 0
       ;;
+    hostname)
+      # 取用宿主機 hostname 作為預設值（常用於 instance/node 名稱）
+      # - 盡量避免引入額外相依；優先用 hostname 指令，失敗再讀 /etc/hostname
+      local hn=""
+      if command -v hostname >/dev/null 2>&1; then
+        hn="$(hostname 2>/dev/null || true)"
+      fi
+      if [ -z "${hn:-}" ] && [ -r /etc/hostname ]; then
+        hn="$(cat /etc/hostname 2>/dev/null || true)"
+      fi
+      hn="$(_appspec_trim_ws "${hn:-}")"
+      if [ -z "${hn:-}" ]; then
+        tgdb_warn "無法取得 hostname，無法產生預設值（$service）：$input_key"
+        return 1
+      fi
+      printf '%s\n' "$hn"
+      return 0
+      ;;
     next_available_port)
       local start
       start="${opts_ref[start]:-}"

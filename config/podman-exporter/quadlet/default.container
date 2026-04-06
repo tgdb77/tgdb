@@ -12,7 +12,7 @@ Label=app=podman-exporter
 PublishPort=127.0.0.1:${host_port}:9882
 
 Environment=CONTAINER_HOST=unix:///run/podman/podman.sock
-Volume=/run/user/${user_id}/podman/podman.sock:/run/podman/podman.sock
+Volume=${podman_sock_host_path}:/run/podman/podman.sock
 
 # 需要掛載宿主機 Podman socket；若你的系統有 SELinux，建議停用 label（避免被拒絕存取）
 SecurityLabelDisable=true
@@ -31,4 +31,3 @@ WantedBy=default.target
 
 [Quadlet]
 DefaultDependencies=false
-

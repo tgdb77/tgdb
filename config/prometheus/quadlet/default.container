@@ -12,7 +12,8 @@ Label=app=prometheus
 # - 若你的 Grafana 實例名稱不是 grafana（例如 grafana2），請把 grafana_pod 改成對應的 Pod 名稱
 Pod=${grafana_pod}.pod
 
-Exec=--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+# 啟用 remote_write receiver，讓 Alloy 等 Agent 可把指標推送進 Prometheus（/api/v1/write）
+Exec=--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.enable-remote-write-receiver
 
 Volume=${instance_dir}/prometheus.yml:/etc/prometheus/prometheus.yml
 Volume=${instance_dir}/data:/prometheus
@@ -30,4 +31,3 @@ WantedBy=default.target
 
 [Quadlet]
 DefaultDependencies=false
-

@@ -60,32 +60,17 @@ _resolve_unit_records() {
     _podman_resolve_unit_records "$1"
 }
 
-_unit_record_scope() {
-    local record="$1"
-    printf '%s\n' "${record%%$'\t'*}"
-}
-
-_unit_record_name() {
-    local record="$1"
-    local rest="${record#*$'\t'}"
-    printf '%s\n' "${rest%%$'\t'*}"
-}
-
-_unit_record_path() {
-    local record="$1"
-    printf '%s\n' "${record##*$'\t'}"
-}
-
 _unit_try_enable_now() {
     local token="$1"
-    local record scope name
+    local scope name
     local -a units=()
 
     while IFS=$'\t' read -r scope name _; do
         [ -n "${scope:-}" ] || continue
         [ -n "${name:-}" ] || continue
         _podman_systemctl "$scope" daemon-reload >/dev/null 2>&1 || true
-        mapfile -t units < <(_resolve_unit_candidates "$name" | awk 'NF && !seen[$0]++')
+        # 啟用/啟動只應針對「該單元類型」的 systemd unit，避免同名 pod/container 時誤啟動 pod。
+        mapfile -t units < <(_podman_action_unit_candidates "$name" | awk 'NF && !seen[$0]++')
         [ "${#units[@]}" -gt 0 ] || continue
 
         _podman_systemctl_try_candidates "$scope" enable -- "${units[@]}" >/dev/null 2>&1 || true
@@ -131,14 +116,34 @@ _collect_restart_units() {
 
         while IFS= read -r u; do
             [ -n "$u" ] && printf '%s\n' "$u"
-        done < <(_resolve_unit_candidates "${pod_base}.pod")
+        done < <(
+            if declare -F _podman_action_unit_candidates >/dev/null 2>&1; then
+                _podman_action_unit_candidates "${pod_base}.pod"
+            else
+                _resolve_unit_candidates "${pod_base}.pod"
+            fi
+        )
 
         mapfile -t members < <(_list_pod_member_container_unit_files_by_scope "${scope:-user}" "$pod_base")
         for m in "${members[@]}"; do
             while IFS= read -r u; do
                 [ -n "$u" ] && printf '%s\n' "$u"
-            done < <(_resolve_unit_candidates "$m")
+            done < <(
+                if declare -F _podman_action_unit_candidates >/dev/null 2>&1; then
+                    _podman_action_unit_candidates "$m"
+                else
+                    _resolve_unit_candidates "$m"
+                fi
+            )
         done
+        return 0
+    fi
+
+    # 非 Pod：優先用「依單元類型收斂」的候選清單，避免誤把同名 pod 一起重啟。
+    # 典型案例：pod= grafana.pod，且同時存在 grafana.container（成員容器），
+    # 若用 _resolve_unit_candidates 會把 pod-grafana.service 也納入，導致重啟容器時整個 pod 被重啟。
+    if declare -F _podman_action_unit_candidates >/dev/null 2>&1; then
+        _podman_action_unit_candidates "$token"
         return 0
     fi
 
@@ -159,6 +164,20 @@ _unit_try_restart() {
         mapfile -t units < <(_collect_restart_units "$name" "$scope" | awk 'NF && !seen[$0]++')
         [ "${#units[@]}" -gt 0 ] || continue
 
+        local pod_base=""
+        if declare -F _pod_base_from_token >/dev/null 2>&1; then
+            pod_base="$(_pod_base_from_token "$name" 2>/dev/null || true)"
+        fi
+
+        # 非 Pod：只挑「第一個存在的候選 unit」做 restart，避免同名 alias 造成誤重啟整個 pod。
+        if [ -z "$pod_base" ]; then
+            if _podman_systemctl_try_candidates "$scope" restart --no-block -- "${units[@]}" >/dev/null 2>&1; then
+                any_start=true
+            fi
+            continue
+        fi
+
+        # Pod：維持既有行為（pod + 成員容器一起重啟）
         local u
         for u in "${units[@]}"; do
             [ -n "$u" ] || continue
