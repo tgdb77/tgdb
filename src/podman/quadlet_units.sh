@@ -11,13 +11,7 @@ _resolve_unit_candidates() {
         candidates+=("$token")
     fi
 
-    if [[ "$token" == *.* ]]; then
-        name="${token%.*}"
-        ext="${token##*.}"
-    else
-        name="$token"
-        ext=""
-    fi
+    _podman_split_unit_token "$token" name ext
 
     if [ -n "$ext" ]; then
         candidates+=("$name.$ext")
@@ -62,33 +56,72 @@ _resolve_unit_candidates() {
     awk '!seen[$0]++' < <(printf "%s\n" "${candidates[@]}")
 }
 
+_resolve_unit_records() {
+    _podman_resolve_unit_records "$1"
+}
+
+_unit_record_scope() {
+    local record="$1"
+    printf '%s\n' "${record%%$'\t'*}"
+}
+
+_unit_record_name() {
+    local record="$1"
+    local rest="${record#*$'\t'}"
+    printf '%s\n' "${rest%%$'\t'*}"
+}
+
+_unit_record_path() {
+    local record="$1"
+    printf '%s\n' "${record##*$'\t'}"
+}
+
 _unit_try_enable_now() {
     local token="$1"
-    local units=()
-    mapfile -t units < <(_resolve_unit_candidates "$token")
+    local record scope name
+    local -a units=()
 
-    # 先嘗試啟用（只建立自動啟動連結，不等待啟動完成）
-    _systemctl_user_try enable -- "${units[@]}" || true
+    while IFS=$'\t' read -r scope name _; do
+        [ -n "${scope:-}" ] || continue
+        [ -n "${name:-}" ] || continue
+        _podman_systemctl "$scope" daemon-reload >/dev/null 2>&1 || true
+        mapfile -t units < <(_resolve_unit_candidates "$name" | awk 'NF && !seen[$0]++')
+        [ "${#units[@]}" -gt 0 ] || continue
 
-    # 再送出啟動（不等待 jobs 完成），避免 systemctl 阻塞導致選單卡住 1–2 分鐘
-    _systemctl_user_try start --no-block -- "${units[@]}" && return 0
+        _podman_systemctl_try_candidates "$scope" enable -- "${units[@]}" >/dev/null 2>&1 || true
+        if _podman_systemctl_try_candidates "$scope" start --no-block -- "${units[@]}" >/dev/null 2>&1; then
+            return 0
+        fi
+    done < <(_resolve_unit_records "$token")
+
     return 1
 }
 
 _unit_try_disable_now() {
     local token="$1"
-    local u
-    while IFS= read -r u; do
-        _systemctl_user_try disable --now -- "$u" || true
-    done < <(_resolve_unit_candidates "$token")
+    local scope name u
+    while IFS=$'\t' read -r scope name _; do
+        [ -n "${scope:-}" ] || continue
+        [ -n "${name:-}" ] || continue
+        while IFS= read -r u; do
+            _podman_systemctl "$scope" disable --now -- "$u" >/dev/null 2>&1 || true
+        done < <(_resolve_unit_candidates "$name" | awk 'NF && !seen[$0]++')
+    done < <(_resolve_unit_records "$token")
 }
 
 _collect_restart_units() {
     local token="$1"
+    local scope_hint="${2:-}"
     local pod_base=""
+    local scope=""
 
     if declare -F _pod_base_from_token >/dev/null 2>&1; then
         pod_base="$(_pod_base_from_token "$token" 2>/dev/null || true)"
+    fi
+    if [ -n "$scope_hint" ]; then
+        scope="$scope_hint"
+    elif declare -F _podman_token_scope >/dev/null 2>&1; then
+        scope="$(_podman_token_scope "$token" 2>/dev/null || true)"
     fi
 
     # Pod 單元重啟時，同步納入成員容器，避免僅重啟 pod service 本身。
@@ -100,7 +133,7 @@ _collect_restart_units() {
             [ -n "$u" ] && printf '%s\n' "$u"
         done < <(_resolve_unit_candidates "${pod_base}.pod")
 
-        mapfile -t members < <(_list_pod_member_container_unit_files "$pod_base")
+        mapfile -t members < <(_list_pod_member_container_unit_files_by_scope "${scope:-user}" "$pod_base")
         for m in "${members[@]}"; do
             while IFS= read -r u; do
                 [ -n "$u" ] && printf '%s\n' "$u"
@@ -114,30 +147,31 @@ _collect_restart_units() {
 
 _unit_try_restart() {
     local token="$1"
-    local units=()
-    mapfile -t units < <(_collect_restart_units "$token" | awk 'NF && !seen[$0]++')
-
-    # 先重載，避免剛新增/修改 Quadlet 檔案但尚未載入導致找不到單元。
-    _systemctl_user_try daemon-reload || true
-
-    local u
     local any_start=false
+    local scope name
 
-    # 先停再啟，避免 restart 只命中部分候選單元時造成 pod 成員狀態不一致。
-    for u in "${units[@]}"; do
-        [ -n "$u" ] || continue
-        _systemctl_user_try stop -- "$u" || true
-    done
+    while IFS=$'\t' read -r scope name _; do
+        [ -n "${scope:-}" ] || continue
+        [ -n "${name:-}" ] || continue
 
-    for u in "${units[@]}"; do
-        [ -n "$u" ] || continue
-        if _systemctl_user_try start --no-block -- "$u"; then
-            any_start=true
-        fi
-    done
+        local -a units=()
+        _podman_systemctl "$scope" daemon-reload >/dev/null 2>&1 || true
+        mapfile -t units < <(_collect_restart_units "$name" "$scope" | awk 'NF && !seen[$0]++')
+        [ "${#units[@]}" -gt 0 ] || continue
 
-    if [ "$any_start" = true ]; then
-        return 0
-    fi
-    return 1
+        local u
+        for u in "${units[@]}"; do
+            [ -n "$u" ] || continue
+            _podman_systemctl "$scope" stop -- "$u" >/dev/null 2>&1 || true
+        done
+
+        for u in "${units[@]}"; do
+            [ -n "$u" ] || continue
+            if _podman_systemctl "$scope" start --no-block -- "$u" >/dev/null 2>&1; then
+                any_start=true
+            fi
+        done
+    done < <(_resolve_unit_records "$token")
+
+    [ "$any_start" = true ]
 }

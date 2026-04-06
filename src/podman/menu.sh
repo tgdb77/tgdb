@@ -15,36 +15,37 @@ podman_menu() {
         echo "❖ Podman/Quadlet 管理 ❖"
         echo "=================================="
         _print_overview_inline
-        podman ps -a || true
+        _podman_print_container_overview all user
         echo "----------------------------------"
         echo "1. 安裝/更新 Podman "
         echo "2. 新增單元 "
         echo "3. 編輯現有單元 "
         echo "4. 查看單元日誌 "
-        echo "5. 停止單元（可多選）"
-        echo "6. 重新啟動單元（可多選）"
-        echo "7. 移除單元（可多選）"
+        echo "5. 停止單元"
+        echo "6. 重新啟動單元"
+        echo "7. 移除單元"
         echo "8. 進入容器 Shell"
         echo "9. 映像管理"
         echo "10. 網路管理"
         echo "11. 卷管理"
         echo "12. 清理孤立資源"
-        echo "13. 容器自動更新（podman auto-update）"
+        echo "13. 容器自動更新"
         echo "14. 編輯 containers 設定"
+        echo "15. rootful 容器管理"
         echo "----------------------------------"
         echo "d. 完全移除 Podman/Quadlet 環境"
         echo "----------------------------------"
         echo "0. 返回主選單"
         echo "=================================="
-        read -r -e -p "請輸入選擇 [0-14]: " choice
+        read -r -e -p "請輸入選擇 [0-15]: " choice
         case "$choice" in
             1) _install_podman ; ui_pause ;;
-            2) _create_or_edit_quadlet_unit ; ui_pause ;;
-            3) _edit_existing_unit_and_reload_restart || { echo "返回上層"; sleep 1; continue; }; ui_pause ;;
-            4) n=$(_pick_existing_unit_file container pod) || { echo "返回上層"; sleep 1; continue; }; _unit_try_logs_follow "$n" ;;
+            2) _create_or_edit_quadlet_unit user ; ui_pause ;;
+            3) _edit_existing_unit_and_reload_restart user || { echo "返回上層"; sleep 1; continue; }; ui_pause ;;
+            4) n=$(_pick_existing_unit_file user container pod) || { echo "返回上層"; sleep 1; continue; }; _unit_try_logs_follow "$n" ;;
             5)
                 local -a stop_units=()
-                mapfile -t stop_units < <(_pick_existing_unit_files_multi "停止單元" container pod)
+                mapfile -t stop_units < <(_pick_existing_unit_files_multi user "停止單元" container pod)
                 if [ "${#stop_units[@]}" -eq 0 ]; then
                     echo "返回上層"
                     sleep 1
@@ -63,7 +64,7 @@ podman_menu() {
                 ;;
             6)
                 local -a restart_units=()
-                mapfile -t restart_units < <(_pick_existing_unit_files_multi "重新啟動單元" container pod network volume image device)
+                mapfile -t restart_units < <(_pick_existing_unit_files_multi user "重新啟動單元" container pod network volume image device)
                 if [ "${#restart_units[@]}" -eq 0 ]; then
                     echo "返回上層"
                     sleep 1
@@ -84,7 +85,7 @@ podman_menu() {
                 ;;
             7)
                 local -a remove_units=()
-                mapfile -t remove_units < <(_pick_existing_unit_files_multi "移除單元" container network volume pod device kube)
+                mapfile -t remove_units < <(_pick_existing_unit_files_multi user "移除單元" container network volume pod device kube)
                 if [ "${#remove_units[@]}" -eq 0 ]; then
                     echo "返回上層"
                     sleep 1
@@ -101,14 +102,138 @@ podman_menu() {
                 echo "移除結果：成功=$ok / 失敗=$fail"
                 ui_pause
                 ;;
-            8) podman_exec_container_menu ;;
-            9) podman_images_menu ;;
-            10) podman_networks_menu ;;
-            11) podman_volumes_menu ;;
-            12) podman_cleanup_menu ;;
-            13) podman_auto_update_menu ;;
+            8) podman_exec_container_menu user ;;
+            9) podman_images_menu user ;;
+            10) podman_networks_menu user ;;
+            11) podman_volumes_menu user ;;
+            12) podman_cleanup_menu user ;;
+            13) podman_auto_update_menu user ;;
             14) containers_config_menu ;;
+            15) podman_rootful_menu ;;
             d) uninstall_podman_environment ;;
+            0) return ;;
+            *) echo "無效選項"; sleep 1 ;;
+        esac
+    done
+}
+
+podman_rootful_menu() {
+    if ! ui_is_interactive; then
+        tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
+    fi
+    if ! command -v podman >/dev/null 2>&1; then
+        tgdb_fail "Podman 未安裝" 1 || return $?
+    fi
+    if ! _podman_is_root && ! command -v sudo >/dev/null 2>&1; then
+        tgdb_fail "找不到 sudo，無法進入 rootful（system scope）Podman 管理。" 1 || return $?
+    fi
+
+    # 進入 rootful 管理前先刷新 sudo（避免每個功能都先跳密碼）。
+    _podman_run_scope_cmd system true || {
+        tgdb_warn "sudo 驗證失敗，無法進入 rootful 管理。"
+        ui_pause
+        return 1
+    }
+
+    while true; do
+        clear
+        echo "=================================="
+        echo "❖ rootful 容器管理（system scope）❖"
+        echo "=================================="
+        _print_overview_inline
+        _podman_print_container_overview all system
+        echo "----------------------------------"
+        echo "1. 新增單元"
+        echo "2. 編輯現有單元"
+        echo "3. 查看單元日誌"
+        echo "4. 停止單元"
+        echo "5. 重新啟動單元"
+        echo "6. 移除單元"
+        echo "7. 進入容器 Shell"
+        echo "8. 映像管理"
+        echo "9. 網路管理"
+        echo "10. 卷管理"
+        echo "11. 容器自動更新"
+        echo "12. 清理孤立資源"
+        echo "----------------------------------"
+        echo "0. 返回上一層"
+        echo "=================================="
+        read -r -e -p "請輸入選擇 [0-12]: " choice
+        case "$choice" in
+            1) _create_or_edit_quadlet_unit system ; ui_pause ;;
+            2) _edit_existing_unit_and_reload_restart system || { echo "返回上層"; sleep 1; continue; }; ui_pause ;;
+            3)
+                n=$(_pick_existing_unit_file system container pod) || { echo "返回上層"; sleep 1; continue; }
+                _unit_try_logs_follow "$n"
+                ;;
+            4)
+                local -a stop_units=()
+                mapfile -t stop_units < <(_pick_existing_unit_files_multi system "停止單元" container pod)
+                if [ "${#stop_units[@]}" -eq 0 ]; then
+                    echo "返回上層"
+                    sleep 1
+                    continue
+                fi
+                local ok=0 fail=0
+                local n
+                for n in "${stop_units[@]}"; do
+                    if _unit_try_stop "$n"; then
+                        ok=$((ok + 1))
+                    else
+                        fail=$((fail + 1))
+                    fi
+                done
+                echo "停止結果：成功=$ok / 失敗=$fail"
+                ui_pause
+                ;;
+            5)
+                local -a restart_units=()
+                mapfile -t restart_units < <(_pick_existing_unit_files_multi system "重新啟動單元" container pod network volume image device)
+                if [ "${#restart_units[@]}" -eq 0 ]; then
+                    echo "返回上層"
+                    sleep 1
+                    continue
+                fi
+                local ok=0 fail=0
+                local n
+                for n in "${restart_units[@]}"; do
+                    if _unit_try_restart "$n"; then
+                        echo "✅ 已送出重啟：$n（啟動中，可用「查看單元日誌」追蹤）"
+                        ok=$((ok + 1))
+                    else
+                        tgdb_warn "重啟失敗：$n（請檢查單元或日誌）"
+                        fail=$((fail + 1))
+                    fi
+                done
+                echo "重啟結果：成功=$ok / 失敗=$fail"
+                ui_pause
+                ;;
+            6)
+                local -a remove_units=()
+                mapfile -t remove_units < <(_pick_existing_unit_files_multi system "移除單元" container network volume pod device kube)
+                if [ "${#remove_units[@]}" -eq 0 ]; then
+                    echo "返回上層"
+                    sleep 1
+                    continue
+                fi
+                local ok=0 fail=0
+                local b
+                for b in "${remove_units[@]}"; do
+                    if _remove_quadlet_unit "$b"; then
+                        ok=$((ok + 1))
+                    else
+                        fail=$((fail + 1))
+                    fi
+                done
+                echo "移除結果：成功=$ok / 失敗=$fail"
+                ui_pause
+                ;;
+            7) podman_exec_container_menu system ;;
+            8) podman_images_menu system ;;
+            9) podman_networks_menu system ;;
+            10) podman_volumes_menu system ;;
+            11) podman_auto_update_menu system ;;
+            12) podman_cleanup_menu system ;;
             0) return ;;
             *) echo "無效選項"; sleep 1 ;;
         esac
@@ -117,12 +242,16 @@ podman_menu() {
 
 # ---- 清理 ----
 podman_cleanup_menu() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    local label
+    label="$(_podman_scope_display_name "$scope")"
     if ! ui_is_interactive; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
 
-    if ui_confirm_yn "是否清除孤立容器、網路、映像、卷？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
-        _podman_cleanup_resources
+    if ui_confirm_yn "是否清除孤立容器、網路、映像、卷（${label}）？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+        _podman_cleanup_resources "$scope"
         echo "✅ 清理完成"
     else
         echo "已取消"
@@ -144,8 +273,8 @@ _podman_parse_multi_targets() {
 }
 
 _podman_batch_remove_targets() {
-    local label="$1" remove_fn="$2"
-    shift 2
+    local scope="$1" label="$2" remove_fn="$3"
+    shift 3
     local -a targets=("$@")
     local ok=0 fail=0
     local target
@@ -156,7 +285,7 @@ _podman_batch_remove_targets() {
     fi
 
     for target in "${targets[@]}"; do
-        if "$remove_fn" "$target"; then
+        if "$remove_fn" "$scope" "$target"; then
             echo "✅ 已移除${label}：$target"
             ok=$((ok + 1))
         else
@@ -169,24 +298,34 @@ _podman_batch_remove_targets() {
     [ "$fail" -eq 0 ]
 }
 
-_podman_remove_image_target() { podman rmi -f "$1"; }
-_podman_remove_network_target() { podman network rm "$1"; }
-_podman_remove_volume_target() { podman volume rm "$1"; }
+_podman_remove_image_target() { _podman_podman_cmd "$1" rmi -f "$2"; }
+_podman_remove_network_target() { _podman_podman_cmd "$1" network rm "$2"; }
+_podman_remove_volume_target() { _podman_podman_cmd "$1" volume rm "$2"; }
 
 _podman_list_all_image_targets() {
-    podman images --format '{{.ID}}' 2>/dev/null | awk 'NF && !seen[$0]++'
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    _podman_podman_cmd "$scope" images --format '{{.ID}}' 2>/dev/null | awk 'NF && !seen[$0]++'
 }
 
 _podman_list_all_network_targets() {
-    podman network ls --format '{{.Name}}' 2>/dev/null | awk 'NF'
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    _podman_podman_cmd "$scope" network ls --format '{{.Name}}' 2>/dev/null | awk 'NF'
 }
 
 _podman_list_all_volume_targets() {
-    podman volume ls --format '{{.Name}}' 2>/dev/null | awk 'NF'
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    _podman_podman_cmd "$scope" volume ls --format '{{.Name}}' 2>/dev/null | awk 'NF'
 }
 
 # ---- 網路管理 ----
 podman_networks_menu() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    local label
+    label="$(_podman_scope_display_name "$scope")"
     if ! ui_is_interactive; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
@@ -194,10 +333,10 @@ podman_networks_menu() {
     while true; do
         clear
         echo "=================================="
-        echo "❖ 網路管理 ❖"
+        echo "❖ 網路管理（${label}）❖"
         echo "=================================="
         echo "--- 當前網路 ---"
-        podman network ls || true
+        _podman_podman_cmd "$scope" network ls || true
         echo "----------------------------------"
         echo "1. 建立網路 (podman network create)"
         echo "2. 刪除網路（可多輸入）"
@@ -209,7 +348,7 @@ podman_networks_menu() {
         case "$c" in
             1)
                 read -r -e -p "網路名稱: " net
-                [ -n "$net" ] && podman network create "$net"
+                [ -n "$net" ] && _podman_podman_cmd "$scope" network create "$net"
                 ui_pause "按鍵返回..."
                 ;;
             2)
@@ -220,20 +359,20 @@ podman_networks_menu() {
                 if [ "${#nets[@]}" -eq 0 ]; then
                     tgdb_warn "未輸入任何網路"
                 else
-                    _podman_batch_remove_targets "網路" _podman_remove_network_target "${nets[@]}"
+                    _podman_batch_remove_targets "$scope" "網路" _podman_remove_network_target "${nets[@]}"
                 fi
                 ui_pause "按鍵返回..."
                 ;;
             3)
                 local -a all_nets=()
-                mapfile -t all_nets < <(_podman_list_all_network_targets)
+                mapfile -t all_nets < <(_podman_list_all_network_targets "$scope")
                 if [ "${#all_nets[@]}" -eq 0 ]; then
                     echo "目前沒有可移除的網路。"
                     ui_pause "按鍵返回..."
                     continue
                 fi
                 if ui_confirm_yn "確定要全部移除目前列出的網路（共 ${#all_nets[@]} 個）？(y/N，預設 Y，輸入 0 取消): " "Y"; then
-                    _podman_batch_remove_targets "網路" _podman_remove_network_target "${all_nets[@]}"
+                    _podman_batch_remove_targets "$scope" "網路" _podman_remove_network_target "${all_nets[@]}"
                 else
                     echo "已取消"
                 fi
@@ -247,6 +386,10 @@ podman_networks_menu() {
 
 # ---- 卷管理 ----
 podman_volumes_menu() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    local label
+    label="$(_podman_scope_display_name "$scope")"
     if ! ui_is_interactive; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
@@ -254,10 +397,10 @@ podman_volumes_menu() {
     while true; do
         clear
         echo "=================================="
-        echo "❖ 卷管理 ❖"
+        echo "❖ 卷管理（${label}）❖"
         echo "=================================="
         echo "--- 當前卷 ---"
-        podman volume ls || true
+        _podman_podman_cmd "$scope" volume ls || true
         echo "----------------------------------"
         echo "1. 建立卷 (podman volume create)"
         echo "2. 刪除卷（可多輸入）"
@@ -269,7 +412,7 @@ podman_volumes_menu() {
         case "$c" in
             1)
                 read -r -e -p "卷名稱: " vol
-                [ -n "$vol" ] && podman volume create "$vol"
+                [ -n "$vol" ] && _podman_podman_cmd "$scope" volume create "$vol"
                 ui_pause "按鍵返回..."
                 ;;
             2)
@@ -280,20 +423,20 @@ podman_volumes_menu() {
                 if [ "${#vols[@]}" -eq 0 ]; then
                     tgdb_warn "未輸入任何卷"
                 else
-                    _podman_batch_remove_targets "卷" _podman_remove_volume_target "${vols[@]}"
+                    _podman_batch_remove_targets "$scope" "卷" _podman_remove_volume_target "${vols[@]}"
                 fi
                 ui_pause "按鍵返回..."
                 ;;
             3)
                 local -a all_vols=()
-                mapfile -t all_vols < <(_podman_list_all_volume_targets)
+                mapfile -t all_vols < <(_podman_list_all_volume_targets "$scope")
                 if [ "${#all_vols[@]}" -eq 0 ]; then
                     echo "目前沒有可移除的卷。"
                     ui_pause "按鍵返回..."
                     continue
                 fi
                 if ui_confirm_yn "確定要全部移除目前列出的卷（共 ${#all_vols[@]} 個）？(y/N，預設 Y，輸入 0 取消): " "Y"; then
-                    _podman_batch_remove_targets "卷" _podman_remove_volume_target "${all_vols[@]}"
+                    _podman_batch_remove_targets "$scope" "卷" _podman_remove_volume_target "${all_vols[@]}"
                 else
                     echo "已取消"
                 fi
@@ -307,11 +450,12 @@ podman_volumes_menu() {
 
 # ---- 容器互動 ----
 _podman_pick_running_container() {
+    local scope_filter="${1:-user}"
     if ! command -v podman >/dev/null 2>&1; then
         tgdb_fail "Podman 未安裝" 1 || return $?
     fi
 
-    mapfile -t __containers < <(podman ps --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || true)
+    mapfile -t __containers < <(_podman_collect_container_records running "$scope_filter")
     if [ "${#__containers[@]}" -eq 0 ]; then
         tgdb_warn "目前沒有任何運行中的容器"
         return 1
@@ -320,8 +464,8 @@ _podman_pick_running_container() {
     echo "--- 運行中的容器 ---" >&2
     local i
     for ((i=0; i<${#__containers[@]}; i++)); do
-        IFS=$'\t' read -r id name image status <<< "${__containers[$i]}"
-        printf "%2d) %s (%s) [%s]\n" $((i+1)) "$name" "$image" "$status" >&2
+        IFS=$'\t' read -r scope id name image status <<< "${__containers[$i]}"
+        printf "%2d) %s [%s] (%s) [%s]\n" $((i+1)) "$name" "$(_podman_scope_display_name "$scope")" "$image" "$status" >&2
     done
     echo " 0) 返回" >&2
 
@@ -329,32 +473,34 @@ _podman_pick_running_container() {
     if ! ui_prompt_index pick "請輸入容器序號 [0-${#__containers[@]}]: " 1 "${#__containers[@]}" "" 0; then
         return 1
     fi
-    local idx=$((pick-1))
 
+    local idx=$((pick-1))
     printf '%s\n' "${__containers[$idx]}"
 }
 
 podman_exec_container_menu() {
+    local scope_filter="${1:-user}"
     if ! ui_is_interactive; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
 
-    local row id name image status
-    row=$(_podman_pick_running_container) || { echo "返回上一層"; sleep 1; return 1; }
+    local row scope id name image status
+    row=$(_podman_pick_running_container "$scope_filter") || { echo "返回上一層"; sleep 1; return 1; }
 
-    IFS=$'\t' read -r id name image status <<< "$row"
+    IFS=$'\t' read -r scope id name image status <<< "$row"
     clear
     echo "=================================="
     echo "❖ 進入容器 Shell ❖"
     echo "=================================="
     echo "容器名稱：$name"
+    echo "範圍：$(_podman_scope_display_name "$scope")"
     echo "映像：$image"
     echo "狀態：$status"
     echo "----------------------------------"
     echo "提示：已進入容器環境，輸入 exit 可退出並返回 TGDB。"
     echo "=================================="
 
-    if podman exec -it "$id" /bin/sh; then
+    if _podman_podman_cmd "$scope" exec -it "$id" /bin/sh; then
         echo
         echo "✅ 已離開容器：$name"
         ui_pause
@@ -367,6 +513,10 @@ podman_exec_container_menu() {
 
 # ---- 映像選單 ----
 podman_images_menu() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    local label
+    label="$(_podman_scope_display_name "$scope")"
     if ! ui_is_interactive; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
@@ -374,10 +524,10 @@ podman_images_menu() {
     while true; do
         clear
         echo "=================================="
-        echo "❖ 映像管理 ❖"
+        echo "❖ 映像管理（${label}）❖"
         echo "=================================="
         echo "--- 當前映像 ---"
-        podman images || true
+        _podman_podman_cmd "$scope" images || true
         echo "----------------------------------"
         echo "1. 拉取映像 (podman pull)"
         echo "2. 刪除映像（可多輸入）"
@@ -389,7 +539,7 @@ podman_images_menu() {
         case "$c" in
             1)
                 read -r -e -p "映像 (例如 docker.io/library/alpine:latest): " img
-                [ -n "$img" ] && podman pull "$img"
+                [ -n "$img" ] && _podman_podman_cmd "$scope" pull "$img"
                 ui_pause "按鍵返回..."
                 ;;
             2)
@@ -400,20 +550,20 @@ podman_images_menu() {
                 if [ "${#imgs[@]}" -eq 0 ]; then
                     tgdb_warn "未輸入任何映像"
                 else
-                    _podman_batch_remove_targets "映像" _podman_remove_image_target "${imgs[@]}"
+                    _podman_batch_remove_targets "$scope" "映像" _podman_remove_image_target "${imgs[@]}"
                 fi
                 ui_pause "按鍵返回..."
                 ;;
             3)
                 local -a all_imgs=()
-                mapfile -t all_imgs < <(_podman_list_all_image_targets)
+                mapfile -t all_imgs < <(_podman_list_all_image_targets "$scope")
                 if [ "${#all_imgs[@]}" -eq 0 ]; then
                     echo "目前沒有可移除的映像。"
                     ui_pause "按鍵返回..."
                     continue
                 fi
                 if ui_confirm_yn "確定要全部移除目前列出的映像（共 ${#all_imgs[@]} 個）？(y/N，預設 Y，輸入 0 取消): " "Y"; then
-                    _podman_batch_remove_targets "映像" _podman_remove_image_target "${all_imgs[@]}"
+                    _podman_batch_remove_targets "$scope" "映像" _podman_remove_image_target "${all_imgs[@]}"
                 else
                     echo "已取消"
                 fi
@@ -426,19 +576,40 @@ podman_images_menu() {
 }
 
 podman_auto_update_menu() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    local label
+    label="$(_podman_scope_display_name "$scope")"
     if ! ui_is_interactive; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
+    fi
+
+    if [ "$scope" = "system" ] && ! _podman_is_root && ! command -v sudo >/dev/null 2>&1; then
+        tgdb_fail "找不到 sudo，無法管理 rootful 的 podman auto-update。" 1 || return $?
+    fi
+
+    local systemctl_cmd journalctl_cmd
+    systemctl_cmd="systemctl --user"
+    journalctl_cmd="journalctl --user"
+    if [ "$scope" = "system" ]; then
+        if _podman_is_root; then
+            systemctl_cmd="systemctl"
+            journalctl_cmd="journalctl"
+        else
+            systemctl_cmd="sudo systemctl"
+            journalctl_cmd="sudo journalctl"
+        fi
     fi
 
     while true; do
         clear
         echo "=================================="
-        echo "❖ 容器自動更新（podman auto-update）❖"
+        echo "❖ 容器自動更新（podman auto-update）（${label}）❖"
         echo "=================================="
         local timer_enabled="unknown" timer_active="unknown"
         if command -v systemctl >/dev/null 2>&1; then
-            timer_enabled="$(systemctl --user is-enabled podman-auto-update.timer 2>/dev/null || true)"
-            timer_active="$(systemctl --user is-active podman-auto-update.timer 2>/dev/null || true)"
+            timer_enabled="$(_podman_systemctl "$scope" is-enabled -- podman-auto-update.timer 2>/dev/null || true)"
+            timer_active="$(_podman_systemctl "$scope" is-active -- podman-auto-update.timer 2>/dev/null || true)"
             [ -z "$timer_enabled" ] && timer_enabled="unknown"
             [ -z "$timer_active" ] && timer_active="unknown"
         else
@@ -448,7 +619,7 @@ podman_auto_update_menu() {
         echo "podman-auto-update.timer：啟用=$timer_enabled / 狀態=$timer_active"
         echo "----------------------------------"
         echo "說明："
-        echo "- 本功能會執行一次：podman auto-update"
+        echo "- 本功能會執行一次：podman auto-update（${label}）"
         echo "- 需容器本身已設定 AutoUpdate 才會被更新（例如 Quadlet .container 內 [Container] 加上 AutoUpdate=registry）。"
         echo "- podman-auto-update.timer 可選擇啟用，做成定期更新。"
         echo ""
@@ -472,10 +643,10 @@ podman_auto_update_menu() {
                     continue
                 fi
                 if ui_confirm_yn "⚠️ 可能因映像更新/不相容導致服務無法運行，確定要立即執行 podman auto-update 嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
-                    echo "⏳ 正在執行：podman auto-update"
-                    if podman auto-update; then
-                        echo "✅ 已完成：podman auto-update"
-                        echo "提示：若服務異常，請用 systemctl --user status <單元> 與 journalctl --user -u <單元> 檢查。"
+                    echo "⏳ 正在執行：podman auto-update（${label}）"
+                    if _podman_podman_cmd "$scope" auto-update; then
+                        echo "✅ 已完成：podman auto-update（${label}）"
+                        echo "提示：若服務異常，請用 ${systemctl_cmd} status <單元> 與 ${journalctl_cmd} -u <單元> 檢查。"
                     else
                         tgdb_warn "podman auto-update 執行失敗，請查看輸出訊息與日誌後再重試。"
                     fi
@@ -485,13 +656,13 @@ podman_auto_update_menu() {
                 ui_pause
                 ;;
             2)
-                _podman_auto_update_timer_enable || true
-                echo "提示：可用 journalctl --user -u podman-auto-update.service 查看更新紀錄。"
+                _podman_auto_update_timer_enable "$scope" || true
+                echo "提示：可用 ${journalctl_cmd} -u podman-auto-update.service 查看更新紀錄。"
                 ui_pause
                 ;;
             3)
                 if ui_confirm_yn "確定要停用 podman-auto-update.timer？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
-                    _podman_auto_update_timer_disable || true
+                    _podman_auto_update_timer_disable "$scope" || true
                 else
                     echo "已取消"
                 fi

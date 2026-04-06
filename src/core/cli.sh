@@ -46,7 +46,6 @@ _cli_app_quick() {
   fi
 
   local min_args=2
-  local provided_args="$#"
   if declare -F _app_fn_exists >/dev/null 2>&1 && _app_fn_exists "$service" cli_quick_min_args; then
     min_args="$(_app_invoke "$service" cli_quick_min_args 2>/dev/null || echo 2)"
     if [[ ! "${min_args:-}" =~ ^[0-9]+$ ]] || [ "$min_args" -lt 2 ] 2>/dev/null; then
@@ -54,20 +53,49 @@ _cli_app_quick() {
     fi
   fi
 
+  # 允許在參數最後額外提供 deploy_mode_code（單一參數，放最後）：
+  # - 0=預設、1=rootless、2=rootful
+  # 設計：放在最後可避免干擾各服務的 cli_quick_args 參數順序。
+  local -a args=("$@")
+  local deploy_mode_code="0"
+  if [ ${#args[@]} -gt "$min_args" ]; then
+    local last
+    last="${args[$(( ${#args[@]} - 1 ))]}"
+    case "$last" in
+      0|1|2)
+        deploy_mode_code="$last"
+        unset 'args[$(( ${#args[@]} - 1 ))]'
+        args=("${args[@]}")
+        ;;
+    esac
+  fi
+
+  local provided_args="${#args[@]}"
   if [ "$provided_args" -lt "$min_args" ]; then
     _cli_usage_error
     return 2
   fi
 
-  local name_code="$1" port_code="$2"
-  shift 2
+  local deploy_mode
+  case "$deploy_mode_code" in
+    0) deploy_mode="$(_apps_resolve_deploy_mode "$service" "${TGDB_DEPLOY_MODE:-}")" || return $? ;;
+    1) deploy_mode="$(_apps_resolve_deploy_mode "$service" "rootless")" || return $? ;;
+    2) deploy_mode="$(_apps_resolve_deploy_mode "$service" "rootful")" || return $? ;;
+    *) _cli_usage_error; return 2 ;;
+  esac
+
+  local name_code="${args[0]}" port_code="${args[1]}"
+  local -a extra_args=()
+  if [ ${#args[@]} -gt 2 ]; then
+    extra_args=("${args[@]:2}")
+  fi
 
   local name host_port instance_dir
   if [ "$name_code" = "0" ]; then
-    name=$(get_next_available_app_name "$service")
+    name=$(get_next_available_app_name "$service" "$deploy_mode")
   else
     name="$name_code"
-    if _is_app_name_duplicate "$name"; then
+    if _is_app_name_duplicate "$name" "$deploy_mode"; then
       tgdb_fail "已存在相同名稱：$name，請改用其他名稱或使用 0 自動命名。" 1 || return $?
       return 1
     fi
@@ -95,7 +123,9 @@ _cli_app_quick() {
   fi
 
   instance_dir="$TGDB_DIR/$name"
-  _deploy_app_cli_quick "$service" "$name" "$host_port" "$instance_dir" "$@"
+
+  # 以環境變數傳遞（_deploy_app_cli_quick 目前依 TGDB_DEPLOY_MODE 解析）
+  TGDB_DEPLOY_MODE="$deploy_mode" _deploy_app_cli_quick "$service" "$name" "$host_port" "$instance_dir" "${extra_args[@]}"
 }
 
 # 應用更新版本（通用）
@@ -452,7 +482,10 @@ print_cli_help() {
   t 5 9 2 alpine:latest busybox:latest
   t 5 10 3 0
   t 7 2 11 2 200
-  t 6 <idx> 1 <name|0> <port|0> [額外參數...]
+  t 6 <idx> 1 <name|0> <port|0> [額外參數...] [deploy_mode_code]
+
+  deploy_mode_code（選用，放最後一個參數）：
+    - 0=預設、1=rootless、2=rootful
 
 補充：
   - 主選單/子選單代碼以互動選單顯示為準。

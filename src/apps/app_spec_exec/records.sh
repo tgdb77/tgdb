@@ -126,6 +126,8 @@ appspec_record_config_paths() {
 
 appspec_copy_config_to_instance() {
   local service="$1" config_path="$2" instance_dir="$3"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
 
   local -a cfg_dests=() cfg_tpls=() cfg_modes=() cfg_labels=()
   _appspec_config_defs "$service" cfg_dests cfg_tpls cfg_modes cfg_labels || return 1
@@ -174,24 +176,28 @@ appspec_copy_config_to_instance() {
   fi
 
   local dest="$instance_dir/$dest_rel"
-  mkdir -p "$(dirname "$dest")"
+  _apps_mkdir_p "$deploy_mode" "$(dirname "$dest")" || return 1
 
-  if [ -n "$config_path" ] && [ -f "$config_path" ]; then
+  if [ -n "$config_path" ] && _apps_test "$deploy_mode" -f "$config_path"; then
     if [ "$config_path" != "$dest" ]; then
-      cp "$config_path" "$dest" 2>/dev/null || true
+      _apps_copy_file_to_mode "$deploy_mode" "$config_path" "$dest" 2>/dev/null || true
     fi
   else
     if [ -n "$tpl_rel" ]; then
       local tpl
       tpl="$(_appspec_join_service_path "$service" "$tpl_rel")" || return 0
-      if [ -f "$tpl" ] && [ ! -f "$dest" ]; then
-        cp "$tpl" "$dest" 2>/dev/null || true
+      if [ -f "$tpl" ] && ! _apps_path_exists "$deploy_mode" "$dest"; then
+        _apps_copy_file_to_mode "$deploy_mode" "$tpl" "$dest" 2>/dev/null || true
       fi
     fi
   fi
 
   if [ -n "$mode" ] && [[ "$mode" =~ ^[0-9]+$ ]]; then
-    chmod "$mode" "$dest" 2>/dev/null || true
+    if [ "$deploy_mode" = "rootful" ]; then
+      _tgdb_run_privileged chmod "$mode" "$dest" 2>/dev/null || true
+    else
+      chmod "$mode" "$dest" 2>/dev/null || true
+    fi
   fi
 
   # 一些服務需要先建立特定檔案，避免容器啟動時被建立成同名資料夾（例如：Volume 掛載檔案時）。
@@ -200,6 +206,8 @@ appspec_copy_config_to_instance() {
 
 appspec_record_files() {
   local service="$1" name="$2"
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
 
   local qdir
   qdir="$(rm_service_quadlet_dir "$service" 2>/dev/null || echo "")"
@@ -212,13 +220,13 @@ appspec_record_files() {
       local i
       for ((i = 0; i < ${#unit_suffixes[@]}; i++)); do
         local f="$qdir/${name}${unit_suffixes[$i]}"
-        [ -f "$f" ] && printf '%s\n' "$f"
+        _apps_path_exists "$deploy_mode" "$f" && printf '%s\n' "$f"
       done
     fi
   else
     local quad
     quad="$qdir/$name.container"
-    [ -f "$quad" ] && printf '%s\n' "$quad"
+    _apps_path_exists "$deploy_mode" "$quad" && printf '%s\n' "$quad"
   fi
 
   local -a cfgs=()
@@ -235,7 +243,7 @@ appspec_record_files() {
 
   local c
   for c in "${cfgs[@]}"; do
-    [ -n "$c" ] && [ -f "$c" ] && printf '%s\n' "$c"
+    [ -n "$c" ] && _apps_path_exists "$deploy_mode" "$c" && printf '%s\n' "$c"
   done
 }
 

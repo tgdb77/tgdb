@@ -714,11 +714,13 @@ appspec_cli_quick() {
   done
 
   if [ -n "${volume_dir:-}" ] && [ "${volume_dir:-}" != "0" ]; then
-    if [ -e "$volume_dir" ] && [ ! -d "$volume_dir" ]; then
+    local deploy_mode
+    deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+    if _apps_test "$deploy_mode" -e "$volume_dir" && ! _apps_test "$deploy_mode" -d "$volume_dir"; then
       tgdb_fail "volume_dir 不是資料夾：$volume_dir" 1 || true
       return 1
     fi
-    if [ -d "$volume_dir" ] && { [ ! -r "$volume_dir" ] || [ ! -w "$volume_dir" ]; }; then
+    if _apps_test "$deploy_mode" -d "$volume_dir" && { ! _apps_test "$deploy_mode" -r "$volume_dir" || ! _apps_test "$deploy_mode" -w "$volume_dir"; }; then
       tgdb_fail "目前使用者對 $volume_dir 沒有讀寫權限，請調整權限或改用其他目錄。" 1 || true
       return 1
     fi

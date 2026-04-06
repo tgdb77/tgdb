@@ -180,8 +180,37 @@ _appspec_build_render_kv_args() {
   done
 }
 
+_appspec_podman_sock_host_path() {
+  local service="$1"
+  local override
+  override="$(appspec_get "$service" "podman_api_socket_path" "")"
+  if [ -n "$override" ]; then
+    printf '%s\n' "$override"
+    return 0
+  fi
+
+  local deploy_mode
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  case "$deploy_mode" in
+    rootful)
+      printf '%s\n' "/run/podman/podman.sock"
+      ;;
+    *)
+      local uid
+      if declare -F _detect_invoking_uid >/dev/null 2>&1; then
+        uid="$(_detect_invoking_uid)"
+      else
+        uid="$(id -u 2>/dev/null || echo "")"
+      fi
+      printf '%s\n' "/run/user/${uid}/podman/podman.sock"
+      ;;
+  esac
+}
+
 _appspec_maybe_enable_podman_socket() {
   local service="$1"
+  local scope
+  scope="$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")"
 
   local v
   v="$(appspec_get "$service" "require_podman_socket" "0")"
@@ -192,13 +221,28 @@ _appspec_maybe_enable_podman_socket() {
     return 0
   fi
 
-  if declare -F _systemctl_user_try >/dev/null 2>&1; then
-    if _systemctl_user_try is-active -- podman.socket >/dev/null 2>&1; then
+  if declare -F tgdb_systemctl_try >/dev/null 2>&1; then
+    if tgdb_systemctl_try "$scope" is-active -- podman.socket >/dev/null 2>&1; then
       return 0
     fi
-    echo "正在為目前使用者啟用 Podman Socket（podman.sock）..." >&2
-    if ! _systemctl_user_try enable --now -- podman.socket >/dev/null 2>&1; then
-      tgdb_warn "無法啟用 Podman Socket，請確認已安裝 Podman 並支援 systemd --user。"
+    if [ "$scope" = "system" ]; then
+      echo "正在為 system scope 啟用 Podman Socket（podman.sock）..." >&2
+    else
+      echo "正在為目前使用者啟用 Podman Socket（podman.sock）..." >&2
+    fi
+    if ! tgdb_systemctl_try "$scope" enable --now -- podman.socket >/dev/null 2>&1; then
+      tgdb_warn "無法啟用 Podman Socket，請確認已安裝 Podman 並支援對應的 systemd scope。"
+    fi
+    return 0
+  fi
+
+  if [ "$scope" = "system" ]; then
+    if _tgdb_run_privileged systemctl is-active --quiet podman.socket 2>/dev/null; then
+      return 0
+    fi
+    echo "正在為 system scope 啟用 Podman Socket（podman.sock）..." >&2
+    if ! _tgdb_run_privileged systemctl enable --now podman.socket >/dev/null 2>&1; then
+      tgdb_warn "無法啟用 Podman Socket，請確認已安裝 Podman 並支援 systemd。"
     fi
     return 0
   fi
@@ -211,6 +255,24 @@ _appspec_maybe_enable_podman_socket() {
     tgdb_warn "無法啟用 Podman Socket，請確認已安裝 Podman 並支援 systemd --user。"
   fi
   return 0
+}
+
+_appspec_require_podman_socket_ready() {
+  local service="$1"
+  local v
+  v="$(appspec_get "$service" "require_podman_socket" "0")"
+  _appspec_truthy "$v" || return 0
+
+  local deploy_mode socket_path
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  socket_path="$(_appspec_podman_sock_host_path "$service")"
+
+  if _apps_test "$deploy_mode" -S "$socket_path"; then
+    return 0
+  fi
+
+  tgdb_fail "需要的 Podman Socket 不存在或不是 socket：$socket_path（$service）。請先確認 podman.socket 已啟用。" 1 || true
+  return 1
 }
 
 _appspec_hook_export_env() {
@@ -268,6 +330,16 @@ _appspec_hook_export_env() {
 _appspec_run_hook_scripts() {
   local service="$1" name="$2" instance_dir="$3" host_port="$4" hook_key="$5"
 
+  # hook 腳本預設以「目前使用者」執行；但若是 rootful 部署，
+  # 腳本內直接呼叫 podman 時應改走 root Podman（system scope）。
+  # 這裡用「只覆寫 podman 指令」的方式提供最小提權面（避免整支腳本都用 sudo 執行）。
+  local deploy_mode podman_bin
+  deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  podman_bin=""
+  if [ "$deploy_mode" = "rootful" ]; then
+    podman_bin="$(command -v podman 2>/dev/null || true)"
+  fi
+
   local raw
   raw="$(appspec_get_all "$service" "$hook_key" 2>/dev/null || true)"
   [ -n "$raw" ] || return 0
@@ -300,6 +372,27 @@ _appspec_run_hook_scripts() {
       source)
         (
           _appspec_hook_export_env "$service" "$name"
+
+          if [ "$deploy_mode" = "rootful" ] && [ -n "$podman_bin" ]; then
+            # 讓 hook 腳本可直接使用 podman 操作 rootful 容器。
+            # 注意：export -f 只對 bash 子行程有效；source runner 直接在本 subshell 生效。
+            TGDB_HOOK_PODMAN_BIN="$podman_bin"
+            export TGDB_HOOK_PODMAN_BIN
+            podman() {
+              if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+                "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              if command -v sudo >/dev/null 2>&1; then
+                sudo "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              echo "❌ 本操作需要 root 權限，且系統未安裝 sudo。" >&2
+              return 1
+            }
+            export -f podman 2>/dev/null || true
+          fi
+
           set -- "$service" "$name" "$instance_dir" "$host_port"
           # shellcheck disable=SC1090 # 腳本由 app.spec 指定，於執行期載入
           source "$script"
@@ -308,6 +401,26 @@ _appspec_run_hook_scripts() {
       bash|"")
         (
           _appspec_hook_export_env "$service" "$name"
+
+          if [ "$deploy_mode" = "rootful" ] && [ -n "$podman_bin" ]; then
+            # 同 source runner：在 bash 子行程內覆寫 podman，改以 sudo/root 執行。
+            TGDB_HOOK_PODMAN_BIN="$podman_bin"
+            export TGDB_HOOK_PODMAN_BIN
+            podman() {
+              if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+                "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              if command -v sudo >/dev/null 2>&1; then
+                sudo "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              echo "❌ 本操作需要 root 權限，且系統未安裝 sudo。" >&2
+              return 1
+            }
+            export -f podman 2>/dev/null || true
+          fi
+
           bash "$script" "$service" "$name" "$instance_dir" "$host_port"
         ) || rc=$?
         ;;
@@ -315,6 +428,25 @@ _appspec_run_hook_scripts() {
         tgdb_warn "不支援的 ${hook_key} runner（$service）：$runner，將改用 bash"
         (
           _appspec_hook_export_env "$service" "$name"
+
+          if [ "$deploy_mode" = "rootful" ] && [ -n "$podman_bin" ]; then
+            TGDB_HOOK_PODMAN_BIN="$podman_bin"
+            export TGDB_HOOK_PODMAN_BIN
+            podman() {
+              if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+                "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              if command -v sudo >/dev/null 2>&1; then
+                sudo "$TGDB_HOOK_PODMAN_BIN" "$@"
+                return $?
+              fi
+              echo "❌ 本操作需要 root 權限，且系統未安裝 sudo。" >&2
+              return 1
+            }
+            export -f podman 2>/dev/null || true
+          fi
+
           bash "$script" "$service" "$name" "$instance_dir" "$host_port"
         ) || rc=$?
         ;;
