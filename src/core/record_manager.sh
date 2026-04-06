@@ -60,6 +60,32 @@ rm_user_unit_path() {
   printf '%s\n' "$(rm_user_units_dir)/$filename"
 }
 
+rm_rootful_root_dir() {
+  printf '%s\n' "${TGDB_ROOTFUL_ROOT:-/var/lib/tgdb}"
+}
+
+# rootful systemd system 單元目錄（*.service / *.timer）
+rm_system_systemd_dir() {
+  printf '%s\n' "/etc/systemd/system"
+}
+
+rm_system_systemd_unit_path() {
+  local filename="$1"
+  _rm_require_safe_segment "$filename" "單元檔名" || return 1
+  printf '%s\n' "$(rm_system_systemd_dir)/$filename"
+}
+
+# Quadlet rootful 單元目錄（*.container / *.network / *.volume ...）
+rm_system_units_dir() {
+  printf '%s\n' "/etc/containers/systemd"
+}
+
+rm_system_unit_path() {
+  local filename="$1"
+  _rm_require_safe_segment "$filename" "單元檔名" || return 1
+  printf '%s\n' "$(rm_system_units_dir)/$filename"
+}
+
 rm_persist_config_dir() {
   local dir="${PERSIST_CONFIG_DIR:-}"
   _rm_require_nonempty "$dir" "PERSIST_CONFIG_DIR 未設定，無法取得持久化設定目錄" || return 1
@@ -74,8 +100,44 @@ rm_persist_config_dir() {
   printf '%s\n' "$dir/config"
 }
 
+rm_persist_config_dir_by_mode() {
+  local mode="${1:-rootless}"
+  case "${mode,,}" in
+    rootful|system)
+      printf '%s\n' "$(rm_rootful_root_dir)/config"
+      ;;
+    rootless|user|"")
+      rm_persist_config_dir
+      ;;
+    *)
+      tgdb_fail "不支援的部署模式：$mode" 1 || return $?
+      ;;
+  esac
+}
+
+rm_runtime_app_dir_by_mode() {
+  local mode="${1:-rootless}"
+  case "${mode,,}" in
+    rootful|system)
+      printf '%s\n' "$(rm_rootful_root_dir)/app"
+      ;;
+    rootless|user|"")
+      _rm_require_nonempty "${TGDB_DIR:-}" "TGDB_DIR 未設定，無法取得應用資料目錄" || return 1
+      printf '%s\n' "$TGDB_DIR"
+      ;;
+    *)
+      tgdb_fail "不支援的部署模式：$mode" 1 || return $?
+      ;;
+  esac
+}
+
 rm_persist_timer_dir() {
   printf '%s\n' "$(rm_persist_config_dir)/timer"
+}
+
+rm_persist_timer_dir_by_mode() {
+  local mode="${1:-rootless}"
+  printf '%s\n' "$(rm_persist_config_dir_by_mode "$mode")/timer"
 }
 
 rm_service_dir() {
@@ -92,6 +154,22 @@ rm_service_configs_dir() {
 rm_service_quadlet_dir() {
   local service="$1"
   printf '%s\n' "$(rm_service_dir "$service")/quadlet"
+}
+
+rm_service_dir_by_mode() {
+  local service="$1" mode="${2:-rootless}"
+  _rm_require_safe_segment "$service" "服務名稱" || return 1
+  printf '%s\n' "$(rm_persist_config_dir_by_mode "$mode")/$service"
+}
+
+rm_service_configs_dir_by_mode() {
+  local service="$1" mode="${2:-rootless}"
+  printf '%s\n' "$(rm_service_dir_by_mode "$service" "$mode")/configs"
+}
+
+rm_service_quadlet_dir_by_mode() {
+  local service="$1" mode="${2:-rootless}"
+  printf '%s\n' "$(rm_service_dir_by_mode "$service" "$mode")/quadlet"
 }
 
 rm_persist_quadlet_dir() {

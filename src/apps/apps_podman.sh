@@ -77,55 +77,34 @@ _ensure_podman_version_for_quadlet() {
 
 select_instance() {
   local service="$1"
-  local image="${2:-}"
+  local _image="${2:-}"
   SELECTED_INSTANCE=""
+  SELECTED_INSTANCE_MODE=""
 
-  local instances=()
+  local instances=() instance_modes=()
   local seen=""
-  local quad_dir user_units_dir
-  quad_dir="$(_service_quadlet_dir "$service")"
-  user_units_dir="$(rm_user_units_dir)"
+  local mode quad_dir runtime_dir
 
-  if [ -d "$quad_dir" ]; then
-    while IFS= read -r -d $'\0' f; do
-      local b="${f##*/}"
-      local name="${b%.container}"
-      if _app_is_aux_instance_name "$service" "$name"; then
-        continue
-      fi
-      if [ -f "$user_units_dir/$name.container" ]; then
-        case ",$seen," in
-          *,"$name",*) ;;
-          *)
-            instances+=("$name")
-            seen="$seen,$name"
-            ;;
-        esac
-      fi
-    done < <(find "$quad_dir" -maxdepth 1 -type f -name "*.container" -print0 2>/dev/null)
-    while IFS= read -r -d $'\0' f; do
-      local b="${f##*/}"
-      local name="${b%.pod}"
-      if _app_is_aux_instance_name "$service" "$name"; then
-        continue
-      fi
-      if [ -f "$user_units_dir/$name.pod" ]; then
-        case ",$seen," in
-          *,"$name",*) ;;
-          *)
-            instances+=("$name")
-            seen="$seen,$name"
-            ;;
-        esac
-      fi
-    done < <(find "$quad_dir" -maxdepth 1 -type f -name "*.pod" -print0 2>/dev/null)
+  local -a modes=()
+  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+    _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
+    _apps_service_supports_deploy_mode "$service" "rootful" && modes+=("rootful")
   fi
+  [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
 
-  if [ -n "$image" ] && [ -d "$user_units_dir" ]; then
-    while IFS= read -r -d $'\0' f; do
-      if grep -Fqx "Image=${image}" "$f" 2>/dev/null; then
-        local unit="${f##*/}"
-        local name="${unit%.container}"
+  for mode in "${modes[@]}"; do
+    quad_dir="$(rm_service_quadlet_dir_by_mode "$service" "$mode" 2>/dev/null || echo "")"
+    if [ -n "$quad_dir" ] && _apps_dir_exists "$mode" "$quad_dir"; then
+      local f=""
+      while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        local b name
+        b="${f##*/}"
+        case "$b" in
+          *.container) name="${b%.container}" ;;
+          *.pod) name="${b%.pod}" ;;
+          *) continue ;;
+        esac
         if _app_is_aux_instance_name "$service" "$name"; then
           continue
         fi
@@ -133,86 +112,34 @@ select_instance() {
           *,"$name",*) ;;
           *)
             instances+=("$name")
+            instance_modes+=("$mode")
             seen="$seen,$name"
             ;;
         esac
-      fi
-    done < <(find "$user_units_dir" -maxdepth 1 -type f -name "*.container" -print0 2>/dev/null)
-  fi
-
-  if [ -d "$user_units_dir" ]; then
-    local had_nullglob=0
-    shopt -q nullglob && had_nullglob=1
-    shopt -s nullglob
-    for f in "$user_units_dir"/*.container; do
-      if grep -Fq "Label=app=${service}" "$f" 2>/dev/null; then
-        local unit="${f##*/}"
-        local name="${unit%.container}"
-        if _app_is_aux_instance_name "$service" "$name"; then
-          continue
-        fi
-        case ",$seen," in
-          *,"$name",*) ;;
-          *)
-            instances+=("$name")
-            seen="$seen,$name"
-            ;;
-        esac
-      fi
-    done
-    if [ "$had_nullglob" -eq 0 ]; then
-      shopt -u nullglob
+      done < <(_apps_find_lines "$mode" "$quad_dir" -maxdepth 1 -type f \( -name "*.container" -o -name "*.pod" \) 2>/dev/null)
     fi
-  fi
 
-  if command -v podman >/dev/null 2>&1; then
-    local cname
-    while IFS= read -r cname; do
-      [ -z "$cname" ] && continue
-      local name="$cname"
-      if _app_is_aux_instance_name "$service" "$name"; then
-        local candidate="$name" parent=""
-        while true; do
-          parent="${candidate%-*}"
-          if [ -z "$parent" ] || [ "$parent" = "$candidate" ]; then
-            break
-          fi
-          candidate="$parent"
-
-          if [ -f "$user_units_dir/$candidate.pod" ] || \
-             [ -f "$user_units_dir/$candidate.container" ] || \
-             { [ -d "$quad_dir" ] && { [ -f "$quad_dir/$candidate.pod" ] || [ -f "$quad_dir/$candidate.container" ]; }; }; then
-            name="$candidate"
-            break
-          fi
-        done
-      fi
-      if _app_is_aux_instance_name "$service" "$name"; then
-        continue
-      fi
-      case ",$seen," in
-        *,"$name",*) ;;
-        *)
-          instances+=("$name")
-          seen="$seen,$name"
-          ;;
-      esac
-    done < <(podman ps -a --filter "label=app=${service}" --format "{{.Names}}" 2>/dev/null || true)
-  fi
-
-  if [ ${#instances[@]} -eq 0 ] && [ -d "$TGDB_DIR" ]; then
-    while IFS= read -r -d $'\0' d; do
-      local name
-      name="$(basename "$d")"
-      case ",$seen," in
-        *,"$name",*) ;;
-        *)
-          instances+=("$name")
-          seen="$seen,$name"
-          ;;
-      esac
-    done < <(find "$TGDB_DIR" -mindepth 1 -maxdepth 1 -type d -name "${service}*" -print0 2>/dev/null)
-  fi
+    runtime_dir="$(_apps_runtime_dir_for_mode "$mode" 2>/dev/null || echo "")"
+    if [ -n "$runtime_dir" ] && _apps_dir_exists "$mode" "$runtime_dir"; then
+      local d=""
+      while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        local name
+        name="$(basename "$d")"
+        if _app_is_aux_instance_name "$service" "$name"; then
+          continue
+        fi
+        case ",$seen," in
+          *,"$name",*) ;;
+          *)
+            instances+=("$name")
+            instance_modes+=("$mode")
+            seen="$seen,$name"
+            ;;
+        esac
+      done < <(_apps_find_lines "$mode" "$runtime_dir" -mindepth 1 -maxdepth 1 -type d -name "${service}*" 2>/dev/null)
+    fi
+  done
 
   if [ ${#instances[@]} -eq 0 ]; then
     echo "找不到任何 '$service' 的已安裝實例。"
@@ -227,7 +154,7 @@ select_instance() {
     echo "----------------------------------"
     local i=1
     for instance in "${instances[@]}"; do
-      echo "$i. $instance"
+      echo "$i. $instance [${instance_modes[$((i - 1))]}]"
       i=$((i + 1))
     done
     echo "----------------------------------"
@@ -240,6 +167,8 @@ select_instance() {
 
     # shellcheck disable=SC2034 # 供其他模組使用（apps_manage.sh）
     SELECTED_INSTANCE=${instances[$((choice - 1))]}
+    # shellcheck disable=SC2034 # 供其他模組使用（apps_manage.sh）
+    SELECTED_INSTANCE_MODE=${instance_modes[$((choice - 1))]}
     return 0
   done
 }

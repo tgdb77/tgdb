@@ -7,6 +7,10 @@ _pod_base_from_token() {
     local token="$1"
     local base=""
 
+    if declare -F _podman_token_name >/dev/null 2>&1; then
+        token="$(_podman_token_name "$token")"
+    fi
+
     case "$token" in
         *.pod)
             base="${token%.pod}"
@@ -31,12 +35,12 @@ _pod_base_from_token() {
     printf '%s\n' "$base"
 }
 
-_list_pod_member_container_unit_files() {
-    local pod_base="$1"
+_list_pod_member_container_unit_files_by_scope() {
+    local scope="$1" pod_base="$2"
     [ -n "$pod_base" ] || return 0
 
     local dir
-    dir="$(rm_user_units_dir)"
+    dir="$(_podman_unit_dir "$scope")"
     [ -d "$dir" ] || return 0
 
     local -a files=()
@@ -64,6 +68,10 @@ _list_pod_member_container_unit_files() {
     done | awk '!seen[$0]++'
 }
 
+_list_pod_member_container_unit_files() {
+    _list_pod_member_container_unit_files_by_scope user "$1"
+}
+
 _container_name_from_unit_file() {
     local unit_file="$1"
     [ -r "$unit_file" ] || return 0
@@ -86,8 +94,12 @@ _unit_try_stop_pod_with_members() {
     local pod_base
     pod_base="$(_pod_base_from_token "$token")" || return 1
 
+    local scope
+    scope="$(_podman_token_scope "$token")"
+    scope="${scope:-user}"
+
     local -a members=()
-    mapfile -t members < <(_list_pod_member_container_unit_files "$pod_base")
+    mapfile -t members < <(_list_pod_member_container_unit_files_by_scope "$scope" "$pod_base")
 
     local -a all_units=()
     local u m
@@ -105,16 +117,11 @@ _unit_try_stop_pod_with_members() {
     mapfile -t all_units < <(printf "%s\n" "${all_units[@]}" | awk 'NF && !seen[$0]++')
 
     local any=false
-    for u in "${all_units[@]}"; do
-        [ -n "$u" ] || continue
-        if _systemctl_user_try disable --now -- "$u"; then
-            any=true
-        else
-            if _systemctl_user_try stop -- "$u"; then
-                any=true
-            fi
-        fi
-    done
+    if _podman_systemctl_try_candidates "$scope" disable --now -- "${all_units[@]}" >/dev/null 2>&1; then
+        any=true
+    elif _podman_systemctl_try_candidates "$scope" stop -- "${all_units[@]}" >/dev/null 2>&1; then
+        any=true
+    fi
 
     if [ "$any" = true ]; then
         if [ "${#members[@]}" -gt 0 ]; then
@@ -128,4 +135,3 @@ _unit_try_stop_pod_with_members() {
     tgdb_warn "無法停止 Pod：$pod_base（可能找不到對應 systemd --user 單元）"
     return 1
 }
-

@@ -25,15 +25,15 @@ _podman_cli_expand_targets() {
 }
 
 _podman_cli_list_stop_unit_targets() {
-    _list_user_units container pod
+    _list_podman_units container pod
 }
 
 _podman_cli_list_restart_unit_targets() {
-    _list_user_units container pod network volume image device
+    _list_podman_units container pod network volume image device
 }
 
 _podman_cli_list_remove_unit_targets() {
-    _list_user_units container network volume pod device kube
+    _list_podman_units container network volume pod device kube
 }
 
 _podman_cli_collect_unit_targets() {
@@ -185,6 +185,25 @@ _podman_cli_batch_remove_targets() {
 _podman_cli_remove_image_target() { podman rmi -f "$1"; }
 _podman_cli_remove_network_target() { podman network rm "$1"; }
 _podman_cli_remove_volume_target() { podman volume rm "$1"; }
+
+_podman_cli_parse_scope_target() {
+    local token="$1" out_scope_var="$2" out_target_var="$3"
+    local scope="user" target="$token"
+
+    case "$token" in
+        user::*)
+            scope="user"
+            target="${token#user::}"
+            ;;
+        system::*)
+            scope="system"
+            target="${token#system::}"
+            ;;
+    esac
+
+    printf -v "$out_scope_var" '%s' "$scope"
+    printf -v "$out_target_var" '%s' "$target"
+}
 
 _podman_cli_list_all_image_targets() {
     podman images --format '{{.ID}}' 2>/dev/null | awk 'NF && !seen[$0]++'
@@ -363,15 +382,17 @@ podman_remove_all_volumes_cli() {
 
 podman_exec_container_cli() {
     local target="$1"
+    local scope="user"
     if [ -z "$target" ]; then
         tgdb_fail "容器名稱或 ID 不得為空" 1 || return $?
     fi
     if ! command -v podman >/dev/null 2>&1; then
         tgdb_fail "Podman 未安裝，無法進入容器" 1 || return $?
     fi
+    _podman_cli_parse_scope_target "$target" scope target
     echo "⚙️ (CLI) 嘗試進入容器：$target"
     echo "提示：進入容器後輸入 exit 可返回終端。"
-    if podman exec -it "$target" /bin/sh; then
+    if _podman_podman_cmd "$scope" exec -it "$target" /bin/sh; then
         echo
         echo "✅ 已離開容器：$target"
         return 0
