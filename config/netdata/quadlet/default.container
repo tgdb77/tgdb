@@ -9,8 +9,7 @@ Image=docker.io/netdata/netdata:stable
 ContainerName=${container_name}
 Label=app=netdata
 
-Network=host
-#PublishPort=127.0.0.1:${host_port}:19999
+PublishPort=127.0.0.1:${host_port}:19999
 
 User=0:0
 
@@ -35,9 +34,7 @@ Volume=${instance_dir}/lib:/var/lib/netdata
 Volume=${instance_dir}/cache:/var/cache/netdata
 
 # 注意：unix socket 掛載即使標 ro 仍可被寫入；請務必保持 Netdata 面板僅限可信來源存取。
-Volume=/run/user/${user_id}/podman/podman.sock:/var/run/docker.sock
-
-#Volume=/run/podman/podman.sock:/var/run/docker.sock
+Volume=${podman_sock_host_path}:/var/run/docker.sock
 
 NoNewPrivileges=true
 
