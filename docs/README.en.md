@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <em>Pure Bash • Rootless Containers • Quadlet Powered • Interactive + CLI Modes</em>
+  <em>Pure Bash • Rootless / Rootful Containers • Quadlet Powered • Interactive + CLI Modes</em>
 </p>
 
 <p align="center">
@@ -49,9 +49,9 @@
       <br><sub>Interactive menu + CLI spell mode</sub>
     </td>
     <td align="center" width="25%">
-      <img src="https://img.shields.io/badge/🔒-Rootless-892CA0?style=flat-square" alt="Rootless">
-      <br><strong>Rootless Containers</strong>
-      <br><sub>Safer deployment with Podman + Quadlet</sub>
+      <img src="https://img.shields.io/badge/🔒-Rootless%20%2F%20Rootful-892CA0?style=flat-square" alt="Rootless / Rootful">
+      <br><strong>Rootless / Rootful Containers</strong>
+      <br><sub>Rootless by default; switch to rootful when system privileges are required</sub>
     </td>
     <td align="center" width="25%">
       <img src="https://img.shields.io/badge/🌐-Cross%20Distro-orange?style=flat-square" alt="Cross-distro">
@@ -65,7 +65,7 @@
 
 | Feature Area | Details |
 |:------------:|:--------|
-| **Containerized Apps** | Built-in support for 100+ app specs across media, AI, knowledge management, monitoring, databases, and network services |
+| **Containerized Apps** | Built-in support for 100+ app specs across media, AI, knowledge management, monitoring, databases, and network services (rootless by default; some apps support rootful) |
 | **Security Stack** | nftables firewall + Fail2ban intrusion protection |
 | **Automated Backups** | Cold backup/restore, Kopia hot backup, Rclone sync, and systemd timer scheduling |
 | **Cloud Storage** | Rclone integration for mounting and syncing cloud storage |
@@ -84,6 +84,7 @@
 > - Recommended OS: **Debian 13**
 > - Run TGDB with a **regular user that has sudo privileges**
 > - **Do not launch it directly as root** unless you really know what you are doing. Rootless Podman, `systemd --user`, shortcut creation, and part of the directory ownership flow are designed around a normal user environment
+> - Even when deploying rootful apps, it is still recommended to run TGDB as a regular user and let TGDB use `sudo` for system-scope operations
 
 ### Requirements
 
@@ -195,7 +196,7 @@ Use TGDB directly from the terminal for scripting and automation:
 
 ## 📱 Supported Applications
 
-TGDB uses **Podman + Quadlet** for rootless container deployment and currently includes **100+ app specs**:
+TGDB uses **Podman + Quadlet** for **rootless / rootful** container deployment (rootless by default) and currently includes **100+ app specs**:
 
 <table>
   <tr>
@@ -251,8 +252,8 @@ TGDB uses **Podman + Quadlet** for rootless container deployment and currently i
   - Data path: `/var/lib/tgdb`
   - Podman socket: `/run/podman/podman.sock`
 - The same instance name cannot exist in both rootless and rootful mode at the same time.
-- Once an instance is created, its deployment mode cannot be switched in place.
-- Rootful backup flows and `.timer` support are not included yet.
+- Once an instance is created, its deployment mode cannot be switched in place (remove and redeploy instead).
+- TGDB's backup/restore and timer flows currently target rootless apps; rootful apps are not fully covered yet (including `.timer`).
 
 ---
 

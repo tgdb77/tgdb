@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <em>純 Bash 實現 • Rootless 容器 • Quadlet 驅動 • 交互式與 CLI 雙模式</em>
+  <em>純 Bash 實現 • Rootless / Rootful 容器 • Quadlet 驅動 • 交互式與 CLI 雙模式</em>
 </p>
 
 <p align="center">
@@ -49,9 +49,9 @@
       <br><sub>直覺互動選單 + 強大 CLI 咒語</sub>
     </td>
     <td align="center" width="25%">
-      <img src="https://img.shields.io/badge/🔒-Rootless-892CA0?style=flat-square" alt="Rootless">
-      <br><strong>Rootless 容器</strong>
-      <br><sub>Podman + Quadlet 安全部署</sub>
+      <img src="https://img.shields.io/badge/🔒-Rootless%20%2F%20Rootful-892CA0?style=flat-square" alt="Rootless / Rootful">
+      <br><strong>Rootless / Rootful 容器</strong>
+      <br><sub>預設 rootless；需要系統權限時可選 rootful</sub>
     </td>
     <td align="center" width="25%">
       <img src="https://img.shields.io/badge/🌐-跨發行版-orange?style=flat-square" alt="Cross-distro">
@@ -65,7 +65,7 @@
 
 | 🎯 功能類別 | 📝 具體說明 |
 |:----------:|:----------|
-| **容器化應用** | 內建 100+ 個 App Spec，涵蓋媒體、AI、知識管理、監控、資料庫與網路服務 |
+| **容器化應用** | 內建 100+ 個 App Spec，涵蓋媒體、AI、知識管理、監控、資料庫與網路服務（預設 rootless；部分應用支援 rootful） |
 | **安全堆疊** | nftables 防火牆 + Fail2ban 入侵防護，完整安全防護 |
 | **自動備份** | 冷備份/還原、Kopia 熱備、Rclone 遠端同步、systemd timer 排程 |
 | **雲端儲存** | Rclone 整合，支援各大雲端服務掛載 |
@@ -84,6 +84,7 @@
 > - 推薦使用 **Debian 13**
 > - 請使用 **帶有 sudo 權限的普通用戶** 執行 TGDB
 > - **不建議直接以 root 使用者啟動**，Rootless Podman、`systemd --user`、快捷鍵與部分目錄權限流程都會以一般使用者環境為主
+> - 即使要部署 rootful Apps，也建議維持以一般使用者執行 TGDB，並讓 TGDB 透過 `sudo` 進行 system scope 操作
 
 ### 系統需求
 
@@ -195,7 +196,7 @@ t
 
 ## 📱 支援的應用
 
-TGDB 使用 **Podman + Quadlet** 實現 Rootless 容器化部署，目前內建 **100+ 個 App Spec**：
+TGDB 使用 **Podman + Quadlet** 實現 **rootless / rootful** 容器化部署（預設 rootless），目前內建 **100+ 個 App Spec**：
 
 <table>
   <tr>
@@ -250,7 +251,9 @@ TGDB 使用 **Podman + Quadlet** 實現 Rootless 容器化部署，目前內建 
   - 單元路徑：`/etc/containers/systemd`
   - 資料路徑：`/var/lib/tgdb`
   - Podman socket：`/run/podman/podman.sock`
-- 同一個實例名稱不可同時存在 rootless 與 rootful 版本，且實例建立後不可直接切換部署模式，尚未支援備份、.timer。
+- 同一個實例名稱不可同時存在 rootless 與 rootful 版本。
+- 實例建立後不可直接「原地切換」部署模式（需移除後重新部署）。
+- 目前 TGDB 的「備份/還原」與「定時任務（.timer）」流程尚未納入 rootful Apps（以 rootless 為主）。
 
 ---
 
