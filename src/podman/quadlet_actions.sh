@@ -20,7 +20,8 @@ _unit_try_stop() {
         [ -n "${name:-}" ] || continue
 
         local -a units=()
-        mapfile -t units < <(_resolve_unit_candidates "$name" | awk 'NF && !seen[$0]++')
+        # 停止單元僅應針對「該單元類型」的 systemd unit，避免同名 pod/container 時誤停 pod。
+        mapfile -t units < <(_podman_action_unit_candidates "$name" | awk 'NF && !seen[$0]++')
         [ "${#units[@]}" -gt 0 ] || continue
 
         if _podman_systemctl_try_candidates "$scope" disable --now -- "${units[@]}" >/dev/null 2>&1; then

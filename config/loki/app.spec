@@ -4,7 +4,6 @@ image=docker.io/grafana/loki:latest
 doc_url=https://github.com/grafana/loki
 menu_order=113
 
-hidden=1
 access_policy=local_only
 
 base_port=3100
@@ -18,9 +17,7 @@ input=grafana_pod|prompt=請輸入要加入的 Grafana Pod 名稱（預設 grafa
 config=loki-config.yaml|template=configs/loki-config.yaml.example|mode=600|label=loki-config.yaml（Loki 設定）
 edit_files=loki-config.yaml
 
-success_warn=Loki 預設不會對外開放 3100（在 Pod 設定）。若你需要 Loki API，請編輯 Grafana 的 .pod 單元自行加入 PublishPort，並搭配防火牆/驗證保護。
 success_warn=Grafana 要新增 loki 資料來源時，URL 建議填 http://localhost:3100（同一個 Pod 內走 localhost），或根據部屬方式調整。
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

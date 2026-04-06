@@ -194,9 +194,9 @@ _podman_action_unit_candidates() {
             printf '%s\n' "$token"
             ;;
         container)
-            printf '%s\n' "$name.service"
             printf '%s\n' "container-$name.service"
             printf '%s\n' "podman-$name.service"
+            printf '%s\n' "$name.service"
             ;;
         pod)
             printf '%s\n' "$name-pod.service"
@@ -359,14 +359,6 @@ _podman_collect_unit_records() {
       | sort -t$'\t' -k2,2 -k1,1
 }
 
-_podman_collect_all_unit_records() {
-    local -a exts=("$@")
-    {
-        _podman_collect_unit_records user "${exts[@]}"
-        _podman_collect_unit_records system "${exts[@]}"
-    } | awk -F'\t' 'NF>=3 && !seen[$1 FS $2]++'
-}
-
 _podman_resolve_unit_records() {
     local token="$1"
     local scope_hint bare pod_base candidate_base
@@ -387,7 +379,30 @@ _podman_resolve_unit_records() {
     fi
 
     local -a candidates=()
-    mapfile -t candidates < <(_resolve_unit_candidates "$candidate_base" 2>/dev/null || true)
+    # 若 token 本身帶有副檔名：
+    # - Quadlet 類型（*.container/*.pod/...）→ 只解析「精準檔名」，避免同名 pod/container 被同時匹配。
+    # - systemd 類型（*.service/*.timer/...）→ 仍需展開候選，才能回推對應的 Quadlet 檔案。
+    if [ -n "$base_ext" ]; then
+        case "$base_ext" in
+            container|network|volume|pod|kube|device|image)
+                candidates=("$bare")
+                ;;
+            *)
+                mapfile -t candidates < <(
+                    {
+                        _resolve_unit_candidates "$bare" 2>/dev/null || true
+                        # Pod 特例：pod-foo.service 這類 token 也優先對應到 foo.pod
+                        if [ -n "${pod_base:-}" ]; then
+                            _resolve_unit_candidates "${pod_base}.pod" 2>/dev/null || true
+                        fi
+                        _resolve_unit_candidates "$candidate_base" 2>/dev/null || true
+                    } | awk '!seen[$0]++'
+                )
+                ;;
+        esac
+    else
+        mapfile -t candidates < <(_resolve_unit_candidates "$candidate_base" 2>/dev/null || true)
+    fi
 
     local -A seen=()
     local scope candidate dir path record
@@ -411,55 +426,13 @@ _podman_resolve_unit_records() {
     done
 }
 
-_podman_find_unit_record_by_exact_name() {
-    local token="$1"
-    local scope name path record
-    while IFS=$'\t' read -r scope name path; do
-        [ -n "${scope:-}" ] || continue
-        [ -n "${name:-}" ] || continue
-        if [ "$token" = "$name" ] || [ "$token" = "$(_podman_token_from_record "$scope" "$name")" ]; then
-            record="$scope"$'\t'"$name"$'\t'"$path"
-            printf '%s\n' "$record"
-            return 0
-        fi
-    done < <(_podman_resolve_unit_records "$token")
-    return 1
-}
-
 _podman_user_units_dir() {
     rm_user_units_dir
-}
-
-_podman_system_units_dir() {
-    printf '%s\n' "/etc/containers/systemd"
 }
 
 _list_user_units() {
     local dir
     dir="$(_podman_user_units_dir)"
-    [ -d "$dir" ] || return 0
-    local exts=("$@")
-    if [ ${#exts[@]} -eq 0 ]; then
-        exts=(container network volume pod device kube)
-    fi
-    local find_args=("$dir" -maxdepth 1 \( -type f -o -type l \) \()
-    local first=true
-    local e
-    for e in "${exts[@]}"; do
-        if [ "$first" = true ]; then
-            find_args+=( -name "*.${e}" )
-            first=false
-        else
-            find_args+=( -o -name "*.${e}" )
-        fi
-    done
-    find_args+=( \) -exec basename {} \; )
-    find "${find_args[@]}" 2>/dev/null | sort -u
-}
-
-_list_system_units() {
-    local dir
-    dir="$(_podman_system_units_dir)"
     [ -d "$dir" ] || return 0
     local exts=("$@")
     if [ ${#exts[@]} -eq 0 ]; then

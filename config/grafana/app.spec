@@ -4,7 +4,6 @@ image=docker.io/grafana/grafana:latest
 doc_url=https://github.com/grafana/grafana
 menu_order=110
 
-hidden=1
 access_policy=local_only
 
 base_port=3993

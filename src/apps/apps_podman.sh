@@ -82,67 +82,56 @@ select_instance() {
   SELECTED_INSTANCE_MODE=""
 
   local instances=() instance_modes=()
-  local seen=""
-  local mode quad_dir runtime_dir
+  local name mode
+  while IFS=$'\t' read -r name mode; do
+    [ -n "$name" ] || continue
+    [ -n "$mode" ] || mode="rootless"
+    instances+=("$name")
+    instance_modes+=("$mode")
+  done < <(_apps_list_instances_by_label "$service" 2>/dev/null || true)
 
-  local -a modes=()
-  if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
-    _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
-    _apps_service_supports_deploy_mode "$service" "rootful" && modes+=("rootful")
+  # 若 Quadlet 單元檔已遺失（或 Label 被移除），仍可嘗試從容器 label 反推出可清理的名稱。
+  if [ ${#instances[@]} -eq 0 ] && command -v podman >/dev/null 2>&1; then
+    local -a modes=()
+    if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
+      _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
+      _apps_service_supports_deploy_mode "$service" "rootful" && modes+=("rootful")
+    fi
+    [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
+
+    local seen=""
+    for mode in "${modes[@]}"; do
+      local n=""
+      while IFS= read -r n; do
+        [ -n "$n" ] || continue
+        if _app_is_aux_instance_name "$service" "$n"; then
+          continue
+        fi
+        case ",$seen," in
+          *,"$mode:$n",*) ;;
+          *)
+            instances+=("$n")
+            instance_modes+=("$mode")
+            seen="$seen,$mode:$n"
+            ;;
+        esac
+      done < <(
+        case "$mode" in
+          rootful)
+            if declare -F _tgdb_run_privileged >/dev/null 2>&1; then
+              _tgdb_run_privileged podman ps -a --format '{{.Names}}' --filter "label=app=${service}" 2>/dev/null || true
+            fi
+            ;;
+          *)
+            podman ps -a --format '{{.Names}}' --filter "label=app=${service}" 2>/dev/null || true
+            ;;
+        esac
+      )
+    done
   fi
-  [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
-
-  for mode in "${modes[@]}"; do
-    quad_dir="$(rm_service_quadlet_dir_by_mode "$service" "$mode" 2>/dev/null || echo "")"
-    if [ -n "$quad_dir" ] && _apps_dir_exists "$mode" "$quad_dir"; then
-      local f=""
-      while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        local b name
-        b="${f##*/}"
-        case "$b" in
-          *.container) name="${b%.container}" ;;
-          *.pod) name="${b%.pod}" ;;
-          *) continue ;;
-        esac
-        if _app_is_aux_instance_name "$service" "$name"; then
-          continue
-        fi
-        case ",$seen," in
-          *,"$name",*) ;;
-          *)
-            instances+=("$name")
-            instance_modes+=("$mode")
-            seen="$seen,$name"
-            ;;
-        esac
-      done < <(_apps_find_lines "$mode" "$quad_dir" -maxdepth 1 -type f \( -name "*.container" -o -name "*.pod" \) 2>/dev/null)
-    fi
-
-    runtime_dir="$(_apps_runtime_dir_for_mode "$mode" 2>/dev/null || echo "")"
-    if [ -n "$runtime_dir" ] && _apps_dir_exists "$mode" "$runtime_dir"; then
-      local d=""
-      while IFS= read -r d; do
-        [ -n "$d" ] || continue
-        local name
-        name="$(basename "$d")"
-        if _app_is_aux_instance_name "$service" "$name"; then
-          continue
-        fi
-        case ",$seen," in
-          *,"$name",*) ;;
-          *)
-            instances+=("$name")
-            instance_modes+=("$mode")
-            seen="$seen,$name"
-            ;;
-        esac
-      done < <(_apps_find_lines "$mode" "$runtime_dir" -mindepth 1 -maxdepth 1 -type d -name "${service}*" 2>/dev/null)
-    fi
-  done
 
   if [ ${#instances[@]} -eq 0 ]; then
-    echo "找不到任何 '$service' 的已安裝實例。"
+    echo "找不到任何 '$service' 的已部署實例。"
     ui_pause "按任意鍵返回..."
     return 1
   fi

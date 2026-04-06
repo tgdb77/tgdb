@@ -669,30 +669,37 @@ _edit_existing_unit_and_reload_restart() {
     fi
 
     local -a edit_files=("$unit_path")
-    local service instance
-    service="$(_podman_detect_app_service_for_unit_file "$unit_name" "$unit_path" 2>/dev/null || true)"
-    instance="${unit_name%.*}"
-    if [ -n "$service" ]; then
-        instance="$(_podman_infer_app_instance_from_unit_filename "$service" "$unit_name" 2>/dev/null || echo "$instance")"
-    fi
+    # Pod 單元通常屬於 multi unit（pod + 多 container），其設定檔可能分散在成員 container/instance 下；
+    # 在「編輯 pod 單元」時自動偵測/提示設定檔容易造成誤判與干擾，因此 pod 一律略過設定檔偵測。
+    local unit_ext service instance
+    unit_ext="${unit_name##*.}"
+    service=""
+    instance=""
+    if [ "$unit_ext" != "pod" ]; then
+        service="$(_podman_detect_app_service_for_unit_file "$unit_name" "$unit_path" 2>/dev/null || true)"
+        instance="${unit_name%.*}"
+        if [ -n "$service" ]; then
+            instance="$(_podman_infer_app_instance_from_unit_filename "$service" "$unit_name" 2>/dev/null || echo "$instance")"
+        fi
 
-    if [ -n "$service" ] && [ -n "$instance" ]; then
-        local -a cfg_files=()
-        mapfile -t cfg_files < <(_podman_collect_app_config_paths_for_instance "$service" "$instance" "$unit_path" "$(_podman_runtime_dir_for_scope "$scope")")
-        if [ ${#cfg_files[@]} -gt 0 ]; then
-            local prompt
-            prompt="偵測到應用：$service / 實例：$instance；是否同時編輯設定檔（${#cfg_files[@]} 個）？(Y/n，預設 Y，輸入 0 取消): "
-            if ui_confirm_yn "$prompt" "Y"; then
-                edit_files+=("${cfg_files[@]}")
-            else
-                local rc=$?
-                if [ "$rc" -eq 2 ]; then
-                    echo "操作已取消。"
-                    return 1
+        if [ -n "$service" ] && [ -n "$instance" ]; then
+            local -a cfg_files=()
+            mapfile -t cfg_files < <(_podman_collect_app_config_paths_for_instance "$service" "$instance" "$unit_path" "$(_podman_runtime_dir_for_scope "$scope")")
+            if [ ${#cfg_files[@]} -gt 0 ]; then
+                local prompt
+                prompt="偵測到應用：$service / 實例：$instance；是否同時編輯設定檔（${#cfg_files[@]} 個）？(Y/n，預設 Y，輸入 0 取消): "
+                if ui_confirm_yn "$prompt" "Y"; then
+                    edit_files+=("${cfg_files[@]}")
+                else
+                    local rc=$?
+                    if [ "$rc" -eq 2 ]; then
+                        echo "操作已取消。"
+                        return 1
+                    fi
                 fi
+            else
+                tgdb_warn "已偵測到應用：$service，但找不到可編輯的設定檔：$instance（可能尚未部署、TGDB_DIR/$instance 不存在、單元未設定 EnvironmentFile=，或 app.spec 未定義 config=/edit_files=）"
             fi
-        else
-            tgdb_warn "已偵測到應用：$service，但找不到可編輯的設定檔：$instance（可能尚未部署、TGDB_DIR/$instance 不存在、單元未設定 EnvironmentFile=，或 app.spec 未定義 config=/edit_files=）"
         fi
     fi
 
@@ -701,19 +708,41 @@ _edit_existing_unit_and_reload_restart() {
 
     if [ "$scope" = "system" ]; then
         tgdb_warn "此單元屬於 rootful/system scope，將以 sudoedit 開啟。"
+
+        # sudoedit 有安全限制：若目標檔案位於「目前使用者可寫入」的目錄，sudoedit 會拒絕開啟。
+        # 常見情境：rootful 的 TGDB_ROOTFUL_ROOT 被設成可由一般使用者寫入（或權限配置偏寬），
+        # 這時仍希望能順利編輯設定檔，因此自動改用 sudo 直接以 root 身分開啟編輯器。
+        local use_sudoedit=0
         if command -v sudoedit >/dev/null 2>&1; then
+            use_sudoedit=1
+            local f parent
+            for f in "${edit_files[@]}"; do
+                [ -n "$f" ] || continue
+                parent="$(dirname "$f")"
+                if [ -d "$parent" ] && [ -w "$parent" ]; then
+                    use_sudoedit=0
+                    break
+                fi
+            done
+        fi
+
+        if [ "$use_sudoedit" -eq 1 ]; then
             if ! sudoedit "${edit_files[@]}"; then
-                tgdb_warn "sudoedit 失敗，改以直接開啟編輯器（可能無法儲存）。"
-                "$EDITOR" "${edit_files[@]}"
-            fi
-        elif command -v sudo >/dev/null 2>&1; then
-            if ! sudo "$EDITOR" "${edit_files[@]}"; then
-                tgdb_warn "無法透過 sudo 開啟編輯器，改以直接開啟。"
-                "$EDITOR" "${edit_files[@]}"
+                tgdb_warn "sudoedit 失敗，將改用 sudo 直接以 root 身分開啟編輯器。"
+                if command -v sudo >/dev/null 2>&1; then
+                    sudo "$EDITOR" "${edit_files[@]}" || "$EDITOR" "${edit_files[@]}"
+                else
+                    "$EDITOR" "${edit_files[@]}"
+                fi
             fi
         else
-            tgdb_warn "找不到 sudoedit / sudo，改以直接開啟編輯器（可能無法儲存）。"
-            "$EDITOR" "${edit_files[@]}"
+            tgdb_warn "偵測到欲編輯的檔案位於目前使用者可寫入的目錄，sudoedit 可能會拒絕；改用 sudo 以 root 身分開啟編輯器。"
+            if command -v sudo >/dev/null 2>&1; then
+                sudo "$EDITOR" "${edit_files[@]}" || "$EDITOR" "${edit_files[@]}"
+            else
+                tgdb_warn "找不到 sudo，改以直接開啟編輯器（可能無法儲存）。"
+                "$EDITOR" "${edit_files[@]}"
+            fi
         fi
     else
         local -a need_unshare=()
