@@ -1,0 +1,53 @@
+[Unit]
+Description=netdata
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/netdata/netdata:stable
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=netdata
+
+Network=host
+#PublishPort=127.0.0.1:${host_port}:19999
+
+User=0:0
+
+EnvironmentFile=${instance_dir}/.env
+
+# 盡量採集主機指標：掛載 host 的 proc/sys/rootfs（rootless 下部分指標可能仍會受限）
+PodmanArgs=--pid=host
+
+Volume=/proc:/host/proc:ro,rslave
+Volume=/sys:/host/sys:ro,rslave
+Volume=/:/host/root:ro,rslave
+
+# 讓 Netdata 可讀到 host 的使用者/群組與系統資訊（供部分採集器辨識）
+Volume=/etc/passwd:/host/etc/passwd:ro
+Volume=/etc/group:/host/etc/group:ro
+Volume=/etc/os-release:/host/etc/os-release:ro
+Volume=/etc/localtime:/etc/localtime:ro
+
+# 持久化資料（建議保留）
+Volume=${instance_dir}/config:/etc/netdata
+Volume=${instance_dir}/lib:/var/lib/netdata
+Volume=${instance_dir}/cache:/var/cache/netdata
+
+# 注意：unix socket 掛載即使標 ro 仍可被寫入；請務必保持 Netdata 面板僅限可信來源存取。
+Volume=/run/user/${user_id}/podman/podman.sock:/var/run/docker.sock
+
+#Volume=/run/podman/podman.sock:/var/run/docker.sock
+
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
