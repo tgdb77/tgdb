@@ -1,0 +1,35 @@
+[Unit]
+Description=opencode
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/anomalyco/opencode
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=opencode
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/config:/opencode/config
+Volume=${instance_dir}/data:/opencode/data
+Volume=${instance_dir}/state:/opencode/state
+
+PublishPort=127.0.0.1:${host_port}:4096
+
+# 以 web 模式啟動（含 Web UI）；容器內請綁 0.0.0.0，讓 PublishPort 可連線
+Exec=web --hostname 0.0.0.0 --port 4096
+
+User=0
+UserNS=keep-id
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
