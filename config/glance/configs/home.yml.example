@@ -1,0 +1,24 @@
+# Glance 首頁（home.yml）
+# 你可以依需求新增 widgets / columns / pages
+#
+# Widget 說明請參考：
+# - https://github.com/glanceapp/glance/blob/main/docs/configuration.md
+
+- name: Home
+  columns:
+    - size: full
+      widgets:
+        - type: search
+          search-engine: duckduckgo
+
+        - type: rss
+          title: selfh.st
+          limit: 8
+          collapse-after: 4
+          cache: 12h
+          feeds:
+            - url: https://selfh.st/rss/
+              title: selfh.st
+
+        - type: hacker-news
+

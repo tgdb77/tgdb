@@ -1,0 +1,10 @@
+/* Glance 自訂 CSS（可選）
+ * - 你可以用瀏覽器開發者工具找出 class 後在此覆寫
+ * - 參考：docs/configuration.md 的 theme.custom-css-file
+ */
+
+/* 範例：讓標題更醒目 */
+.branding__app-name {
+  font-weight: 700;
+}
+

@@ -1,0 +1,32 @@
+[Unit]
+Description=Penpot exporter
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-valkey.service container-${container_name}-valkey.service
+Wants=${container_name}-valkey.service container-${container_name}-valkey.service
+
+[Container]
+Image=docker.io/penpotapp/exporter:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-exporter
+Label=app=penpot
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+# Exporter 需要連到 frontend；同 pod 可直接打 127.0.0.1:8080
+Environment=PENPOT_PUBLIC_URI=http://127.0.0.1:8080
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+
