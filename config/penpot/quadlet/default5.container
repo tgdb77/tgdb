@@ -1,0 +1,28 @@
+[Unit]
+Description=Penpot valkey
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/valkey/valkey:8.1-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}-valkey
+Label=app=penpot
+Label=tgdb_db=redis
+
+Pod=${container_name}.pod
+
+# 直接沿用上游建議的記憶體限制策略（可自行調整）
+Exec=valkey-server --maxmemory 128mb --maxmemory-policy volatile-lfu
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

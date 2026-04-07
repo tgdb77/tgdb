@@ -1,0 +1,28 @@
+# ntfy 設定檔（server.yml）
+# 參考：
+# - https://docs.ntfy.sh/config/
+#
+# 注意：
+# - 本範本預設啟用 auth-file + deny-all（關閉註冊），並由 TGDB 在部署後用 CLI 建立初始管理員。
+# - 若要對外提供服務，強烈建議放在 Nginx HTTPS 反向代理後面。
+
+# 對外網址（用於連結產生等；請依你的實際對外域名調整）
+base-url: "http://127.0.0.1:${host_port}"
+
+# 監聽（容器內）
+listen-http: ":80"
+
+# 快取/附件（容器內路徑）
+cache-file: "/var/cache/ntfy/cache.db"
+attachment-cache-dir: "/var/cache/ntfy/attachments"
+
+# 身份驗證（預設關閉註冊）
+auth-file: "/var/cache/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# 若你需要匿名讀取、但禁止匿名發送，可改成：
+# auth-default-access: "read-only"
+
+# Web UI 登入/註冊
+enable-login: true
+enable-signup: false

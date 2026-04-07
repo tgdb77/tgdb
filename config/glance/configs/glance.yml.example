@@ -1,0 +1,20 @@
+# Glance 主設定（glance.yml）
+# 參考：
+# - https://github.com/glanceapp/glance
+# - https://github.com/glanceapp/glance/blob/main/docs/configuration.md
+
+server:
+  # 容器內監聽埠（對應 Quadlet 的 PublishPort ...:8080）
+  port: 8080
+  # 提供 /assets/ 靜態檔案（對應 Quadlet 掛載 ${instance_dir}/assets:/app/assets）
+  assets-path: /app/assets
+
+branding:
+  app-name: "TGDB Dashboard"
+
+theme:
+  # 自訂 CSS（可選；對應 assets/user.css）
+  custom-css-file: /assets/user.css
+
+pages:
+  - $include: home.yml

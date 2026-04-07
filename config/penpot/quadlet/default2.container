@@ -1,0 +1,33 @@
+[Unit]
+Description=Penpot backend
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+After=${container_name}-valkey.service container-${container_name}-valkey.service
+Wants=${container_name}-valkey.service container-${container_name}-valkey.service
+
+[Container]
+Image=docker.io/penpotapp/backend:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-backend
+Label=app=penpot
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/assets:/opt/data/assets
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+
