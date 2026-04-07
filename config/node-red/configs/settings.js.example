@@ -1,0 +1,21 @@
+/**
+ * Node-RED settings.js（TGDB 範本）
+ *
+ * 說明：
+ * - 此檔案會在部署前由 TGDB 自動產生。
+ * - 管理帳密來源：實例目錄內的 auth.env
+ * - adminAuth 只保護 Editor / Admin API；HTTP In、Dashboard 等路由請另外規劃驗證。
+ */
+
+module.exports = {
+  adminAuth: {
+    type: "credentials",
+    users: [
+      {
+        username: "__TGDB_NODE_RED_ADMIN_USER__",
+        password: "__TGDB_NODE_RED_PASSWORD_HASH__",
+        permissions: "*"
+      }
+    ]
+  }
+};

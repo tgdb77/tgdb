@@ -1,0 +1,60 @@
+[Unit]
+Description=frigate
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/blakeblackshear/frigate:stable
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=frigate
+
+EnvironmentFile=${instance_dir}/.env
+
+PublishPort=127.0.0.1:${host_port}:5000
+
+# Web UI / API（已驗證）：
+#PublishPort=127.0.0.1:18971:8971
+
+# RTSP restreaming（預設未驗證；請自行評估是否要對外開放）：
+PublishPort=127.0.0.1:18554:8554
+
+# WebRTC（兩向通話等功能；按需開啟）：
+PublishPort=127.0.0.1:18558:8555/tcp
+PublishPort=127.0.0.1:18558:8555/udp
+
+Volume=${instance_dir}/config:/config
+Volume=${instance_dir}/media:/media/frigate
+Volume=/etc/localtime:/etc/localtime:ro
+
+# 建議使用 tmpfs 作為錄影片段暫存（上游常見預設 1GB，可依主機記憶體調整）
+Tmpfs=/tmp/cache:rw,size=1000000000
+
+# /dev/shm 會用於解碼畫面快取；可依攝影機數量/解析度調整
+ShmSize=512m
+
+# Frigate 常見需要硬體加速（Coral / GPU / NPU 等），上游通常建議先以 privileged 方式跑通，
+# 再逐步收斂到最小必要權限。
+PodmanArgs=--privileged
+PodmanArgs=--stop-timeout=30
+
+# 常見硬體裝置（按需取消註解並依你的硬體路徑修改；不存在的裝置路徑會導致啟動失敗）：
+#PodmanArgs=--device=/dev/bus/usb:/dev/bus/usb          # USB Coral
+#PodmanArgs=--device=/dev/apex_0:/dev/apex_0            # PCIe Coral
+#PodmanArgs=--device=/dev/dri/renderD128:/dev/dri/renderD128  # Intel/AMD GPU（路徑依主機而定）
+#PodmanArgs=--device=/dev/accel:/dev/accel              # Intel NPU
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
+

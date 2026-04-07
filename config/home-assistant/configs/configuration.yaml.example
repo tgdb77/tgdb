@@ -1,0 +1,17 @@
+# Home Assistant 初始設定（可自行擴充）
+
+# 建議：啟用預設整合（官方常見建議）
+default_config:
+
+# http 相關設定
+http:
+  # 本範本會將 server_port 設為你在 TGDB 選擇的埠號（${host_port}）
+  # - 因為預設使用 host network，所以這個埠號會直接是主機埠
+  server_port: ${host_port}
+
+  # 若你要放在反向代理後面（Nginx / Caddy），請依官方文件設定：
+  # - use_x_forwarded_for / trusted_proxies
+  #use_x_forwarded_for: true
+  #trusted_proxies:
+  #  - 127.0.0.1
+
