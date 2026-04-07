@@ -1,0 +1,20 @@
+# Frigate 設定檔（最小範本）
+# - 檔名可為 config.yml 或 config.yaml；若兩者同時存在，Frigate 會優先讀取 config.yml
+# - 建議先用此最小設定讓服務啟動，再透過 Frigate Web UI 的內建編輯器逐步完善並驗證
+#
+# 參考：
+# - https://docs.frigate.video/configuration/
+# - https://docs.frigate.video/guides/getting_started/
+
+mqtt:
+  enabled: false
+
+cameras:
+  dummy_camera:
+    enabled: false
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:554/rtsp
+          roles:
+            - detect
+

@@ -1,0 +1,37 @@
+[Unit]
+Description=gladys
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/gladysassistant/gladys:v4
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=gladys
+
+EnvironmentFile=${instance_dir}/.env
+
+# Gladys 常見部署會需要 host network 才能做區網/設備探索（mDNS/SSDP/UDP broadcast 等）
+Network=host
+
+Volume=${instance_dir}/data:/var/lib/gladysassistant
+
+# --- 上游常見建議（風險較高；本範本預設已啟用，請只在可信任環境使用）---
+PodmanArgs=--cgroupns=host
+PodmanArgs=--privileged
+Volume=/dev:/dev
+Volume=/run/udev:/run/udev:ro
+Volume=${podman_sock_host_path}:/var/run/docker.sock
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
