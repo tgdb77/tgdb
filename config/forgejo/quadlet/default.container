@@ -1,0 +1,35 @@
+[Unit]
+Description=Forgejo
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=codeberg.org/forgejo/forgejo:13-rootless
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=forgejo
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/data:/var/lib/gitea
+Volume=${instance_dir}/conf:/etc/gitea
+
+User=${user_id}:${group_id}
+UserNS=keep-id
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 90 ]; do /usr/bin/podman exec ${container_name}-postgres pg_isready -h 127.0.0.1 -p 5432 -U ${db_user} >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "PostgreSQL 尚未就緒，取消啟動 Forgejo" >&2; exit 1'
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

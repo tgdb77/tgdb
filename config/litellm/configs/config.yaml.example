@@ -1,0 +1,18 @@
+# LiteLLM Proxy 設定（TGDB 產生）
+#
+# 官方文件：
+# - https://docs.litellm.ai/docs/proxy/quick_start
+# - https://docs.litellm.ai/docs/proxy/deploy
+#
+# 修改後請重啟（依你的容器名稱調整）：
+# - systemctl --user restart ${container_name}.service
+
+model_list:
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
