@@ -1,0 +1,9 @@
+server:
+  port: 80
+  sources:
+    - path: /srv
+      config:
+        defaultEnabled: true
+
+auth:
+  adminUsername: ${admin_user}
