@@ -47,7 +47,7 @@ nginx_p_menu() {
         echo "7. 編輯 nginx.conf"
         echo "8. 編輯指定站點 conf"
         echo "9. 刪除站點"
-        echo "10. 新增/匯入自備憑證（crt/key）"
+        echo "10. 證書管理"
         echo "11. 追蹤日誌"
         echo "12. 自動任務設定（SSL/CF/WAF）"
         echo "13. WAF（ModSecurity + OWASP CRS）"
@@ -67,7 +67,7 @@ nginx_p_menu() {
             7) nginx_p_edit_main_conf || true ;;
             8) nginx_p_edit_site_conf || true ;;
             9) nginx_p_delete_site || true ;;
-            10) nginx_p_add_custom_cert || true ;;
+            10) nginx_p_cert_manager_menu || true ;;
             11) nginx_p_tail_journal || true ;;
             12) nginx_p_timers_menu || true ;;
             13) nginx_p_waf_menu || true ;;

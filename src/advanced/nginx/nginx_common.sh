@@ -116,19 +116,64 @@ _cert_end_ts() {
     date -d "$end" +%s 2>/dev/null
 }
 
+_nginx_cert_host_path_from_conf_path() {
+    local path="$1"
+
+    if [ -z "${path:-}" ]; then
+        return 1
+    fi
+
+    case "$path" in
+        /etc/nginx/certs/*)
+            printf '%s\n' "$TGDB_DIR/nginx/certs/${path#/etc/nginx/certs/}"
+            ;;
+        /*)
+            printf '%s\n' "$path"
+            ;;
+        *)
+            printf '%s\n' "$TGDB_DIR/nginx/certs/$path"
+            ;;
+    esac
+}
+
+_nginx_site_cert_host_path() {
+    local domain="$1"
+    local conf="$TGDB_DIR/nginx/configs/${domain}.conf"
+    local cert_path=""
+    local _paths=()
+
+    if [ -f "$conf" ]; then
+        readarray -t _paths < <(_nginx_site_cert_paths_from_conf "$conf")
+        cert_path="${_paths[0]:-}"
+    fi
+
+    if [ -z "${cert_path:-}" ]; then
+        cert_path="/etc/nginx/certs/${domain}.crt"
+    fi
+
+    _nginx_cert_host_path_from_conf_path "$cert_path"
+}
+
 _cert_status_line() {
     local domain="$1"
-    local crt="$TGDB_DIR/nginx/certs/${domain}.crt"
+    local crt cert_note cert_base
+    crt="$(_nginx_site_cert_host_path "$domain" 2>/dev/null || printf '%s\n' "$TGDB_DIR/nginx/certs/${domain}.crt")"
+
+    cert_base="$(basename "$crt" .crt 2>/dev/null || true)"
+    cert_note=""
+    if [ -n "${cert_base:-}" ] && [ "$cert_base" != "$domain" ]; then
+        cert_note="（使用 ${cert_base}.crt）"
+    fi
 
     if [ ! -f "$crt" ]; then
-        printf '%-35s %s\n' "$domain" "❌ 憑證不存在"
+        printf '%-35s %s\n' "$domain" "❌ 憑證不存在${cert_note}"
         return 0
     fi
 
     local end_ts now_ts days end_date
     end_ts="$(_cert_end_ts "$crt" || true)"
     if [ -z "${end_ts:-}" ]; then
-        printf '%-35s %s\n' "$domain" "⚠️ 無法解析到期時間"
+        printf '%-35s %s\n' "$domain" "⚠️ 無法解析到期時間${cert_note}"
         return 0
     fi
 
@@ -138,16 +183,16 @@ _cert_status_line() {
     [ -z "${end_date:-}" ] && end_date="$end_ts"
 
     if [ "$days" -lt 0 ] 2>/dev/null; then
-        printf '%-35s %s\n' "$domain" "❌ 已過期（到期：$end_date）"
+        printf '%-35s %s\n' "$domain" "❌ 已過期（到期：$end_date）${cert_note}"
         return 0
     fi
 
     if [ "$days" -le 14 ] 2>/dev/null; then
-        printf '%-35s %s\n' "$domain" "⚠️ 剩餘 ${days} 天（到期：$end_date）"
+        printf '%-35s %s\n' "$domain" "⚠️ 剩餘 ${days} 天（到期：$end_date）${cert_note}"
         return 0
     fi
 
-    printf '%-35s %s\n' "$domain" "✅ 剩餘 ${days} 天（到期：$end_date）"
+    printf '%-35s %s\n' "$domain" "✅ 剩餘 ${days} 天（到期：$end_date）${cert_note}"
     return 0
 }
 
