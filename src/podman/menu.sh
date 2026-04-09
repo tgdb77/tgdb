@@ -143,30 +143,32 @@ podman_rootful_menu() {
         _print_overview_inline
         _podman_print_container_overview all system
         echo "----------------------------------"
-        echo "1. 新增單元"
-        echo "2. 編輯現有單元"
-        echo "3. 查看單元日誌"
-        echo "4. 停止單元"
-        echo "5. 重新啟動單元"
-        echo "6. 移除單元"
-        echo "7. 進入容器 Shell"
-        echo "8. 映像管理"
-        echo "9. 網路管理"
-        echo "10. 卷管理"
-        echo "11. 容器自動更新"
+        echo "1. 佔位"
+        echo "2. 新增單元"
+        echo "3. 編輯現有單元"
+        echo "4. 查看單元日誌"
+        echo "5. 停止單元"
+        echo "6. 重新啟動單元"
+        echo "7. 移除單元"
+        echo "8. 進入容器 Shell"
+        echo "9. 映像管理"
+        echo "10. 網路管理"
+        echo "11. 卷管理"
         echo "12. 清理孤立資源"
+        echo "13. 容器自動更新"
         echo "----------------------------------"
         echo "0. 返回上一層"
         echo "=================================="
         read -r -e -p "請輸入選擇 [0-12]: " choice
         case "$choice" in
-            1) _create_or_edit_quadlet_unit system ; ui_pause ;;
-            2) _edit_existing_unit_and_reload_restart system || { echo "返回上層"; sleep 1; continue; }; ui_pause ;;
-            3)
+            1) echo ":D" ; ui_pause;;
+            2) _create_or_edit_quadlet_unit system ; ui_pause ;;
+            3) _edit_existing_unit_and_reload_restart system || { echo "返回上層"; sleep 1; continue; }; ui_pause ;;
+            4)
                 n=$(_pick_existing_unit_file system container pod) || { echo "返回上層"; sleep 1; continue; }
                 _unit_try_logs_follow "$n"
                 ;;
-            4)
+            5)
                 local -a stop_units=()
                 mapfile -t stop_units < <(_pick_existing_unit_files_multi system "停止單元" container pod)
                 if [ "${#stop_units[@]}" -eq 0 ]; then
@@ -186,7 +188,7 @@ podman_rootful_menu() {
                 echo "停止結果：成功=$ok / 失敗=$fail"
                 ui_pause
                 ;;
-            5)
+            6)
                 local -a restart_units=()
                 mapfile -t restart_units < <(_pick_existing_unit_files_multi system "重新啟動單元" container pod network volume image device)
                 if [ "${#restart_units[@]}" -eq 0 ]; then
@@ -208,7 +210,7 @@ podman_rootful_menu() {
                 echo "重啟結果：成功=$ok / 失敗=$fail"
                 ui_pause
                 ;;
-            6)
+            7)
                 local -a remove_units=()
                 mapfile -t remove_units < <(_pick_existing_unit_files_multi system "移除單元" container network volume pod device kube)
                 if [ "${#remove_units[@]}" -eq 0 ]; then
@@ -228,12 +230,12 @@ podman_rootful_menu() {
                 echo "移除結果：成功=$ok / 失敗=$fail"
                 ui_pause
                 ;;
-            7) podman_exec_container_menu system ;;
-            8) podman_images_menu system ;;
-            9) podman_networks_menu system ;;
-            10) podman_volumes_menu system ;;
-            11) podman_auto_update_menu system ;;
+            8) podman_exec_container_menu system ;;
+            9) podman_images_menu system ;;
+            10) podman_networks_menu system ;;
+            11) podman_volumes_menu system ;;
             12) podman_cleanup_menu system ;;
+            13) podman_auto_update_menu system ;;
             0) return ;;
             *) echo "無效選項"; sleep 1 ;;
         esac

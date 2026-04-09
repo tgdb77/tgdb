@@ -1,0 +1,81 @@
+# Nginx shared auth 整站範例：把 `draw1.example.com` 之類的站點交給共用的 oauth2-proxy + Pocket ID 保護
+#
+# 用法：
+# 1. 先確認 TGDB Nginx 已部署完成，且已為你的實際網域準備憑證。
+# 2. 若你已經有既有站點 conf，不一定要整份覆蓋；也可改用同目錄的
+#    `shared-auth-locations.conf` 片段併入既有 `server {}`。
+# 3. 請把下面的 `draw1.example.com` 改成你的實際網域。
+# 4. 請把下面的 `http://host.containers.internal:8088` 改成你的實際上游。
+# 4. 這份整站範例只是示範其中一個子網域；其他 `*.${cookie_parent_domain}` 站點
+#    可沿用相同的 `/oauth2/*` 與 `auth_request` 邏輯，共用同一個 oauth2-proxy instance。
+# 5. 「shared auth」代表：
+#    - 所有子網域都把 `/oauth2/*` 轉給同一個 oauth2-proxy
+#    - 所有子網域共用 `.${cookie_parent_domain}` Cookie
+#    - 所有子網域都需在 Pocket ID 同一個 OIDC Client 中註冊 callback URL
+
+server {
+    listen 80;
+    server_name draw1.example.com;
+    return 301 https://draw1.example.com$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name draw1.example.com;
+
+    ssl_certificate     /etc/nginx/certs/draw1.example.com.crt;
+    ssl_certificate_key /etc/nginx/certs/draw1.example.com.key;
+    add_header Alt-Svc 'h3=":443"; ma=86400' always;
+
+    # shared auth 核心：
+    # 這個站點把 `/oauth2/*` 交給共用的 oauth2-proxy instance。
+    # 雖然 oauth2-proxy 只有一份，但它會依目前 Host 判斷 callback 與登入返回位置。
+    location /oauth2/ {
+        proxy_pass http://127.0.0.1:${host_port};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Uri $request_uri;
+        proxy_set_header X-Auth-Request-Redirect $scheme://$host$request_uri;
+        proxy_http_version 1.1;
+    }
+
+    # Nginx 子請求驗證端點（不轉發 request body）
+    # 每次請求真正進到你的應用前，都會先打這個 auth check。
+    location = /oauth2/auth {
+        proxy_pass http://127.0.0.1:${host_port};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Uri $request_uri;
+        proxy_set_header Content-Length "";
+        proxy_pass_request_body off;
+        proxy_http_version 1.1;
+    }
+
+    location / {
+        # 未登入時，Nginx 會先被 /oauth2/auth 回 401，
+        # 再由 error_page 轉去 /oauth2/sign_in 啟動登入流程。
+        auth_request /oauth2/auth;
+        error_page 401 =403 /oauth2/sign_in;
+
+        # 來自 oauth2-proxy 的登入資訊（需啟用 OAUTH2_PROXY_SET_XAUTHREQUEST=true）
+        # 若後端應用需要知道目前使用者，可轉交這些 Header。
+        auth_request_set $user  $upstream_http_x_auth_request_user;
+        auth_request_set $email $upstream_http_x_auth_request_email;
+        proxy_set_header X-User  $user;
+        proxy_set_header X-Email $email;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # 這裡仍是你原本應用自己的上游；shared auth 不會取代業務反代。
+        proxy_pass http://host.containers.internal:8088;
+        client_max_body_size 1000m;
+    }
+}

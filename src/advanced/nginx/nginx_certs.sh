@@ -119,6 +119,370 @@ _nginx_list_cert_inventory_lines() {
     done
 }
 
+_nginx_is_valid_cert_name() {
+    local name="$1"
+    [ -n "${name:-}" ] || return 1
+    [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || return 1
+    case "$name" in
+        .*|*/*|*\\*) return 1 ;;
+        *[._-]) return 1 ;;
+    esac
+    return 0
+}
+
+_nginx_cert_usage_sites() {
+    local base="$1"
+    local cert_path="/etc/nginx/certs/${base}.crt"
+    local key_path="/etc/nginx/certs/${base}.key"
+    local domain conf
+
+    while IFS= read -r domain; do
+        [ -n "${domain:-}" ] || continue
+        conf="$TGDB_DIR/nginx/configs/${domain}.conf"
+        [ -f "$conf" ] || continue
+
+        local _paths=()
+        readarray -t _paths < <(_nginx_site_cert_paths_from_conf "$conf")
+        if [ "${_paths[0]:-}" = "$cert_path" ] || [ "${_paths[1]:-}" = "$key_path" ]; then
+            printf '%s\n' "$domain"
+        fi
+    done < <(_list_site_domains)
+}
+
+_nginx_cert_usage_label() {
+    local base="$1"
+    local sites=()
+    local site
+
+    while IFS= read -r site; do
+        [ -n "${site:-}" ] && sites+=("$site")
+    done < <(_nginx_cert_usage_sites "$base")
+
+    if [ "${#sites[@]}" -eq 0 ]; then
+        printf '%s\n' "未被站點使用"
+        return 0
+    fi
+
+    local joined=""
+    joined="$(printf '%s, ' "${sites[@]}")"
+    joined="${joined%, }"
+    printf '使用中：%s\n' "$joined"
+}
+
+_nginx_cert_days_left_label() {
+    local days_left="$1"
+
+    if [ -z "${days_left:-}" ] || [ "$days_left" = "?" ]; then
+        printf '%s\n' "到期未知"
+        return 0
+    fi
+
+    if ! [[ "$days_left" =~ ^-?[0-9]+$ ]]; then
+        printf '%s\n' "到期未知"
+        return 0
+    fi
+
+    if [ "$days_left" -lt 0 ]; then
+        printf '已過期 %s 天\n' "$((0 - days_left))"
+        return 0
+    fi
+
+    printf '剩餘 %s 天\n' "$days_left"
+}
+
+_nginx_cert_meta_label() {
+    local base="$1"
+    local is_wildcard="$2"
+    local days_left="$3"
+    local usage
+    local tags=()
+    local joined=""
+
+    if [ "$is_wildcard" = "1" ]; then
+        tags+=("泛域名")
+    fi
+    tags+=("$(_nginx_cert_days_left_label "$days_left")")
+    usage="$(_nginx_cert_usage_label "$base")"
+    [ -n "${usage:-}" ] && tags+=("$usage")
+
+    joined="$(printf '%s / ' "${tags[@]}")"
+    joined="${joined% / }"
+    printf '%s\n' "$joined"
+}
+
+_nginx_print_cert_inventory() {
+    local lines=()
+    local line
+
+    while IFS= read -r line; do
+        [ -n "${line:-}" ] && lines+=("$line")
+    done < <(_nginx_list_cert_inventory_lines)
+
+    echo "已匯入證書："
+    if [ "${#lines[@]}" -eq 0 ]; then
+        echo " - 尚無證書"
+        return 0
+    fi
+
+    local i base is_wildcard days_left meta
+    for ((i=0; i<${#lines[@]}; i++)); do
+        base="$(echo "${lines[$i]}" | awk -F'\t' '{print $1}')"
+        is_wildcard="$(echo "${lines[$i]}" | awk -F'\t' '{print $4}')"
+        days_left="$(echo "${lines[$i]}" | awk -F'\t' '{print $6}')"
+        meta="$(_nginx_cert_meta_label "$base" "$is_wildcard" "$days_left")"
+        printf ' - %s（%s）\n' "$base" "$meta"
+    done
+}
+
+_nginx_prompt_select_cert_base() {
+    local out_var="$1"
+    local lines=()
+    local line
+
+    if ! ui_is_interactive; then
+        return 1
+    fi
+
+    while IFS= read -r line; do
+        [ -n "${line:-}" ] && lines+=("$line")
+    done < <(_nginx_list_cert_inventory_lines)
+
+    if [ "${#lines[@]}" -eq 0 ]; then
+        return 3
+    fi
+
+    echo "=================================="
+    echo "❖ 選擇證書 ❖"
+    echo "=================================="
+
+    local i base is_wildcard days_left meta
+    for ((i=0; i<${#lines[@]}; i++)); do
+        base="$(echo "${lines[$i]}" | awk -F'\t' '{print $1}')"
+        is_wildcard="$(echo "${lines[$i]}" | awk -F'\t' '{print $4}')"
+        days_left="$(echo "${lines[$i]}" | awk -F'\t' '{print $6}')"
+        meta="$(_nginx_cert_meta_label "$base" "$is_wildcard" "$days_left")"
+        printf '%2d) %s（%s）\n' "$((i+1))" "$base" "$meta"
+    done
+    echo "----------------------------------"
+    echo " 0) 取消"
+    echo "=================================="
+
+    local sel
+    if ! ui_prompt_index sel "請輸入編號 [0-${#lines[@]}]: " 0 "${#lines[@]}" "0" ""; then
+        return 2
+    fi
+
+    if [ "$sel" -eq 0 ]; then
+        return 1
+    fi
+
+    printf -v "$out_var" '%s' "$(echo "${lines[$((sel-1))]}" | awk -F'\t' '{print $1}')"
+    return 0
+}
+
+_nginx_find_editor() {
+    local editor="nano"
+    if command -v "$editor" >/dev/null 2>&1; then
+        printf '%s\n' "$editor"
+        return 0
+    fi
+
+    if ensure_editor; then
+        printf '%s\n' "$EDITOR"
+        return 0
+    fi
+
+    return 1
+}
+
+_nginx_validate_custom_cert_pair() {
+    local crt_file="$1"
+    local key_file="$2"
+
+    if ! grep -q "BEGIN CERTIFICATE" "$crt_file" 2>/dev/null || ! grep -q "END CERTIFICATE" "$crt_file" 2>/dev/null; then
+        tgdb_fail "CRT 格式看起來不正確（找不到 CERTIFICATE 區塊）" 1 || return $?
+        return 1
+    fi
+    if ! grep -q "BEGIN .*PRIVATE KEY" "$key_file" 2>/dev/null || ! grep -q "END .*PRIVATE KEY" "$key_file" 2>/dev/null; then
+        tgdb_fail "KEY 格式看起來不正確（找不到 PRIVATE KEY 區塊）" 1 || return $?
+        return 1
+    fi
+
+    if command -v openssl >/dev/null 2>&1; then
+        if ! openssl x509 -in "$crt_file" -noout >/dev/null 2>&1; then
+            tgdb_fail "CRT 內容無法被 openssl 解析，請確認 PEM 內容是否完整。" 1 || return $?
+            return 1
+        fi
+        if ! openssl pkey -in "$key_file" -noout >/dev/null 2>&1; then
+            tgdb_fail "KEY 內容無法被 openssl 解析，請確認 PEM 內容是否完整。" 1 || return $?
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+_nginx_write_custom_cert_pair() {
+    local base="$1"
+    local crt_tmp="$2"
+    local key_tmp="$3"
+    local cert_dir="$TGDB_DIR/nginx/certs"
+    local crt="$cert_dir/${base}.crt"
+    local key="$cert_dir/${base}.key"
+
+    mkdir -p "$cert_dir"
+
+    mv -f "$crt_tmp" "$crt" 2>/dev/null || { cat "$crt_tmp" >"$crt"; rm -f "$crt_tmp" 2>/dev/null || true; }
+    mv -f "$key_tmp" "$key" 2>/dev/null || { cat "$key_tmp" >"$key"; rm -f "$key_tmp" 2>/dev/null || true; }
+
+    chmod 600 "$key" 2>/dev/null || true
+}
+
+_nginx_reload_if_cert_in_use() {
+    local base="$1"
+    local in_use=0
+    local site
+
+    while IFS= read -r site; do
+        [ -n "${site:-}" ] || continue
+        in_use=1
+        break
+    done < <(_nginx_cert_usage_sites "$base")
+
+    if [ "$in_use" -ne 1 ]; then
+        return 0
+    fi
+
+    if ! podman ps --format '{{.Names}}' 2>/dev/null | grep -qx "$NGINX_CONTAINER_NAME"; then
+        echo "ℹ️ 證書已更新，但目前未偵測到執行中的 Nginx 容器，暫不重載。"
+        return 0
+    fi
+
+    if _nginx_test_and_reload_podman; then
+        echo "✅ 已重新載入 Nginx，使更新後的證書生效。"
+        return 0
+    fi
+
+    tgdb_fail "證書已寫入，但 Nginx 重載失敗，請檢查 nginx 設定後手動重載。" 1 || return $?
+    return 1
+}
+
+_nginx_edit_cert_files_with_editor() {
+    local base="$1"
+    local mode="${2:-add}"
+    local cert_dir="$TGDB_DIR/nginx/certs"
+    local crt="$cert_dir/${base}.crt"
+    local key="$cert_dir/${base}.key"
+    local crt_tmp key_tmp editor
+
+    mkdir -p "$cert_dir"
+
+    crt_tmp="$(mktemp 2>/dev/null || echo "$cert_dir/.${base}.crt.tmp")"
+    key_tmp="$(mktemp 2>/dev/null || echo "$cert_dir/.${base}.key.tmp")"
+
+    if [ "$mode" = "edit" ]; then
+        if [ ! -f "$crt" ] || [ ! -f "$key" ]; then
+            rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
+            tgdb_fail "找不到既有證書：$base" 1 || return $?
+            return 1
+        fi
+        cp -f "$crt" "$crt_tmp" 2>/dev/null || { cat "$crt" >"$crt_tmp"; }
+        cp -f "$key" "$key_tmp" 2>/dev/null || { cat "$key" >"$key_tmp"; }
+    fi
+
+    editor="$(_nginx_find_editor)" || {
+        rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
+        tgdb_fail "找不到可用的文字編輯器（建議安裝 nano）。" 1 || return $?
+        return 1
+    }
+
+    echo "接下來會用 $editor 讓你編輯 PEM 內容，請將整段內容貼入後儲存並退出。"
+    echo "1/2：編輯 CRT（憑證）"
+    "$editor" "$crt_tmp" || true
+    echo "2/2：編輯 KEY（私鑰）"
+    "$editor" "$key_tmp" || true
+
+    if ! _nginx_validate_custom_cert_pair "$crt_tmp" "$key_tmp"; then
+        rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
+        return 1
+    fi
+
+    _nginx_write_custom_cert_pair "$base" "$crt_tmp" "$key_tmp"
+    return 0
+}
+
+_nginx_add_custom_cert_by_name() {
+    local base="$1"
+    local crt="$TGDB_DIR/nginx/certs/${base}.crt"
+    local key="$TGDB_DIR/nginx/certs/${base}.key"
+
+    if ! _nginx_is_valid_cert_name "$base"; then
+        tgdb_fail "證書名稱格式不正確（僅允許英數、.、_、-；不得含空白或路徑字元）" 2 || return $?
+        return 2
+    fi
+
+    if [ -f "$crt" ] || [ -f "$key" ]; then
+        tgdb_fail "證書 \"$base\" 已存在，請改用編輯功能。" 1 || return $?
+        return 1
+    fi
+
+    _nginx_edit_cert_files_with_editor "$base" "add" || return $?
+    echo "✅ 已新增證書：$base"
+}
+
+_nginx_edit_custom_cert_by_name() {
+    local base="$1"
+    local crt="$TGDB_DIR/nginx/certs/${base}.crt"
+    local key="$TGDB_DIR/nginx/certs/${base}.key"
+
+    if ! _nginx_is_valid_cert_name "$base"; then
+        tgdb_fail "證書名稱格式不正確（僅允許英數、.、_、-；不得含空白或路徑字元）" 2 || return $?
+        return 2
+    fi
+
+    if [ ! -f "$crt" ] || [ ! -f "$key" ]; then
+        tgdb_fail "找不到既有證書：$base" 1 || return $?
+        return 1
+    fi
+
+    _nginx_edit_cert_files_with_editor "$base" "edit" || return $?
+    echo "✅ 已更新證書：$base"
+    _nginx_reload_if_cert_in_use "$base"
+}
+
+_nginx_delete_custom_cert_by_name() {
+    local base="$1"
+    local crt="$TGDB_DIR/nginx/certs/${base}.crt"
+    local key="$TGDB_DIR/nginx/certs/${base}.key"
+    local in_use_sites=()
+    local site
+
+    if ! _nginx_is_valid_cert_name "$base"; then
+        tgdb_fail "證書名稱格式不正確（僅允許英數、.、_、-；不得含空白或路徑字元）" 2 || return $?
+        return 2
+    fi
+
+    if [ ! -f "$crt" ] && [ ! -f "$key" ]; then
+        tgdb_fail "找不到證書：$base" 1 || return $?
+        return 1
+    fi
+
+    while IFS= read -r site; do
+        [ -n "${site:-}" ] && in_use_sites+=("$site")
+    done < <(_nginx_cert_usage_sites "$base")
+
+    if [ "${#in_use_sites[@]}" -gt 0 ]; then
+        local joined=""
+        joined="$(printf '%s, ' "${in_use_sites[@]}")"
+        joined="${joined%, }"
+        tgdb_fail "證書 \"$base\" 仍被以下站點使用：$joined。請先切換站點憑證後再刪除。" 1 || return $?
+        return 1
+    fi
+
+    rm -f "$crt" "$key" 2>/dev/null || true
+    echo "✅ 已刪除證書：$base"
+}
+
 _nginx_prompt_select_existing_cert_for_fqdn() {
     local out_var="$1"
     local fqdn="$2"
@@ -256,58 +620,40 @@ _nginx_p_apply_issue_cert_for_fqdn() {
 }
 
 nginx_p_add_custom_cert_cli() {
-    local domain="${1:-}"
-    if [ -z "$domain" ]; then
-        tgdb_fail "用法：nginx_p_add_custom_cert_cli <fqdn>" 2 || return $?
+    local cert_name="${1:-}"
+    if [ -z "$cert_name" ]; then
+        tgdb_fail "用法：nginx_p_add_custom_cert_cli <cert_name>" 2 || return $?
     fi
     if [ ! -t 0 ]; then
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
-    if ! _is_valid_fqdn "$domain"; then
-        tgdb_fail "域名格式不正確（僅允許英數、-、.，且需包含至少一個 .）" 2 || return $?
+    _nginx_add_custom_cert_by_name "$cert_name"
+}
+
+nginx_p_list_custom_certs_cli() {
+    if [ "$#" -gt 0 ]; then
+        tgdb_fail "用法：nginx_p_list_custom_certs_cli" 2 || return $?
     fi
+    _nginx_print_cert_inventory
+}
 
-    local cert_dir="$TGDB_DIR/nginx/certs"
-    mkdir -p "$cert_dir"
-
-    local crt_tmp key_tmp
-    crt_tmp="$(mktemp 2>/dev/null || echo "$cert_dir/.${domain}.crt.tmp")"
-    key_tmp="$(mktemp 2>/dev/null || echo "$cert_dir/.${domain}.key.tmp")"
-
-    local editor="nano"
-    if ! command -v "$editor" >/dev/null 2>&1; then
-        if ensure_editor; then
-            editor="$EDITOR"
-        else
-            rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
-            tgdb_fail "找不到可用的文字編輯器（建議安裝 nano）。" 1 || return $?
-        fi
+nginx_p_edit_custom_cert_cli() {
+    local cert_name="${1:-}"
+    if [ -z "$cert_name" ]; then
+        tgdb_fail "用法：nginx_p_edit_custom_cert_cli <cert_name>" 2 || return $?
     fi
-
-    echo "接下來會用 $editor 讓你貼上 PEM 內容，請將整段內容貼入後儲存並退出。"
-    echo "1/2：編輯 CRT（憑證）"
-    "$editor" "$crt_tmp"
-    echo "2/2：編輯 KEY（私鑰）"
-    "$editor" "$key_tmp"
-
-    if ! grep -q "BEGIN CERTIFICATE" "$crt_tmp" 2>/dev/null || ! grep -q "END CERTIFICATE" "$crt_tmp" 2>/dev/null; then
-        rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
-        tgdb_fail "CRT 格式看起來不正確（找不到 CERTIFICATE 區塊）" 1 || return $?
+    if [ ! -t 0 ]; then
+        tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
-    if ! grep -q "BEGIN .*PRIVATE KEY" "$key_tmp" 2>/dev/null || ! grep -q "END .*PRIVATE KEY" "$key_tmp" 2>/dev/null; then
-        rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
-        tgdb_fail "KEY 格式看起來不正確（找不到 PRIVATE KEY 區塊）" 1 || return $?
+    _nginx_edit_custom_cert_by_name "$cert_name"
+}
+
+nginx_p_delete_custom_cert_cli() {
+    local cert_name="${1:-}"
+    if [ -z "$cert_name" ]; then
+        tgdb_fail "用法：nginx_p_delete_custom_cert_cli <cert_name>" 2 || return $?
     fi
-
-    local crt="$cert_dir/${domain}.crt"
-    local key="$cert_dir/${domain}.key"
-
-    mv -f "$crt_tmp" "$crt" 2>/dev/null || { cat "$crt_tmp" >"$crt"; rm -f "$crt_tmp" 2>/dev/null || true; }
-    mv -f "$key_tmp" "$key" 2>/dev/null || { cat "$key_tmp" >"$key"; rm -f "$key_tmp" 2>/dev/null || true; }
-
-    chmod 600 "$key" 2>/dev/null || true
-
-    echo "✅ 已添加 \"$domain\" 證書"
+    _nginx_delete_custom_cert_by_name "$cert_name"
 }
 
 nginx_p_add_custom_cert() {
@@ -315,65 +661,105 @@ nginx_p_add_custom_cert() {
         tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
     fi
 
-    local domain
-    read -r -p "請輸入要匯入憑證的域名（例：api.example.com）: " domain
-    if [ -z "${domain:-}" ]; then
-        tgdb_err "域名不可為空"
-        ui_pause
-        return 1
-    fi
-    if ! _is_valid_fqdn "$domain"; then
-        tgdb_err "域名格式不正確（僅允許英數、-、.，且需包含至少一個 .）"
+    local cert_name
+    read -r -p "請輸入要新增的證書名稱（例：example.com）: " cert_name
+    if [ -z "${cert_name:-}" ]; then
+        tgdb_err "證書名稱不可為空"
         ui_pause
         return 1
     fi
 
-    local cert_dir="$TGDB_DIR/nginx/certs"
-    mkdir -p "$cert_dir"
-
-    local crt_tmp key_tmp
-    crt_tmp="$(mktemp 2>/dev/null || echo "$cert_dir/.${domain}.crt.tmp")"
-    key_tmp="$(mktemp 2>/dev/null || echo "$cert_dir/.${domain}.key.tmp")"
-
-    local editor="nano"
-    if ! command -v "$editor" >/dev/null 2>&1; then
-        if ensure_editor; then
-            editor="$EDITOR"
-        else
-            rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
-            tgdb_err "找不到可用的文字編輯器（建議安裝 nano）。"
-            ui_pause
-            return 1
-        fi
-    fi
-
-    echo "接下來會用 $editor 讓你貼上 PEM 內容，請將整段內容貼入後儲存並退出。"
-    echo "1/2：編輯 CRT（憑證）"
-    "$editor" "$crt_tmp"
-    echo "2/2：編輯 KEY（私鑰）"
-    "$editor" "$key_tmp"
-
-    if ! grep -q "BEGIN CERTIFICATE" "$crt_tmp" 2>/dev/null || ! grep -q "END CERTIFICATE" "$crt_tmp" 2>/dev/null; then
-        rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
-        tgdb_err "CRT 格式看起來不正確（找不到 CERTIFICATE 區塊）"
+    if ! _nginx_add_custom_cert_by_name "$cert_name"; then
         ui_pause
         return 1
     fi
-    if ! grep -q "BEGIN .*PRIVATE KEY" "$key_tmp" 2>/dev/null || ! grep -q "END .*PRIVATE KEY" "$key_tmp" 2>/dev/null; then
-        rm -f "$crt_tmp" "$key_tmp" 2>/dev/null || true
-        tgdb_err "KEY 格式看起來不正確（找不到 PRIVATE KEY 區塊）"
-        ui_pause
-        return 1
-    fi
-
-    local crt="$cert_dir/${domain}.crt"
-    local key="$cert_dir/${domain}.key"
-
-    mv -f "$crt_tmp" "$crt" 2>/dev/null || { cat "$crt_tmp" >"$crt"; rm -f "$crt_tmp" 2>/dev/null || true; }
-    mv -f "$key_tmp" "$key" 2>/dev/null || { cat "$key_tmp" >"$key"; rm -f "$key_tmp" 2>/dev/null || true; }
-
-    chmod 600 "$key" 2>/dev/null || true
-
-    echo "✅ 已添加 \"$domain\" 證書"
     ui_pause
+}
+
+nginx_p_edit_custom_cert() {
+    if ! ui_is_interactive; then
+        tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
+    fi
+
+    local cert_name=""
+    if ! _nginx_prompt_select_cert_base cert_name; then
+        local rc=$?
+        if [ "$rc" -eq 3 ]; then
+            tgdb_warn "目前沒有可編輯的證書。"
+            ui_pause
+            return 0
+        fi
+        if [ "$rc" -eq 1 ]; then
+            return 0
+        fi
+        ui_pause
+        return 1
+    fi
+
+    if ! _nginx_edit_custom_cert_by_name "$cert_name"; then
+        ui_pause
+        return 1
+    fi
+    ui_pause
+}
+
+nginx_p_delete_custom_cert() {
+    if ! ui_is_interactive; then
+        tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
+    fi
+
+    local cert_name=""
+    if ! _nginx_prompt_select_cert_base cert_name; then
+        local rc=$?
+        if [ "$rc" -eq 3 ]; then
+            tgdb_warn "目前沒有可刪除的證書。"
+            ui_pause
+            return 0
+        fi
+        if [ "$rc" -eq 1 ]; then
+            return 0
+        fi
+        ui_pause
+        return 1
+    fi
+
+    if ! ui_confirm_yn "確認要刪除證書 \"$cert_name\" 嗎？(y/N，預設 Y，輸入 0 取消): " "Y"; then
+        ui_pause
+        return 0
+    fi
+
+    if ! _nginx_delete_custom_cert_by_name "$cert_name"; then
+        ui_pause
+        return 1
+    fi
+    ui_pause
+}
+
+nginx_p_cert_manager_menu() {
+    if ! ui_is_interactive; then
+        tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
+    fi
+
+    while true; do
+        clear
+        echo "=================================="
+        echo "❖ 證書管理 ❖"
+        echo "=================================="
+        _nginx_print_cert_inventory
+        echo "----------------------------------"
+        echo "1. 新增自訂證書（crt/key）"
+        echo "2. 編輯證書"
+        echo "3. 刪除證書"
+        echo "----------------------------------"
+        echo "0. 返回"
+        echo "=================================="
+        read -r -e -p "請輸入選擇 [0-3]: " c
+        case "$c" in
+            1) nginx_p_add_custom_cert || true ;;
+            2) nginx_p_edit_custom_cert || true ;;
+            3) nginx_p_delete_custom_cert || true ;;
+            0) return ;;
+            *) echo "無效選項"; sleep 1 ;;
+        esac
+    done
 }
