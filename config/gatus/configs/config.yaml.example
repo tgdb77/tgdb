@@ -1,0 +1,57 @@
+# Gatus 設定檔（TGDB 產生）
+# 文件：
+# - 主 README / 設定總覽：https://github.com/TwiN/gatus
+#
+# 說明：
+# - 本範本預設使用 SQLite 持久化歷史結果
+# - 範例 endpoint 預設 `enabled: false`，避免第一次部署就持續打外部站點
+# - 請依你的實際服務自行新增/啟用 endpoints
+
+web:
+  address: "0.0.0.0"
+  port: 8080
+
+ui:
+  title: "Gatus | TGDB"
+  dashboard-heading: "服務狀態"
+  dashboard-subheading: "監測你的 HTTP / TCP / DNS 端點"
+  default-sort-by: "group"
+
+# 若要讓 Prometheus 抓取 /metrics，可改成 true
+metrics: false
+
+storage:
+  type: sqlite
+  path: /data/data.db
+  caching: false
+  maximum-number-of-results: 200
+  maximum-number-of-events: 20
+
+concurrency: 3
+
+# --- 存取保護：TGDB 預設啟用 Basic Auth ---
+# 說明：
+# - 部署時會自動把密碼轉成「bcrypt 後再 base64」的格式寫入下方欄位
+# - 若你想改密碼，可重新部署/更新，或手動依官方格式重產該值後覆寫
+security:
+  basic:
+    username: "__TGDB_GATUS_BASIC_AUTH_USER__"
+    password-bcrypt-base64: "__TGDB_GATUS_BASIC_AUTH_PASSWORD_BCRYPT_BASE64__"
+
+endpoints:
+  - enabled: false
+    name: "google"
+    group: "demo"
+    url: "https://google.com/"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - enabled: false
+    name: "example-tcp"
+    group: "demo"
+    url: "tcp://example.com:443"
+    interval: 5m
+    conditions:
+      - "[CONNECTED] == true"
