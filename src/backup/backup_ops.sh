@@ -47,7 +47,7 @@ backup_create() {
         fi
     fi
     if [ -d "$CONTAINERS_SYSTEMD_DIR" ]; then
-        echo " - $CONTAINERS_SYSTEMD_DIR（Quadlet 單元設定）"
+        echo " - $CONTAINERS_SYSTEMD_DIR（Quadlet runtime，僅 TGDB 管理範圍）"
     else
         echo " - （略過）未找到 $CONTAINERS_SYSTEMD_DIR"
     fi
@@ -71,12 +71,10 @@ backup_create() {
         items+=("config")
     fi
     if [ -d "$CONTAINERS_SYSTEMD_DIR" ]; then
-        rm -rf -- "$BACKUP_CONTAINERS_SYSTEMD_DIR"
-        mkdir -p "$BACKUP_CONTAINERS_SYSTEMD_DIR"
-        if podman unshare cp -a "$CONTAINERS_SYSTEMD_DIR/." "$BACKUP_CONTAINERS_SYSTEMD_DIR/"; then
-            items+=("quadlet")
+        if _backup_stage_runtime_quadlet_tree "$BACKUP_QUADLET_RUNTIME_DIR"; then
+            items+=("$BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME")
         else
-            tgdb_warn "無法備份 $CONTAINERS_SYSTEMD_DIR，略過此目錄。"
+            tgdb_warn "找不到可備份的 TGDB Quadlet runtime 單元，略過此區塊。"
         fi
     fi
 
@@ -137,7 +135,7 @@ backup_create_selected() {
     local -a items=()
     [ -d "$stage_dir/$tgdb_name" ] && items+=("$tgdb_name")
     [ -d "$stage_dir/config" ] && items+=("config")
-    [ -d "$stage_dir/quadlet" ] && items+=("quadlet")
+    [ -d "$stage_dir/$BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME" ] && items+=("$BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME")
 
     if [ ${#items[@]} -eq 0 ]; then
         rm -rf "$stage_dir" 2>/dev/null || true
@@ -262,24 +260,30 @@ _backup_restore_from_archive() {
         echo "ℹ️ 備份中未包含定時任務單元設定（config/timer），略過還原。"
     fi
 
-    local restored_quadlet_ok=0
-    if [ -d "$BACKUP_CONTAINERS_SYSTEMD_DIR" ]; then
-        echo "同步 Quadlet 單元設定：$BACKUP_CONTAINERS_SYSTEMD_DIR -> $CONTAINERS_SYSTEMD_DIR"
-        mkdir -p "$CONTAINERS_SYSTEMD_DIR"
+    local restored_quadlet_ok=0 runtime_backup_dir=""
+    runtime_backup_dir="$(_backup_find_runtime_quadlet_dir_in_tree "$BACKUP_ROOT" 2>/dev/null || true)"
+    if [ -n "$runtime_backup_dir" ] && [ -d "$runtime_backup_dir" ]; then
+        echo "同步 Quadlet runtime：$runtime_backup_dir -> $CONTAINERS_SYSTEMD_DIR"
+        local -a restored_units=()
+        local unit_name
+        while IFS= read -r unit_name; do
+            [ -n "$unit_name" ] && restored_units+=("$unit_name")
+        done < <(_backup_collect_unit_filenames_from_dir "$runtime_backup_dir")
+
         _backup_clear_user_quadlet_units || true
-        if ! podman unshare cp -a "$BACKUP_CONTAINERS_SYSTEMD_DIR/." "$CONTAINERS_SYSTEMD_DIR/"; then
-            tgdb_warn "無法還原 Quadlet 單元設定至 $CONTAINERS_SYSTEMD_DIR，請手動檢查。"
+        if ! _backup_restore_runtime_quadlet_tree "$runtime_backup_dir"; then
+            tgdb_warn "無法還原 Quadlet runtime 至 $CONTAINERS_SYSTEMD_DIR，請手動檢查。"
         else
             if _backup_has_systemctl_user; then
-                echo "⏳ 正在重整並啟用所有單元..."
-                _backup_enable_all_units_from_units_dir
+                echo "⏳ 正在重整並啟用所有已還原的 TGDB Quadlet 單元..."
+                _backup_enable_units_by_filenames "${restored_units[@]}"
                 restored_quadlet_ok=1
             else
                 tgdb_warn "未偵測到 systemctl --user，無法自動啟用單元，請手動啟動相關服務。"
             fi
         fi
     else
-        echo "ℹ️ 備份中未包含 Quadlet 單元設定（quadlet），略過還原。"
+        echo "ℹ️ 備份中未包含 Quadlet runtime（$BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME / quadlet），略過還原。"
     fi
 
     if [ "$restored_quadlet_ok" -eq 0 ] && [ "$had_running" -eq 1 ]; then
@@ -364,16 +368,17 @@ _backup_restore_selected_instance_from_archive() {
     fi
 
     local -a restored_units=()
-    if [ -d "$extract_dir/quadlet" ]; then
-        mkdir -p "$CONTAINERS_SYSTEMD_DIR"
-        local f
-        while IFS= read -r -d $'\0' f; do
-            podman unshare cp -a "$f" "$CONTAINERS_SYSTEMD_DIR/" || {
-                tgdb_warn "還原 Quadlet 單元失敗：$(basename "$f")"
-                continue
-            }
-            restored_units+=("$(basename "$f")")
-        done < <(find "$extract_dir/quadlet" -maxdepth 1 -type f -print0 2>/dev/null)
+    local runtime_extract_dir=""
+    runtime_extract_dir="$(_backup_find_runtime_quadlet_dir_in_tree "$extract_dir" 2>/dev/null || true)"
+    if [ -n "$runtime_extract_dir" ] && [ -d "$runtime_extract_dir" ]; then
+        while IFS= read -r f; do
+            [ -n "$f" ] && restored_units+=("$f")
+        done < <(_backup_collect_unit_filenames_from_dir "$runtime_extract_dir")
+
+        if ! _backup_restore_runtime_quadlet_tree "$runtime_extract_dir"; then
+            tgdb_warn "還原 Quadlet runtime 失敗：$runtime_extract_dir"
+            restored_units=()
+        fi
     fi
 
     rm -rf "$extract_dir" 2>/dev/null || true
@@ -503,7 +508,7 @@ backup_restore_latest_interactive() {
     echo "將還原自: $LATEST_BACKUP"
     echo "----------------------------------"
     echo "此動作會覆蓋 $TGDB_DIR 與 $BACKUP_CONFIG_DIR 的內容，"
-    echo "並根據備份還原 $CONTAINERS_SYSTEMD_DIR（Podman Quadlet 單元）與 $USER_SD_DIR（定時任務單元）。"
+    echo "並根據備份還原 $CONTAINERS_SYSTEMD_DIR（Podman Quadlet runtime）與 $USER_SD_DIR（定時任務單元）。"
     echo "建議在還原前先停止相關服務（Podman/Nginx 等）。"
     if ! ui_confirm_yn "確認繼續嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
         echo "操作已取消。"
@@ -535,7 +540,7 @@ backup_restore_latest_cli() {
     echo "目標根目錄: $BACKUP_ROOT"
     echo "將還原自: $LATEST_BACKUP"
     echo "----------------------------------"
-    echo "此動作會覆蓋 $TGDB_DIR 與 $BACKUP_CONFIG_DIR 的內容，並還原 $CONTAINERS_SYSTEMD_DIR（Podman Quadlet 單元）與 $USER_SD_DIR（定時任務單元），且不會再互動確認。"
+    echo "此動作會覆蓋 $TGDB_DIR 與 $BACKUP_CONFIG_DIR 的內容，並還原 $CONTAINERS_SYSTEMD_DIR（Podman Quadlet runtime）與 $USER_SD_DIR（定時任務單元），且不會再互動確認。"
 
     if _backup_restore_from_archive "$LATEST_BACKUP"; then
         echo "✅ 已從最新備份還原（CLI）：$LATEST_BACKUP"

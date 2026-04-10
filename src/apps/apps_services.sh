@@ -402,7 +402,7 @@ _apps_unit_container_has_app_label() {
 _apps_list_instances_by_label() {
   local service="$1"
   [ -z "$service" ] && return 0
-  local mode unit_dir seen=""
+  local mode seen=""
   local -a modes=()
   if declare -F _apps_service_supports_deploy_mode >/dev/null 2>&1; then
     _apps_service_supports_deploy_mode "$service" "rootless" && modes+=("rootless")
@@ -412,34 +412,43 @@ _apps_list_instances_by_label() {
   [ ${#modes[@]} -gt 0 ] || modes=(rootless rootful)
 
   for mode in "${modes[@]}"; do
-    unit_dir="$(_apps_unit_dir_for_mode "$mode" 2>/dev/null || echo "")"
-    if [ -n "$unit_dir" ] && _apps_dir_exists "$mode" "$unit_dir"; then
-      local f=""
-      while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        local base name
-        base="${f##*/}"
-        case "$base" in
-          *.container) name="${base%.container}" ;;
-          *) continue ;;
-        esac
+    local f="" unit_dir legacy_unit_dir
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      local base name
+      base="${f##*/}"
+      case "$base" in
+        *.container) name="${base%.container}" ;;
+        *) continue ;;
+      esac
 
-        # 以 Quadlet unit 內的 Label=app=<service> 判斷歸屬，避免「僅剩紀錄檔」被誤判為已部署。
-        if ! _apps_unit_container_has_app_label "$mode" "$f" "$service"; then
-          continue
-        fi
-        if _app_is_aux_instance_name "$service" "$name"; then
-          continue
-        fi
-        case ",$seen," in
-          *,"$mode:$name",*) ;;
-          *)
-            printf '%s\t%s\n' "$name" "$mode"
-            seen="$seen,$mode:$name"
-            ;;
-        esac
-      done < <(_apps_find_lines "$mode" "$unit_dir" -maxdepth 1 -type f -name "*.container" 2>/dev/null)
-    fi
+      # 以 Quadlet unit 內的 Label=app=<service> 判斷歸屬，避免「僅剩紀錄檔」被誤判為已部署。
+      if ! _apps_unit_container_has_app_label "$mode" "$f" "$service"; then
+        continue
+      fi
+      if _app_is_aux_instance_name "$service" "$name"; then
+        continue
+      fi
+      case ",$seen," in
+        *,"$mode:$name",*) ;;
+        *)
+          printf '%s\t%s\n' "$name" "$mode"
+          seen="$seen,$mode:$name"
+          ;;
+      esac
+    done < <(
+      if declare -F rm_list_service_runtime_quadlet_files_by_mode >/dev/null 2>&1; then
+        while IFS=$'\t' read -r _scope _svc _base _path _managed; do
+          [ -n "$_path" ] || continue
+          printf '%s\n' "$_path"
+        done < <(rm_list_service_runtime_quadlet_files_by_mode "$service" "$mode" 2>/dev/null)
+      else
+        unit_dir="$(_apps_unit_dir_for_mode "$mode" "$service" 2>/dev/null || echo "")"
+        legacy_unit_dir="$(_apps_legacy_unit_dir_for_mode "$mode" 2>/dev/null || echo "")"
+        [ -n "$unit_dir" ] && _apps_dir_exists "$mode" "$unit_dir" && _apps_find_lines "$mode" "$unit_dir" -type f -name "*.container" 2>/dev/null
+        [ -n "$legacy_unit_dir" ] && _apps_find_lines "$mode" "$legacy_unit_dir" -maxdepth 1 -type f -name "*.container" 2>/dev/null
+      fi
+    )
   done
 }
 

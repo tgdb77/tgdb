@@ -38,13 +38,13 @@ _kopia_list_rclone_remotes() {
   rclone listremotes --config "$cfg" 2>/dev/null | sed 's/:$//' | sed '/^$/d'
 }
 
-_kopia_unit_path() {
-  printf '%s\n' "$(rm_user_units_dir)/kopia.container"
+_kopia_resolved_unit_path() {
+  _quadlet_runtime_or_legacy_unit_path "kopia.container" "kopia"
 }
 
 _kopia_is_installed() {
   local unit_path
-  unit_path="$(_kopia_unit_path)"
+  unit_path="$(_kopia_resolved_unit_path)"
   if [ -f "$unit_path" ]; then
     return 0
   fi
@@ -82,7 +82,7 @@ _kopia_podman_container_status_label() {
 
 _kopia_detect_host_port() {
   local unit_path
-  unit_path="$(_kopia_unit_path)"
+  unit_path="$(_kopia_resolved_unit_path)"
   [ -f "$unit_path" ] || return 1
 
   local content port

@@ -392,10 +392,15 @@ _podman_detect_app_service_for_unit_file() {
     fi
 
     local base="${fname%.pod}"
-    local member
+    local member member_record member_path
     while IFS= read -r member; do
         [ -n "$member" ] || continue
-        service="$(_podman_extract_app_label_from_unit_file "$(_podman_unit_path "$scope" "$member")")"
+        member_path="$(_podman_unit_path "$scope" "$member")"
+        member_record="$(_podman_resolve_unit_records "$(_podman_token_from_record "$scope" "$member")" 2>/dev/null | head -n 1 || true)"
+        if [ -n "$member_record" ]; then
+            member_path="$(printf '%s\n' "$member_record" | awk -F'\t' 'NF>=3 {print $3; exit}')"
+        fi
+        service="$(_podman_extract_app_label_from_unit_file "$member_path")"
         if [ -n "$service" ]; then
             printf '%s\n' "$service"
             return 0
@@ -823,6 +828,8 @@ _remove_quadlet_unit() {
     fname=$(basename "$target_file")
     base="${fname%.*}"
     ext="${fname##*.}"
+    local service=""
+    service="$(_podman_unit_service_from_path "$target_file" 2>/dev/null || true)"
 
     if [[ "$ext" = "pod" ]]; then
         local -a members=()
@@ -855,6 +862,11 @@ _remove_quadlet_unit() {
             for m in "${members[@]}"; do
                 local unit_path
                 unit_path="$(_podman_unit_path "$scope" "$m")"
+                local member_record=""
+                member_record="$(_podman_resolve_unit_records "$(_podman_token_from_record "$scope" "$m")" 2>/dev/null | head -n 1 || true)"
+                if [ -n "$member_record" ]; then
+                    unit_path="$(printf '%s\n' "$member_record" | awk -F'\t' 'NF>=3 {print $3; exit}')"
+                fi
                 local cn=""
                 cn="$(_container_name_from_unit_file "$unit_path" 2>/dev/null || true)"
                 [ -n "$cn" ] || cn="${m%.container}"
@@ -863,9 +875,27 @@ _remove_quadlet_unit() {
         fi
 
         for m in "${members[@]}"; do
-            _podman_run_scope_cmd "$scope" rm -f -- "$(_podman_unit_path "$scope" "$m")" 2>/dev/null || true
+            local member_target=""
+            member_target="$(_podman_unit_path "$scope" "$m")"
+            local member_record=""
+            member_record="$(_podman_resolve_unit_records "$(_podman_token_from_record "$scope" "$m")" 2>/dev/null | head -n 1 || true)"
+            if [ -n "$member_record" ]; then
+                member_target="$(printf '%s\n' "$member_record" | awk -F'\t' 'NF>=3 {print $3; exit}')"
+            fi
+            _podman_run_scope_cmd "$scope" rm -f -- "$member_target" 2>/dev/null || true
         done
         _podman_run_scope_cmd "$scope" rm -f -- "$target_file" 2>/dev/null || true
+        if [ -n "$service" ] && [ "$target_file" != "$(_podman_unit_path "$scope" "$fname")" ]; then
+            local service_dir=""
+            service_dir="$(_podman_service_runtime_unit_dir "$scope" "$service" 2>/dev/null || true)"
+            if [ -n "$service_dir" ]; then
+                if [ "$scope" = "system" ] && ! _podman_is_root; then
+                    _podman_run_scope_cmd "$scope" rmdir --ignore-fail-on-non-empty "$service_dir" 2>/dev/null || true
+                else
+                    rmdir --ignore-fail-on-non-empty "$service_dir" 2>/dev/null || true
+                fi
+            fi
+        fi
         _podman_systemctl "$scope" daemon-reload || true
 
         local tgdb_dir

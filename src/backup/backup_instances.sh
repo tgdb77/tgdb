@@ -312,11 +312,17 @@ _backup_stage_selected_instance() {
         _backup_stage_copy_path "$path" "$stage_dir" "$rel" || return 1
     done < <(_backup_collect_matching_service_files "$quadlet_dir" "$name")
 
-    while IFS= read -r path; do
-        [ -n "$path" ] || continue
-        rel="quadlet/$(basename "$path")"
+    local base
+    while IFS=$'\t' read -r _scope _svc base path _managed; do
+        [ -n "${path:-}" ] || continue
+        if ! _backup_instance_name_matches_basename "$base" "$name"; then
+            continue
+        fi
+        rel="$(_backup_runtime_quadlet_rel_path_from_root "$path" 2>/dev/null || true)"
+        [ -n "${rel:-}" ] || continue
+        rel="$BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME/$rel"
         _backup_stage_copy_path "$path" "$stage_dir" "$rel" || return 1
-    done < <(_backup_collect_matching_service_files "$CONTAINERS_SYSTEMD_DIR" "$name")
+    done < <(rm_list_service_runtime_quadlet_files_by_mode "$service" rootless 2>/dev/null || true)
 
     return 0
 }

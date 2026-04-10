@@ -76,7 +76,7 @@ _install_default_tgdb_network_quadlet() {
     # 安裝預設網路單元：讓未來 app 可直接使用 tgdb 網路（並在安裝時嘗試直接建立）。
     local src dest_dir dest
     src="$CONFIG_DIR/quadlet/networks/tgdb.network"
-    dest_dir="$(rm_user_units_dir)"
+    dest_dir="$(rm_service_runtime_quadlet_dir_by_mode "tgdb" rootless 2>/dev/null || printf '%s\n' "$(rm_user_units_dir)/tgdb")"
     dest="$dest_dir/tgdb.network"
 
     if [ ! -f "$src" ]; then
