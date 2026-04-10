@@ -141,20 +141,15 @@ _systemctl_user_try() {
 }
 
 _quadlet_user_units_dir() {
-  local scope
-  scope="$(tgdb_active_scope)"
-
-  if [ "$scope" = "system" ]; then
-    if declare -F rm_system_units_dir >/dev/null 2>&1; then
-      rm_system_units_dir
-      return 0
-    fi
-    printf '%s\n' "/etc/containers/systemd"
+  if declare -F rm_quadlet_root_dir_by_mode >/dev/null 2>&1; then
+    rm_quadlet_root_dir_by_mode "$(tgdb_active_deploy_mode)"
     return 0
   fi
 
-  if declare -F rm_user_units_dir >/dev/null 2>&1; then
-    rm_user_units_dir
+  local scope
+  scope="$(tgdb_active_scope)"
+  if [ "$scope" = "system" ]; then
+    printf '%s\n' "/etc/containers/systemd"
     return 0
   fi
   printf '%s\n' "${USER_UNITS_DIR:-$HOME/.config/containers/systemd}"
@@ -184,6 +179,63 @@ _write_file() {
   fi
   _tgdb_run_privileged mkdir -p "$dir" || return 1
   printf '%s' "$*" | _tgdb_run_privileged tee "$path" >/dev/null
+}
+
+_quadlet_runtime_unit_path() {
+  local unit_filename="$1" service="${2:-}"
+  if [ -n "$service" ] && declare -F rm_runtime_quadlet_unit_path_by_mode >/dev/null 2>&1; then
+    rm_runtime_quadlet_unit_path_by_mode "$service" "$unit_filename" "$(tgdb_active_deploy_mode)"
+    return 0
+  fi
+  if declare -F rm_tgdb_runtime_quadlet_root_dir_by_mode >/dev/null 2>&1; then
+    printf '%s\n' "$(rm_tgdb_runtime_quadlet_root_dir_by_mode "$(tgdb_active_deploy_mode)")/$unit_filename"
+    return 0
+  fi
+  printf '%s\n' "$(_quadlet_user_units_dir)/$unit_filename"
+}
+
+_quadlet_runtime_or_legacy_unit_path() {
+  local unit_filename="$1" service="${2:-}"
+  if [ -n "$service" ] && declare -F rm_runtime_or_legacy_quadlet_unit_path_by_mode >/dev/null 2>&1; then
+    rm_runtime_or_legacy_quadlet_unit_path_by_mode "$service" "$unit_filename" "$(tgdb_active_deploy_mode)"
+    return 0
+  fi
+
+  local runtime_path legacy_path
+  runtime_path="$(_quadlet_runtime_unit_path "$unit_filename" "$service")"
+  if [ -n "$runtime_path" ] && [ -e "$runtime_path" ]; then
+    printf '%s\n' "$runtime_path"
+    return 0
+  fi
+
+  if declare -F rm_legacy_quadlet_unit_path_by_mode >/dev/null 2>&1; then
+    legacy_path="$(rm_legacy_quadlet_unit_path_by_mode "$unit_filename" "$(tgdb_active_deploy_mode)" 2>/dev/null || true)"
+    if [ -n "$legacy_path" ] && [ -e "$legacy_path" ]; then
+      printf '%s\n' "$legacy_path"
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "$runtime_path"
+}
+
+_quadlet_runtime_unit_with_markers() {
+  local unit_content="$1" service="${2:-}" instance="${3:-}"
+  if [ -z "$service" ]; then
+    printf '%s' "$unit_content"
+    return 0
+  fi
+
+  local cleaned
+  cleaned="$(printf '%s' "$unit_content" | awk '
+    !/^[[:space:]]*# *TGDB-(Managed|Service|Instance|Deploy-Mode):/
+  ')"
+
+  printf '# TGDB-Managed: 1\n'
+  printf '# TGDB-Service: %s\n' "$service"
+  [ -n "$instance" ] && printf '# TGDB-Instance: %s\n' "$instance"
+  printf '# TGDB-Deploy-Mode: %s\n' "$(tgdb_active_deploy_mode)"
+  printf '%s' "$cleaned"
 }
 
 _quadlet_extract_images() {
@@ -298,11 +350,21 @@ _quadlet_pull_images_from_unit() {
 }
 
 _install_unit_and_enable() {
+  local service=""
   local name="$1"
-  shift
-  local unit_content="$*"
+  shift || true
 
-  _quadlet_pull_images_from_unit "$unit_content" || return $?
+  if [ "$#" -gt 1 ]; then
+    service="$name"
+    name="$1"
+    shift || true
+  fi
+
+  local unit_content="$*"
+  local runtime_content
+  runtime_content="$(_quadlet_runtime_unit_with_markers "$unit_content" "$service" "$name")"
+
+  _quadlet_pull_images_from_unit "$runtime_content" || return $?
   echo "⏳ 正在套用佈署並啟動服務，請稍等..."
 
   if ! _ensure_user_units_dir; then
@@ -310,8 +372,8 @@ _install_unit_and_enable() {
     return 1
   fi
   local unit_path
-  unit_path="$(_quadlet_user_units_dir)/$name.container"
-  if ! _write_file "$unit_path" "$unit_content"; then
+  unit_path="$(_quadlet_runtime_unit_path "$name.container" "$service")"
+  if ! _write_file "$unit_path" "$runtime_content"; then
     tgdb_fail "寫入 Quadlet 單元失敗：$unit_path" 1 || return $?
     return 1
   fi
@@ -330,6 +392,12 @@ _install_unit_and_enable() {
 
   tgdb_fail "無法啟用或啟動服務：$name（請檢查 $(tgdb_scope_label "$(tgdb_active_scope)") 與單元日誌）。" 1 || return $?
   return 1
+}
+
+_install_service_unit_and_enable() {
+  local service="$1" name="$2"
+  shift 2 || true
+  _install_unit_and_enable "$service" "$name" "$@"
 }
 
 _quadlet_enable_now_by_filename() {
@@ -394,6 +462,17 @@ _quadlet_enable_now_bulk_by_filenames() {
 }
 
 _install_quadlet_units_from_files() {
+  local service=""
+  local instance=""
+  if [ "$#" -gt 0 ] && [ ! -f "$1" ]; then
+    service="$1"
+    shift || true
+  fi
+  if [ -n "$service" ] && [ "$#" -gt 0 ] && [ ! -f "$1" ]; then
+    instance="$1"
+    shift || true
+  fi
+
   if [ "$#" -le 0 ]; then
     tgdb_fail "未提供任何 Quadlet 單元檔案" 1 || return $?
   fi
@@ -436,8 +515,12 @@ _install_quadlet_units_from_files() {
 
   for f in "${files[@]}"; do
     local dest
-    dest="$(_quadlet_user_units_dir)/$(basename "$f")"
-    if ! _write_file "$dest" "$(cat "$f")"; then
+    local unit_filename unit_content runtime_content
+    unit_filename="$(basename "$f")"
+    unit_content="$(cat "$f")"
+    runtime_content="$(_quadlet_runtime_unit_with_markers "$unit_content" "$service" "$instance")"
+    dest="$(_quadlet_runtime_unit_path "$unit_filename" "$service")"
+    if ! _write_file "$dest" "$runtime_content"; then
       tgdb_fail "寫入 Quadlet 單元失敗：$dest" 1 || return $?
       return 1
     fi
@@ -469,6 +552,12 @@ _install_quadlet_units_from_files() {
   }
 
   return 0
+}
+
+_install_service_quadlet_units_from_files() {
+  local service="$1" instance="$2"
+  shift 2 || true
+  _install_quadlet_units_from_files "$service" "$instance" "$@"
 }
 
 _quadlet_apply_rshared_to_volumes() {

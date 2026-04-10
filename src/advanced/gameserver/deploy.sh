@@ -210,7 +210,7 @@ gameserver_p_deploy() {
 
   unit_content="$(_gameserver_render_quadlet_content "$unit_base" "$image" "$instance_dir" "$volume_dir")" || return $?
 
-  _install_unit_and_enable "$unit_base" "$unit_content" || {
+  _install_service_unit_and_enable "gameserver" "$unit_base" "$unit_content" || {
     tgdb_fail "套用 Quadlet 失敗：$unit_base" 1 || true
     return 1
   }

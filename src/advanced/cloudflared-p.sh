@@ -103,6 +103,20 @@ _cloudflared_unit_name_from_tunnel() {
   printf '%s\n' "cloudflared-${safe}"
 }
 
+_cloudflared_runtime_unit_path() {
+  local tunnel="$1"
+  local unit_name
+  unit_name="$(_cloudflared_unit_name_from_tunnel "$tunnel")"
+  _quadlet_runtime_unit_path "${unit_name}.container" "cloudflared"
+}
+
+_cloudflared_resolved_unit_path() {
+  local tunnel="$1"
+  local unit_name
+  unit_name="$(_cloudflared_unit_name_from_tunnel "$tunnel")"
+  _quadlet_runtime_or_legacy_unit_path "${unit_name}.container" "cloudflared"
+}
+
 _cloudflared_is_valid_tunnel_name() {
   local name="${1:-}"
   [ -n "$name" ] || return 1
@@ -299,7 +313,7 @@ _cloudflared_render_quadlet_unit() {
     -e "s|\${TUNNEL_UUID}|$(_esc "$tunnel_uuid")|g" \
   )"
 
-  _install_unit_and_enable "$unit_name" "$content"
+  _install_service_unit_and_enable "cloudflared" "$unit_name" "$content" || return $?
   return 0
 }
 
@@ -325,7 +339,7 @@ cloudflared_p_deploy() {
   local unit_name
   unit_name="$(_cloudflared_unit_name_from_tunnel "$tunnel_name")"
   local unit_path
-  unit_path="$(rm_user_unit_path "$unit_name.container" 2>/dev/null || true)"
+  unit_path="$(_cloudflared_resolved_unit_path "$tunnel_name" 2>/dev/null || true)"
 
   local auth_dir
   auth_dir="$(_cloudflared_auth_dir)"
@@ -657,7 +671,7 @@ cloudflared_p_update() {
   local unit_name
   unit_name="$(_cloudflared_unit_name_from_tunnel "$tunnel")"
   local unit_path
-  unit_path="$(_quadlet_user_units_dir)/${unit_name}.container"
+  unit_path="$(_cloudflared_resolved_unit_path "$tunnel" 2>/dev/null || true)"
   if [ ! -f "$unit_path" ] && ! podman container exists "$unit_name" 2>/dev/null; then
     tgdb_fail "找不到已部署的 Tunnel 單元：$unit_name。請先完成佈署後再試。" 1 || true
     ui_pause "按任意鍵返回..."
@@ -790,9 +804,14 @@ cloudflared_p_full_remove() {
     _systemctl_user_try stop --no-block -- "${unit_name}.service" "container-${unit_name}.service" "${unit_name}.container" || true
     _systemctl_user_try disable -- "${unit_name}.container" "${unit_name}.service" "container-${unit_name}.service" || true
     podman rm -f "$unit_name" 2>/dev/null || true
-    unit_path="$(rm_user_unit_path "${unit_name}.container" 2>/dev/null || true)"
+    unit_path="$(_cloudflared_resolved_unit_path "$t" 2>/dev/null || true)"
     if [ -n "${unit_path:-}" ] && [ -f "$unit_path" ]; then
       rm -f "$unit_path" 2>/dev/null || true
+    fi
+    local legacy_path=""
+    legacy_path="$(rm_legacy_quadlet_unit_path_by_mode "${unit_name}.container" rootless 2>/dev/null || true)"
+    if [ -n "${legacy_path:-}" ] && [ "$legacy_path" != "$unit_path" ] && [ -f "$legacy_path" ]; then
+      rm -f "$legacy_path" 2>/dev/null || true
     fi
   done
   _systemctl_user_try daemon-reload || true
@@ -843,9 +862,14 @@ cloudflared_p_remove() {
   podman rm -f "$unit_name" 2>/dev/null || true
 
   local unit_path=""
-  unit_path="$(rm_user_unit_path "${unit_name}.container" 2>/dev/null || true)"
+  unit_path="$(_cloudflared_resolved_unit_path "$tunnel" 2>/dev/null || true)"
   if [ -n "${unit_path:-}" ] && [ -f "$unit_path" ]; then
     rm -f "$unit_path" 2>/dev/null || true
+  fi
+  local legacy_path=""
+  legacy_path="$(rm_legacy_quadlet_unit_path_by_mode "${unit_name}.container" rootless 2>/dev/null || true)"
+  if [ -n "${legacy_path:-}" ] && [ "$legacy_path" != "$unit_path" ] && [ -f "$legacy_path" ]; then
+    rm -f "$legacy_path" 2>/dev/null || true
   fi
   _systemctl_user_try daemon-reload || true
 

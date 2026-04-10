@@ -250,61 +250,57 @@ _dbbackup_find_db_endpoints() {
 
   load_system_config >/dev/null 2>&1 || true
 
-  local user_units_dir persist_dir
-  user_units_dir="$(rm_user_units_dir 2>/dev/null || echo "")"
+  local persist_dir
   persist_dir="$(rm_persist_config_dir 2>/dev/null || echo "")"
 
-  local -a scan_dirs=()
-  [ -n "${user_units_dir:-}" ] && [ -d "$user_units_dir" ] && scan_dirs+=("$user_units_dir")
-  [ -n "${persist_dir:-}" ] && [ -d "$persist_dir" ] && scan_dirs+=("$persist_dir")
-
-  [ ${#scan_dirs[@]} -gt 0 ] || return 0
-
   local -A seen=()
-  local dir file
-  for dir in "${scan_dirs[@]}"; do
-    while IFS= read -r -d '' file; do
-      [ -f "$file" ] || continue
+  local file
+  while IFS= read -r file; do
+    [ -f "$file" ] || continue
 
-      local container_name env_file instance_dir host_data_dir app_label display
+    local container_name env_file instance_dir host_data_dir app_label display
 
-      _dbbackup_unit_has_tgdb_db_label "$file" "$db_type" || continue
+    _dbbackup_unit_has_tgdb_db_label "$file" "$db_type" || continue
 
-      container_name="$(_dbbackup_unit_get_first_value "$file" "ContainerName" 2>/dev/null || true)"
-      [ -n "${container_name:-}" ] || continue
+    container_name="$(_dbbackup_unit_get_first_value "$file" "ContainerName" 2>/dev/null || true)"
+    [ -n "${container_name:-}" ] || continue
 
-      case "$db_type" in
-        postgres) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/postgresql/data" 2>/dev/null || true)" ;;
-        redis) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/data" 2>/dev/null || true)" ;;
-        mysql) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/mysql" 2>/dev/null || true)" ;;
-        *) return 1 ;;
-      esac
+    case "$db_type" in
+      postgres) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/postgresql/data" 2>/dev/null || true)" ;;
+      redis) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/data" 2>/dev/null || true)" ;;
+      mysql) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/mysql" 2>/dev/null || true)" ;;
+      *) return 1 ;;
+    esac
 
-      [ -n "${host_data_dir:-}" ] || continue
+    [ -n "${host_data_dir:-}" ] || continue
 
-      if [ "${seen[$container_name]+x}" = "x" ]; then
-        continue
-      fi
-      seen["$container_name"]=1
+    if [ "${seen[$container_name]+x}" = "x" ]; then
+      continue
+    fi
+    seen["$container_name"]=1
 
-      instance_dir="$(dirname "$host_data_dir" 2>/dev/null || echo "")"
-      [ -n "${instance_dir:-}" ] || continue
+    instance_dir="$(dirname "$host_data_dir" 2>/dev/null || echo "")"
+    [ -n "${instance_dir:-}" ] || continue
 
-      env_file="$instance_dir/.env"
+    env_file="$instance_dir/.env"
 
-      # 只列出有環境檔的目標（避免後續匯出/匯入缺少帳密）
-      [ -f "$env_file" ] || continue
+    # 只列出有環境檔的目標（避免後續匯出/匯入缺少帳密）
+    [ -f "$env_file" ] || continue
 
-      app_label="$(_dbbackup_unit_label_get_value "$file" "app" 2>/dev/null || true)"
-      if [ -n "${app_label:-}" ]; then
-        display="${app_label} / ${container_name}"
-      else
-        display="$container_name"
-      fi
+    app_label="$(_dbbackup_unit_label_get_value "$file" "app" 2>/dev/null || true)"
+    if [ -n "${app_label:-}" ]; then
+      display="${app_label} / ${container_name}"
+    else
+      display="$container_name"
+    fi
 
-      printf '%s|%s|%s|%s|%s\n' "$display" "$container_name" "$env_file" "$instance_dir" "$file"
-    done < <(find "$dir" -type f -name "*.container" -print0 2>/dev/null)
-  done
+    printf '%s|%s|%s|%s|%s\n' "$display" "$container_name" "$env_file" "$instance_dir" "$file"
+  done < <(
+    if declare -F rm_list_tgdb_runtime_quadlet_files_by_mode >/dev/null 2>&1; then
+      rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null | awk -F'\t' 'NF >= 4 && $3 ~ /\.container$/ { print $4 }'
+    fi
+    [ -n "${persist_dir:-}" ] && [ -d "$persist_dir" ] && find "$persist_dir" -type f -name "*.container" -print 2>/dev/null
+  )
 }
 
 _dbbackup_pick_db_type() {

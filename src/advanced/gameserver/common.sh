@@ -111,9 +111,9 @@ _gameserver_instance_meta_path() {
   printf '%s\n' "$(_gameserver_instance_dir "$unit_base")/.gameserver.meta"
 }
 
-_gameserver_unit_path() {
+_gameserver_resolved_unit_path() {
   local unit_base="$1"
-  rm_user_unit_path "${unit_base}.container"
+  _quadlet_runtime_or_legacy_unit_path "${unit_base}.container" "gameserver"
 }
 
 _gameserver_trim_ws() {
@@ -253,15 +253,11 @@ _gameserver_list_unit_bases() {
     done < <(find "$records_dir" -maxdepth 1 -type f -name "${GAMESERVER_UNIT_PREFIX}*.env" -print0 2>/dev/null)
   fi
 
-  local units_dir
-  units_dir="$(rm_user_units_dir)"
-  if [ -d "$units_dir" ]; then
-    while IFS= read -r -d $'\0' f; do
-      b="${f##*/}"
-      unit_base="${b%.container}"
-      _gameserver_add_unit_base_unique "$unit_base" found seen || true
-    done < <(find "$units_dir" -maxdepth 1 -type f -name "${GAMESERVER_UNIT_PREFIX}*.container" -print0 2>/dev/null)
-  fi
+  while IFS=$'\t' read -r _scope _service b _path _managed; do
+    [ -n "$b" ] || continue
+    unit_base="${b%.container}"
+    _gameserver_add_unit_base_unique "$unit_base" found seen || true
+  done < <(rm_list_service_runtime_quadlet_files_by_mode "gameserver" rootless 2>/dev/null | awk -F'\t' 'NF >= 3 && $3 ~ /^gameserver-.*\.container$/')
 
   if [ ${#found[@]} -eq 0 ]; then
     return 0
@@ -275,7 +271,7 @@ _gameserver_instance_exists() {
   [ -n "$unit_base" ] || return 1
 
   [ -f "$(_gameserver_record_env_path "$unit_base")" ] && return 0
-  [ -f "$(_gameserver_unit_path "$unit_base")" ] && return 0
+  [ -f "$(_gameserver_resolved_unit_path "$unit_base")" ] && return 0
   [ -d "$(_gameserver_instance_dir "$unit_base")" ] && return 0
 
   return 1
@@ -309,7 +305,7 @@ _gameserver_shortname_from_image() {
 _gameserver_read_image_from_unit_file() {
   local unit_base="$1"
   local unit_file
-  unit_file="$(_gameserver_unit_path "$unit_base")"
+  unit_file="$(_gameserver_resolved_unit_path "$unit_base")"
   [ -f "$unit_file" ] || return 1
 
   awk -F= '
@@ -325,7 +321,7 @@ _gameserver_read_image_from_unit_file() {
 _gameserver_read_data_volume_from_unit_file() {
   local unit_base="$1"
   local unit_file
-  unit_file="$(_gameserver_unit_path "$unit_base")"
+  unit_file="$(_gameserver_resolved_unit_path "$unit_base")"
   [ -f "$unit_file" ] || return 1
 
   awk -F= '

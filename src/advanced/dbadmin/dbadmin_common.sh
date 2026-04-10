@@ -58,8 +58,8 @@ _dbadmin_is_tool_installed() {
   [ -z "$name" ] && return 1
 
   local unit_path
-  unit_path="$(rm_user_units_dir)/${name}.container"
-  if [ -f "$unit_path" ]; then
+  unit_path="$(_quadlet_runtime_or_legacy_unit_path "${name}.container" "$service" 2>/dev/null || true)"
+  if [ -n "${unit_path:-}" ] && [ -f "$unit_path" ]; then
     return 0
   fi
 
@@ -111,12 +111,14 @@ _dbadmin_is_instance_name_conflict() {
   local name="$1"
   [ -z "$name" ] && return 1
 
-  local user_units_dir
-  user_units_dir="$(rm_user_units_dir)"
-  if [ -d "$user_units_dir" ]; then
-    if [ -f "$user_units_dir/$name.container" ] || \
-       [ -f "$user_units_dir/$name.service" ] || \
-       [ -f "$user_units_dir/container-$name.service" ]; then
+  if declare -F rm_list_tgdb_runtime_quadlet_files_by_mode >/dev/null 2>&1; then
+    if rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null | awk -F'\t' -v want="${name}.container" 'NF >= 4 && $3 == want { found=1; exit } END { exit(found ? 0 : 1) }'; then
+      return 0
+    fi
+  else
+    local unit_root
+    unit_root="$(rm_quadlet_root_dir_by_mode rootless 2>/dev/null || echo "")"
+    if [ -n "${unit_root:-}" ] && [ -d "$unit_root" ] && find "$unit_root" -type f -name "${name}.container" -print -quit 2>/dev/null | grep -q .; then
       return 0
     fi
   fi

@@ -47,7 +47,7 @@ _list_pod_member_container_unit_files_by_scope() {
     local f
     while IFS= read -r -d '' f; do
         files+=("$f")
-    done < <(find "$dir" -maxdepth 1 \( -type f -o -type l \) -name "*.container" -print0 2>/dev/null)
+    done < <(find "$dir" \( -type f -o -type l \) -name "*.container" -print0 2>/dev/null)
 
     for f in "${files[@]}"; do
         [ -r "$f" ] || continue

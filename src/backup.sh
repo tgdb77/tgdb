@@ -35,13 +35,18 @@ BACKUP_DIR="$BACKUP_ROOT/backup"
 
 BACKUP_CONFIG_DIR="$(rm_persist_config_dir)"
 CONTAINERS_SYSTEMD_DIR="$(rm_user_units_dir)"
-BACKUP_CONTAINERS_SYSTEMD_DIR="$BACKUP_ROOT/quadlet"
+BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME="quadlet-runtime"
+BACKUP_QUADLET_RUNTIME_DIR="$BACKUP_ROOT/$BACKUP_QUADLET_RUNTIME_ARCHIVE_DIRNAME"
 BACKUP_TIMER_UNITS_DIR="$(rm_persist_timer_dir)"
 
 USER_SD_DIR="$(rm_user_systemd_dir)"
+# shellcheck disable=SC2034 # 供 backup_timers.sh / 子模組讀取
 BACKUP_SERVICE_NAME="tgdb-backup.service"
+# shellcheck disable=SC2034 # 供 backup_timers.sh / 子模組讀取
 BACKUP_TIMER_NAME="tgdb-backup.timer"
+# shellcheck disable=SC2034 # 供 backup_timers.sh / 子模組讀取
 BACKUP_SELECT_SERVICE_NAME="tgdb-backup-select.service"
+# shellcheck disable=SC2034 # 供 backup_timers.sh / 子模組讀取
 BACKUP_SELECT_TIMER_NAME="tgdb-backup-select.timer"
 
 # 避免在 set -u 模式下引用未初始化陣列
