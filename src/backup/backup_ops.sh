@@ -234,6 +234,12 @@ _backup_restore_from_archive() {
         tgdb_fail "解壓縮備份失敗：$archive" 1 || return $?
     fi
 
+    local restored_name
+    while IFS= read -r restored_name; do
+        [ -n "$restored_name" ] || continue
+        _backup_ensure_restored_instance_volume_dir "$restored_name" || true
+    done < <(_backup_archive_instance_names "$archive")
+
     if [ -d "$BACKUP_CONFIG_DIR" ]; then
         echo "✅ 已還原持久化設定目錄：$BACKUP_CONFIG_DIR"
     else
@@ -381,7 +387,7 @@ _backup_restore_selected_instance_from_archive() {
         _backup_resume_after_cold_snapshot
     fi
 
-    echo "⚠️ 注意：指定還原僅覆蓋同名實例的設定層 / instance 結構 / Quadlet，不包含 volume_dir。"
+    echo "⚠️ 注意：指定還原僅覆蓋同名實例的設定層 / instance 結構 / Quadlet，不包含 volume_dir 內容；若 App 使用 volume_dir，系統會自動補建必要目錄與 volume_subdirs。"
     return 0
 }
 
@@ -541,4 +547,3 @@ backup_restore_latest_cli() {
 backup_restore_selected_latest_interactive() {
     backup_restore_selected_latest_multi_interactive
 }
-
