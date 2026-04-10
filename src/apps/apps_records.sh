@@ -310,8 +310,9 @@ _app_full_remove_units_by_filenames() {
 
 _app_try_delete_path() {
   local delete_path="$1" method="${2:-unshare}"
-  local deploy_mode
+  local deploy_mode effective_method started_at finished_at elapsed=""
   deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+  started_at="$(date +%s 2>/dev/null || printf '%s\n' "")"
 
   if [ "$method" = "auto" ] || [ -z "$method" ]; then
     if [ "$deploy_mode" = "rootful" ]; then
@@ -320,6 +321,7 @@ _app_try_delete_path() {
       method="unshare"
     fi
   fi
+  effective_method="$method"
 
   case "$method" in
     rm)
@@ -333,7 +335,6 @@ _app_try_delete_path() {
         tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
         return 1
       fi
-      return 0
       ;;
     unshare|*)
       if [ "$deploy_mode" = "rootful" ]; then
@@ -344,18 +345,29 @@ _app_try_delete_path() {
             return 1
           fi
         fi
-        return 0
-      fi
-      if ! tgdb_podman unshare rm -rf "$delete_path" 2>/dev/null; then
-        if [ -d "$delete_path" ]; then
-          tgdb_warn "無法刪除實例資料夾：$delete_path"
-          tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
-          return 1
+      else
+        if ! tgdb_podman unshare rm -rf "$delete_path" 2>/dev/null; then
+          if [ -d "$delete_path" ]; then
+            tgdb_warn "無法刪除實例資料夾：$delete_path"
+            tgdb_warn "可能因權限不足（例如容器以 root 建立檔案），請使用 sudo 或 root 手動清理。"
+            return 1
+          fi
         fi
       fi
-      return 0
       ;;
   esac
+
+  finished_at="$(date +%s 2>/dev/null || printf '%s\n' "")"
+  if [[ "$started_at" =~ ^[0-9]+$ ]] && [[ "$finished_at" =~ ^[0-9]+$ ]] && [ "$finished_at" -ge "$started_at" ]; then
+    elapsed=$((finished_at - started_at))
+  fi
+
+  if [[ "$elapsed" =~ ^[0-9]+$ ]] && [ "$elapsed" -ge 5 ]; then
+    tgdb_info "刪除目錄耗時 ${elapsed} 秒：$delete_path（方式：$effective_method）"
+    tgdb_info "若目錄含大量小檔案、volume_dir 資料量大、位於慢速或遠端檔案系統，或前一步仍在等待容器停止，整體移除會較久。"
+  fi
+
+  return 0
 }
 
 _app_record_files() {

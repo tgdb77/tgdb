@@ -10,6 +10,7 @@ _TGDB_TIMER_REGISTRY_LOADED=1
 
 TGDB_TIMER_REGISTRY=(
   "backup|自動備份|backup|tgdb_timer_define_backup_task"
+  "backup_select|指定實例自動備份|backup|tgdb_timer_define_backup_select_task"
   "dbbackup_all|數據庫批次匯出|dbadmin-p|tgdb_timer_define_dbbackup_all_task"
   "kopia_backup|Kopia 統一備份|kopia-p|tgdb_timer_define_kopia_backup_task"
   "nginx_ssl|Nginx SSL 續簽|nginx-p|tgdb_timer_define_nginx_ssl_task"

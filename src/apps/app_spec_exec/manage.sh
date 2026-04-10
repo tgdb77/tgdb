@@ -212,7 +212,11 @@ appspec_full_remove_instance() {
     if declare -F _app_try_delete_path >/dev/null 2>&1; then
       _app_try_delete_path "$delete_path" "$method" || true
     else
-      tgdb_podman unshare rm -rf "$delete_path" 2>/dev/null || true
+      if [ "$deploy_mode" = "rootful" ]; then
+        _tgdb_run_privileged rm -rf "$delete_path" 2>/dev/null || true
+      else
+        tgdb_podman unshare rm -rf "$delete_path" 2>/dev/null || true
+      fi
     fi
   fi
 
@@ -236,7 +240,11 @@ appspec_full_remove_instance() {
     if declare -F _app_try_delete_path >/dev/null 2>&1; then
       _app_try_delete_path "$volume_dir" "$method" || true
     else
-      tgdb_podman unshare rm -rf "$volume_dir" 2>/dev/null || true
+      if [ "$deploy_mode" = "rootful" ]; then
+        _tgdb_run_privileged rm -rf "$volume_dir" 2>/dev/null || true
+      else
+        tgdb_podman unshare rm -rf "$volume_dir" 2>/dev/null || true
+      fi
     fi
   fi
 
@@ -245,7 +253,9 @@ appspec_full_remove_instance() {
   if _appspec_truthy "$purge"; then
     local f
     while IFS= read -r f; do
-      [ -n "$f" ] && _apps_remove_file "$deploy_mode" "$f" 2>/dev/null || true
+      if [ -n "$f" ]; then
+        _apps_remove_file "$deploy_mode" "$f" 2>/dev/null || true
+      fi
     done < <(appspec_record_files "$service" "$name" 2>/dev/null || true)
   fi
 
