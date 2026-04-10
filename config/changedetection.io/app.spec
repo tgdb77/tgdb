@@ -5,6 +5,7 @@ doc_url=https://github.com/dgtlmoon/changedetection.io
 menu_order=16
 
 base_port=5656
+
 instance_subdirs=changedetection-data
 record_subdirs=changedetection-data
 
@@ -13,15 +14,9 @@ config_dest=.env
 config_mode=600
 config_label=.env（環境變數）
 
-full_remove_delete_method=rm
-
 success_extra=ℹ️ 反代完成後，請編輯 ChangeDetection.io 的 Quadlet/紀錄，將環境變數 BASE_URL 改成你的域名並取消註釋。
 
 quadlet_type=multi
-
-# unit：多單元（pod + containers）
-# - suffix：輸出檔案為 ${container_name}${suffix}（例如 myapp.pod / myapp.container / myapp-browser.container）
-# - template：相對於 config/<service>/
 unit=pod|template=quadlet/default.pod|suffix=.pod
 unit=main|template=quadlet/default.container|suffix=.container
 unit=browser|template=quadlet/default2.container|suffix=-browser.container
