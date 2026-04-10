@@ -87,21 +87,15 @@ _kopia_unit_volume_host_for_container_path() {
 }
 
 _kopia_scan_container_units() {
-  local -a scan_dirs=()
+  if declare -F rm_list_tgdb_runtime_quadlet_files_by_mode >/dev/null 2>&1; then
+    rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null | awk -F'\t' 'NF >= 4 && $3 ~ /\.container$/ { print $4 }'
+  fi
 
-  local user_units_dir persist_dir
-  user_units_dir="$(rm_user_units_dir 2>/dev/null || echo "")"
+  local persist_dir
   persist_dir="$(rm_persist_config_dir 2>/dev/null || echo "")"
-
-  [ -n "${user_units_dir:-}" ] && [ -d "$user_units_dir" ] && scan_dirs+=("$user_units_dir")
-  [ -n "${persist_dir:-}" ] && [ -d "$persist_dir" ] && scan_dirs+=("$persist_dir")
-
-  [ ${#scan_dirs[@]} -gt 0 ] || return 0
-
-  local dir file
-  for dir in "${scan_dirs[@]}"; do
-    find "$dir" -type f -name "*.container" -print 2>/dev/null || true
-  done
+  if [ -n "${persist_dir:-}" ] && [ -d "$persist_dir" ]; then
+    find "$persist_dir" -type f -name "*.container" -print 2>/dev/null || true
+  fi
 }
 
 _kopia_collect_db_data_dirs() {
@@ -135,4 +129,3 @@ _kopia_has_db_dump_targets() {
   done < <(_kopia_collect_db_data_dirs)
   return 1
 }
-

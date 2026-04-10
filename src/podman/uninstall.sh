@@ -30,6 +30,30 @@ _disable_user_podman_units() {
 }
 
 _purge_user_quadlet_files() {
+    if declare -F rm_list_tgdb_runtime_quadlet_files_by_mode >/dev/null 2>&1; then
+        local -a records=()
+        local line
+        while IFS= read -r line; do
+            [ -n "$line" ] && records+=("$line")
+        done < <(rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null || true)
+
+        [ ${#records[@]} -gt 0 ] || return 0
+
+        local base path
+        for line in "${records[@]}"; do
+            IFS=$'\t' read -r _scope _service base path _managed <<< "$line"
+            [ -n "${base:-}" ] || continue
+            _unit_try_disable_now "$base" || true
+        done
+        for line in "${records[@]}"; do
+            IFS=$'\t' read -r _scope _service base path _managed <<< "$line"
+            [ -n "${path:-}" ] || continue
+            rm -f -- "$path" 2>/dev/null || true
+        done
+        _systemctl_user_try daemon-reload || true
+        return 0
+    fi
+
     local user_units_dir
     user_units_dir="$(rm_user_units_dir)"
     [ -n "$user_units_dir" ] || return 0
@@ -88,7 +112,7 @@ uninstall_podman_environment() {
     echo "=================================="
     echo "此操作將："
     echo "- 停用使用者層級 Podman/Quadlet 相關單元（container/network/volume/pod...）"
-    echo "- 移除所有 Quadlet 單元檔（*.container/*.network/*.volume/*.pod/*.kube/*.device/*.image）"
+    echo "- 先移除 TGDB 管理的 Quadlet runtime 單元（以及後續清理整個 rootless Podman 環境）"
     echo "- 刪除所有容器、Pod、映像、網路與卷（rootless）"
     echo "- 移除使用者 podman 設定與資料目錄 (~/.config|~/.local/share|~/.cache/containers)"
     echo "- 可選：移除系統套件 podman（以及 TGDB 自動安裝的 polkit/policykit-1）、停用 root 計時器"

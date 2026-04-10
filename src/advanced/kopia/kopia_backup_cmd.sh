@@ -206,10 +206,11 @@ cmd_restore_overwrite() {
   backup_root="$(tgdb_backup_root)"
   tgdb_name="$(basename "$TGDB_DIR" 2>/dev/null || echo "app")"
 
-  local main_source config_source quadlet_source source_mode
+  local main_source config_source quadlet_source source_mode quadlet_dir_name
   main_source="/data/$tgdb_name"
   config_source="/data/config"
-  quadlet_source="/data/quadlet"
+  quadlet_dir_name="$(_kopia_quadlet_runtime_archive_dirname)"
+  quadlet_source="/data/$quadlet_dir_name"
   source_mode="split"
 
   _kopia_ensure_container_running "kopia" || return 1
@@ -258,7 +259,7 @@ cmd_restore_overwrite() {
 
   if [ "$main_source" = "/data" ]; then
     source_mode="root"
-    tgdb_warn "偵測到來源快照為 /data，將使用 root 模式還原（自動拆回 $tgdb_name/config/quadlet）。"
+    tgdb_warn "偵測到來源快照為 /data，將使用 root 模式還原（自動拆回 $tgdb_name/config/$quadlet_dir_name）。"
   fi
 
   local -a main_ids=()
@@ -275,10 +276,16 @@ cmd_restore_overwrite() {
         tgdb_warn "未取得 $config_source 快照，後續將略過 config 還原。"
       fi
     fi
-    if [ -d "$backup_root/quadlet" ]; then
+    if [ -d "$backup_root/$quadlet_dir_name" ]; then
       mapfile -t quadlet_ids < <(printf '%s\n' "$all_raw" | _kopia_snapshot_ids_for_source_from_all_text "$quadlet_source" 2>/dev/null || true)
       if [ ${#quadlet_ids[@]} -eq 0 ]; then
-        tgdb_warn "未取得 $quadlet_source 快照，後續將略過 quadlet 還原。"
+        tgdb_warn "未取得 $quadlet_source 快照，後續將略過 Quadlet runtime 還原。"
+      fi
+    elif [ -d "$backup_root/quadlet" ]; then
+      quadlet_source="/data/quadlet"
+      mapfile -t quadlet_ids < <(printf '%s\n' "$all_raw" | _kopia_snapshot_ids_for_source_from_all_text "$quadlet_source" 2>/dev/null || true)
+      if [ ${#quadlet_ids[@]} -eq 0 ]; then
+        tgdb_warn "未取得 $quadlet_source 快照，後續將略過 Quadlet runtime 還原。"
       fi
     fi
   fi
@@ -350,9 +357,9 @@ cmd_restore_overwrite() {
   done
   echo "----------------------------------"
   if [ "$source_mode" = "root" ]; then
-    echo "可選版本範圍：1-$max_common（來源為 /data，將自動拆回 $tgdb_name/config/quadlet）"
+    echo "可選版本範圍：1-$max_common（來源為 /data，將自動拆回 $tgdb_name/config/$quadlet_dir_name）"
   else
-    echo "可對齊版本範圍：1-$max_common（確保主要目錄與 config/quadlet 版本一致）"
+    echo "可對齊版本範圍：1-$max_common（確保主要目錄與 config/$quadlet_dir_name 版本一致）"
   fi
 
   local pick selected_rank selected_id
@@ -418,10 +425,10 @@ cmd_restore_overwrite() {
       restore_subdirs+=("config")
     fi
     if [ ${#quadlet_ids[@]} -ge "$selected_rank" ]; then
-      restore_labels+=("quadlet")
+      restore_labels+=("${quadlet_source#/data/}")
       restore_sources+=("$quadlet_source")
       restore_ids+=("${quadlet_ids[$((selected_rank-1))]}")
-      restore_subdirs+=("quadlet")
+      restore_subdirs+=("${quadlet_source#/data/}")
     fi
   fi
 
@@ -491,14 +498,14 @@ cmd_restore_overwrite() {
   local -a apply_labels=() apply_subdirs=()
   if [ "$source_mode" = "root" ]; then
     local root_sub
-    for root_sub in "$tgdb_name" "config" "quadlet"; do
+    for root_sub in "$tgdb_name" "config" "$quadlet_dir_name" "quadlet"; do
       if [ -d "$stage_dir/$root_sub" ]; then
         apply_labels+=("$root_sub")
         apply_subdirs+=("$root_sub")
       fi
     done
     if [ ${#apply_subdirs[@]} -eq 0 ]; then
-      tgdb_fail "root 模式還原後未找到可套用目錄（$tgdb_name/config/quadlet）。" 1 || true
+      tgdb_fail "root 模式還原後未找到可套用目錄（$tgdb_name/config/$quadlet_dir_name）。" 1 || true
       echo "⚠️ 已保留暫存目錄供排查：$stage_dir"
       return 1
     fi
@@ -566,7 +573,7 @@ cmd_restore_overwrite() {
     if [ "$subdir" = "." ] || [ "$subdir" = "config" ]; then
       config_applied=1
     fi
-    if [ "$subdir" = "quadlet" ]; then
+    if [ "$subdir" = "$quadlet_dir_name" ] || [ "$subdir" = "quadlet" ]; then
       quadlet_applied=1
     fi
   done
@@ -581,7 +588,7 @@ cmd_restore_overwrite() {
   fi
 
   if [ "$quadlet_applied" -eq 1 ]; then
-    echo "⏳ 正在同步 quadlet 至使用者單元目錄（~/.config/containers/systemd）..."
+    echo "⏳ 正在同步 Quadlet runtime 至使用者單元目錄（~/.config/containers/systemd）..."
     _kopia_sync_quadlet_to_user_units || true
   fi
 
@@ -608,8 +615,19 @@ cmd_restore_overwrite() {
   _kopia_prepare_nginx_cache_dirs || true
 
   if _kopia_has_systemctl_user; then
+    local runtime_apply_dir=""
+    runtime_apply_dir="$(_kopia_find_runtime_quadlet_dir_in_tree "$backup_root" 2>/dev/null || true)"
     echo "⏳ 正在重整並啟用所有 Quadlet 單元..."
-    _kopia_enable_all_units_from_units_dir || true
+    if [ -n "${runtime_apply_dir:-}" ] && [ -d "$runtime_apply_dir" ]; then
+      local -a restored_units=()
+      local unit_name
+      while IFS= read -r unit_name; do
+        [ -n "$unit_name" ] && restored_units+=("$unit_name")
+      done < <(_kopia_collect_unit_filenames_from_dir "$runtime_apply_dir")
+      _kopia_enable_units_by_filenames "${restored_units[@]}" || true
+    else
+      _kopia_enable_all_units_from_units_dir || true
+    fi
   elif [ "$had_running" -eq 1 ]; then
     echo "▶️ 未偵測到 systemctl --user，嘗試恢復原本服務..."
     _kopia_resume_active_units || true

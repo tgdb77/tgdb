@@ -224,38 +224,162 @@ _kopia_start_unit_by_filename() {
   _systemctl_user_try start --no-block -- "${candidates[@]}" >/dev/null 2>&1 || true
 }
 
+_kopia_quadlet_runtime_archive_dirname() {
+  printf '%s\n' "quadlet-runtime"
+}
+
+_kopia_quadlet_runtime_stage_dir() {
+  local backup_root
+  backup_root="$(tgdb_backup_root)"
+  printf '%s\n' "$backup_root/$(_kopia_quadlet_runtime_archive_dirname)"
+}
+
+_kopia_iter_runtime_quadlet_records() {
+  rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null || true
+}
+
+_kopia_iter_runtime_quadlet_paths() {
+  local path
+  while IFS=$'\t' read -r _scope _service _base path _managed; do
+    [ -n "${path:-}" ] || continue
+    printf '%s\n' "$path"
+  done < <(_kopia_iter_runtime_quadlet_records)
+}
+
+_kopia_runtime_quadlet_rel_path_from_root() {
+  local path="$1"
+  local root
+  root="$(rm_quadlet_root_dir_by_mode rootless 2>/dev/null || rm_user_units_dir)"
+  [ -n "${path:-}" ] || return 1
+  case "$path" in
+    "$root"/*)
+      printf '%s\n' "${path#"$root"/}"
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+_kopia_collect_unit_filenames_from_dir() {
+  local dir="$1"
+  [ -d "$dir" ] || return 0
+
+  find "$dir" -type f \
+    \( -name "*.container" -o -name "*.pod" -o -name "*.network" -o -name "*.volume" -o -name "*.device" -o -name "*.kube" -o -name "*.image" \) \
+    -printf '%f\n' 2>/dev/null | awk 'NF && !seen[$0]++'
+}
+
+_kopia_find_runtime_quadlet_dir_in_tree() {
+  local base_dir="$1"
+  [ -n "${base_dir:-}" ] || return 1
+
+  if [ -d "$base_dir/$(_kopia_quadlet_runtime_archive_dirname)" ]; then
+    printf '%s\n' "$base_dir/$(_kopia_quadlet_runtime_archive_dirname)"
+    return 0
+  fi
+  if [ -d "$base_dir/quadlet" ]; then
+    printf '%s\n' "$base_dir/quadlet"
+    return 0
+  fi
+  return 1
+}
+
+_kopia_restore_runtime_quadlet_tree() {
+  local src_dir="$1"
+  local dst_dir
+  dst_dir="$(rm_quadlet_root_dir_by_mode rootless 2>/dev/null || rm_user_units_dir)"
+  [ -d "$src_dir" ] || return 1
+  mkdir -p "$dst_dir" 2>/dev/null || return 1
+  cp -a "$src_dir/." "$dst_dir/" 2>/dev/null
+}
+
+_kopia_stage_runtime_quadlet_tree() {
+  local stage_dir="$1"
+  [ -n "${stage_dir:-}" ] || return 1
+
+  rm -rf -- "$stage_dir" 2>/dev/null || true
+  mkdir -p "$stage_dir" 2>/dev/null || return 1
+
+  local copied=0 path rel dest
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rel="$(_kopia_runtime_quadlet_rel_path_from_root "$path" 2>/dev/null || true)"
+    [ -n "${rel:-}" ] || continue
+    dest="$stage_dir/$rel"
+    mkdir -p "$(dirname "$dest")" 2>/dev/null || return 1
+    if ! cp -a "$path" "$dest" 2>/dev/null; then
+      tgdb_warn "同步 Quadlet runtime 失敗：$path"
+      continue
+    fi
+    copied=$((copied + 1))
+  done < <(_kopia_iter_runtime_quadlet_paths)
+
+  if [ "$copied" -le 0 ]; then
+    rm -rf -- "$stage_dir" 2>/dev/null || true
+    return 1
+  fi
+  return 0
+}
+
+_kopia_enable_units_by_filenames() {
+  [ "$#" -gt 0 ] || return 0
+  _kopia_has_systemctl_user || return 0
+
+  _systemctl_user_try daemon-reload >/dev/null 2>&1 || true
+
+  local -a networks=() volumes=() devices=() pods=() containers=() others=()
+  local u
+  for u in "$@"; do
+    [ -n "$u" ] || continue
+    case "$u" in
+      *.network) networks+=("$u") ;;
+      *.volume) volumes+=("$u") ;;
+      *.device) devices+=("$u") ;;
+      *.pod) pods+=("$u") ;;
+      *.container) containers+=("$u") ;;
+      *) others+=("$u") ;;
+    esac
+  done
+
+  for u in "${networks[@]}"; do _quadlet_enable_now_by_filename "$u"; done
+  for u in "${volumes[@]}"; do _quadlet_enable_now_by_filename "$u"; done
+  for u in "${devices[@]}"; do _quadlet_enable_now_by_filename "$u"; done
+  for u in "${pods[@]}"; do _quadlet_enable_now_by_filename "$u"; done
+  for u in "${containers[@]}"; do _quadlet_enable_now_by_filename "$u"; done
+  for u in "${others[@]}"; do _quadlet_enable_now_by_filename "$u"; done
+}
+
 _kopia_collect_active_user_units() {
   KOPIA_ACTIVE_CONTAINERS=()
   KOPIA_ACTIVE_PODS=()
 
-  local containers_systemd_dir
-  containers_systemd_dir="$(rm_user_units_dir)"
-  [ -d "$containers_systemd_dir" ] || return 0
   _kopia_has_systemctl_user || return 0
 
   local -A seen_cont=()
   local -A seen_pod=()
   local f fname
 
-  while IFS= read -r -d $'\0' f; do
-    fname="$(basename "$f")"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    fname="${f##*/}"
     if _kopia_unit_is_active_by_filename "$fname"; then
       if [ -z "${seen_cont["$fname"]+x}" ]; then
         seen_cont["$fname"]=1
         KOPIA_ACTIVE_CONTAINERS+=("$fname")
       fi
     fi
-  done < <(find "$containers_systemd_dir" -maxdepth 1 -type f -name "*.container" -print0 2>/dev/null)
+  done < <(_kopia_iter_runtime_quadlet_paths | awk '/\.container$/')
 
-  while IFS= read -r -d $'\0' f; do
-    fname="$(basename "$f")"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    fname="${f##*/}"
     if _kopia_unit_is_active_by_filename "$fname"; then
       if [ -z "${seen_pod["$fname"]+x}" ]; then
         seen_pod["$fname"]=1
         KOPIA_ACTIVE_PODS+=("$fname")
       fi
     fi
-  done < <(find "$containers_systemd_dir" -maxdepth 1 -type f -name "*.pod" -print0 2>/dev/null)
+  done < <(_kopia_iter_runtime_quadlet_paths | awk '/\.pod$/')
 }
 
 _kopia_resume_active_units() {
@@ -274,54 +398,33 @@ _kopia_resume_active_units() {
 }
 
 _kopia_enable_all_units_from_units_dir() {
-  local containers_systemd_dir
-  containers_systemd_dir="$(rm_user_units_dir)"
-  [ -d "$containers_systemd_dir" ] || return 0
   _kopia_has_systemctl_user || return 0
 
-  _systemctl_user_try daemon-reload >/dev/null 2>&1 || true
-
-  local -a networks=() volumes=() devices=() pods=() containers=()
-  local f b
-  while IFS= read -r -d $'\0' f; do
-    b="$(basename "$f")"
-    case "$b" in
-      *.network) networks+=("$b") ;;
-      *.volume) volumes+=("$b") ;;
-      *.device) devices+=("$b") ;;
-      *.pod) pods+=("$b") ;;
-      *.container) containers+=("$b") ;;
-    esac
-  done < <(find "$containers_systemd_dir" -maxdepth 1 -type f \( -name "*.network" -o -name "*.volume" -o -name "*.device" -o -name "*.pod" -o -name "*.container" \) -print0 2>/dev/null)
-
+  local -a units=()
   local u
-  for u in "${networks[@]}"; do _quadlet_enable_now_by_filename "$u"; done
-  for u in "${volumes[@]}"; do _quadlet_enable_now_by_filename "$u"; done
-  for u in "${devices[@]}"; do _quadlet_enable_now_by_filename "$u"; done
-  for u in "${pods[@]}"; do _quadlet_enable_now_by_filename "$u"; done
-  for u in "${containers[@]}"; do _quadlet_enable_now_by_filename "$u"; done
-  return 0
+  while IFS= read -r u; do
+    [ -n "$u" ] && units+=("$u")
+  done < <(_kopia_collect_unit_filenames_from_dir "$(rm_quadlet_root_dir_by_mode rootless 2>/dev/null || rm_user_units_dir)")
+
+  _kopia_enable_units_by_filenames "${units[@]}"
 }
 
 _kopia_clear_user_quadlet_units() {
-  local dst_dir
-  dst_dir="$(rm_user_units_dir)"
-  [ -d "$dst_dir" ] || return 0
+  local -a records=()
+  local line
+  while IFS= read -r line; do
+    [ -n "$line" ] && records+=("$line")
+  done < <(_kopia_iter_runtime_quadlet_records)
 
-  local -a unit_files=()
-  local f
-  while IFS= read -r -d $'\0' f; do
-    unit_files+=("$(basename "$f")")
-  done < <(find "$dst_dir" -maxdepth 1 -type f \
-    \( -name "*.container" -o -name "*.pod" -o -name "*.network" -o -name "*.volume" -o -name "*.device" -o -name "*.kube" -o -name "*.image" -o -name "*.build" \) \
-    -print0 2>/dev/null)
-
-  [ ${#unit_files[@]} -gt 0 ] || return 0
+  [ ${#records[@]} -gt 0 ] || return 0
 
   if _kopia_has_systemctl_user; then
     _systemctl_user_try daemon-reload >/dev/null 2>&1 || true
     local unit
-    for unit in "${unit_files[@]}"; do
+    local path
+    for line in "${records[@]}"; do
+      IFS=$'\t' read -r _scope _service unit path _managed <<< "$line"
+      [ -n "${unit:-}" ] || continue
       local -a candidates=()
       mapfile -t candidates < <(_kopia_unit_candidates_by_filename "$unit")
       _systemctl_user_try disable --now -- "${candidates[@]}" >/dev/null 2>&1 || true
@@ -329,8 +432,11 @@ _kopia_clear_user_quadlet_units() {
   fi
 
   local removed=0 failed=0
-  for f in "${unit_files[@]}"; do
-    if rm -f -- "$dst_dir/$f" 2>/dev/null; then
+  local path
+  for line in "${records[@]}"; do
+    IFS=$'\t' read -r _scope _service _base path _managed <<< "$line"
+    [ -n "${path:-}" ] || continue
+    if rm -f -- "$path" 2>/dev/null; then
       removed=$((removed + 1))
     else
       failed=$((failed + 1))
@@ -338,22 +444,22 @@ _kopia_clear_user_quadlet_units() {
   done
 
   if [ "$failed" -gt 0 ]; then
-    tgdb_warn "清理既有 Quadlet 單元時有失敗（成功=$removed / 失敗=$failed）：$dst_dir"
+    tgdb_warn "清理 TGDB 管理的 Quadlet runtime 時有失敗（成功=$removed / 失敗=$failed）。"
     return 1
   fi
 
-  echo "ℹ️ 已清理既有 Quadlet 單元：$dst_dir（共 $removed 個）"
+  echo "ℹ️ 已清理 TGDB 管理的 Quadlet runtime（共 $removed 個）"
   return 0
 }
 
 _kopia_sync_quadlet_to_user_units() {
   local backup_root src_dir dst_dir
   backup_root="$(tgdb_backup_root)"
-  src_dir="$backup_root/quadlet"
-  dst_dir="$(rm_user_units_dir)"
+  src_dir="$(_kopia_find_runtime_quadlet_dir_in_tree "$backup_root" 2>/dev/null || true)"
+  dst_dir="$(rm_quadlet_root_dir_by_mode rootless 2>/dev/null || rm_user_units_dir)"
 
-  if [ ! -d "$src_dir" ]; then
-    tgdb_warn "未找到還原後 quadlet 目錄：$src_dir（略過同步）。"
+  if [ -z "${src_dir:-}" ] || [ ! -d "$src_dir" ]; then
+    tgdb_warn "未找到還原後 Quadlet runtime 目錄（略過同步）。"
     return 1
   fi
 
@@ -364,11 +470,11 @@ _kopia_sync_quadlet_to_user_units() {
 
   _kopia_clear_user_quadlet_units || true
 
-  if ! cp -a "$src_dir/." "$dst_dir/"; then
-    tgdb_warn "同步 Quadlet 單元失敗：$src_dir -> $dst_dir"
+  if ! _kopia_restore_runtime_quadlet_tree "$src_dir"; then
+    tgdb_warn "同步 Quadlet runtime 失敗：$src_dir -> $dst_dir"
     return 1
   fi
 
-  echo "✅ 已同步 Quadlet 單元：$src_dir -> $dst_dir"
+  echo "✅ 已同步 Quadlet runtime：$src_dir -> $dst_dir"
   return 0
 }

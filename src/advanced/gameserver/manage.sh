@@ -359,7 +359,7 @@ gameserver_p_remove() {
   fi
 
   local unit_file
-  unit_file="$(_gameserver_unit_path "$unit_base")"
+  unit_file="$(_gameserver_resolved_unit_path "$unit_base")"
 
   if _remove_quadlet_unit "${unit_base}.container"; then
     if [ "$delete_volume" = "1" ]; then
@@ -384,7 +384,7 @@ gameserver_p_edit_unit() {
   _gameserver_select_unit_base unit_base "編輯伺服器單元" || return 0
 
   local unit_file
-  unit_file="$(_gameserver_unit_path "$unit_base")"
+  unit_file="$(_gameserver_resolved_unit_path "$unit_base")"
   if [ ! -f "$unit_file" ]; then
     tgdb_fail "找不到可編輯的單元檔：$unit_file" 1 || true
     ui_pause "按任意鍵返回..."

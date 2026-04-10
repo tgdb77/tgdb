@@ -17,7 +17,7 @@ _find_quadlet_path() {
   local deploy_mode
   deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
   local d
-  d=$(_service_quadlet_dir "$1")
+  d="$(_service_quadlet_dir "$1")"
   if _apps_path_exists "$deploy_mode" "$d/$2.container"; then
     echo "$d/$2.container"
     return 0
@@ -68,7 +68,7 @@ _app_deploy_from_record_single() {
     fi
   fi
 
-  if ! _install_unit_and_enable "$name" "$unit_content"; then
+  if ! _install_service_unit_and_enable "$service" "$name" "$unit_content"; then
     tgdb_err "從紀錄部署失敗：$name（單元啟用失敗）"
     ui_pause
     return 1
@@ -200,7 +200,7 @@ _app_deploy_from_record_multi() {
     fi
   fi
 
-  if ! _install_quadlet_units_from_files "${unit_files[@]}"; then
+  if ! _install_service_quadlet_units_from_files "$service" "$name" "${unit_files[@]}"; then
     tgdb_err "從紀錄部署失敗：$name（單元啟用失敗）"
     ui_pause
     return 1
@@ -266,14 +266,18 @@ _app_restart_units_by_filenames() {
 }
 
 _app_full_remove_units_by_filenames() {
+  local service="$1"
+  shift || true
+
   if [ "$#" -le 0 ]; then
     return 0
   fi
 
   local unit base
-  local deploy_mode unit_dir
+  local deploy_mode unit_dir legacy_unit_dir
   deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
-  unit_dir="$(_apps_unit_dir_for_mode "$deploy_mode" 2>/dev/null || rm_user_units_dir)"
+  unit_dir="$(_apps_unit_dir_for_mode "$deploy_mode" "$service" 2>/dev/null || echo "")"
+  legacy_unit_dir="$(_apps_legacy_unit_dir_for_mode "$deploy_mode" 2>/dev/null || rm_user_units_dir)"
 
   for unit in "$@"; do
     case "$unit" in
@@ -304,7 +308,19 @@ _app_full_remove_units_by_filenames() {
   done
 
   for unit in "$@"; do
-    _apps_remove_file "$deploy_mode" "$unit_dir/$unit" 2>/dev/null || true
+    local runtime_path=""
+    if [ -n "$service" ]; then
+      runtime_path="$(_apps_runtime_unit_path_for_service "$deploy_mode" "$service" "$unit" 2>/dev/null || echo "")"
+    elif [ -n "$unit_dir" ]; then
+      runtime_path="$unit_dir/$unit"
+    fi
+
+    if [ -n "$runtime_path" ]; then
+      _apps_remove_file "$deploy_mode" "$runtime_path" 2>/dev/null || true
+    fi
+    if [ -n "$legacy_unit_dir" ]; then
+      _apps_remove_file "$deploy_mode" "$legacy_unit_dir/$unit" 2>/dev/null || true
+    fi
   done
 }
 
@@ -585,7 +601,7 @@ _deploy_from_config_quadlet_unit() {
       ;;
     *)
       local dest
-      dest="$(rm_user_unit_path "$name.$type")"
+      dest="$(_quadlet_runtime_unit_path "$name.$type")"
       _write_file "$dest" "$(cat "$quad")"
       _systemctl_user_try daemon-reload || true
       ;;

@@ -16,6 +16,10 @@ DERPER_STUN_PORT="${DERPER_STUN_PORT:-3478}"
 DERPER_DEFAULT_REGION_ID="${DERPER_DEFAULT_REGION_ID:-901}"
 DERPER_DEFAULT_REGION_NAME="${DERPER_DEFAULT_REGION_NAME:-TGDB DERP}"
 
+_derper_resolved_unit_path() {
+  _quadlet_runtime_or_legacy_unit_path "${DERPER_CONTAINER_NAME}.container" "derper"
+}
+
 _derper_repo_tpl_env() {
   printf '%s\n' "$CONFIG_DIR/derper/configs/derper.env.example"
 }
@@ -737,7 +741,10 @@ derper_p_deploy() {
   instance_dir="$(_derper_instance_dir)"
   mkdir -p "$instance_dir" 2>/dev/null || true
   unit_content="$(_derper_render_quadlet_unit "$instance_dir" "$derp_port")" || { ui_pause "按任意鍵返回..."; return 1; }
-  _install_unit_and_enable "$DERPER_CONTAINER_NAME" "$unit_content" || true
+  _install_service_unit_and_enable "derper" "$DERPER_CONTAINER_NAME" "$unit_content" || {
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
 
   _derper_firewall_maybe_open_ports "$derp_port" || true
 
@@ -792,9 +799,14 @@ derper_p_full_remove_integrated() {
   _systemctl_user_try stop -- "${DERPER_CONTAINER_NAME}.container" "container-${DERPER_CONTAINER_NAME}.service" "${DERPER_CONTAINER_NAME}.service" || true
 
   local unit_path
-  unit_path="$(rm_user_unit_path "${DERPER_CONTAINER_NAME}.container" 2>/dev/null || true)"
+  unit_path="$(_derper_resolved_unit_path 2>/dev/null || true)"
   if [ -n "${unit_path:-}" ] && [ -f "$unit_path" ]; then
     rm -f "$unit_path" 2>/dev/null || true
+  fi
+  local legacy_path=""
+  legacy_path="$(rm_legacy_quadlet_unit_path_by_mode "${DERPER_CONTAINER_NAME}.container" rootless 2>/dev/null || true)"
+  if [ -n "${legacy_path:-}" ] && [ "$legacy_path" != "$unit_path" ] && [ -f "$legacy_path" ]; then
+    rm -f "$legacy_path" 2>/dev/null || true
   fi
   _systemctl_user_try daemon-reload || true
 

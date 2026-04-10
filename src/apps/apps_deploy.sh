@@ -695,12 +695,12 @@ _deploy_app_finalize_from_staging() {
     if [ ${#unit_files[@]} -eq 0 ]; then
       tgdb_fail "找不到可部署的 Quadlet 單元檔案：$units_dir" 1 || return $?
     fi
-    if ! _install_quadlet_units_from_files "${unit_files[@]}"; then
+    if ! _install_service_quadlet_units_from_files "$service" "$name" "${unit_files[@]}"; then
       _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
       return 1
     fi
   else
-    if ! _install_unit_and_enable "$name" "$unit"; then
+    if ! _install_service_unit_and_enable "$service" "$name" "$unit"; then
       _cleanup_staging_dirs "$staging_instance_dir" "$staging_units_dir"
       return 1
     fi

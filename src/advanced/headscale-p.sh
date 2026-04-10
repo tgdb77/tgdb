@@ -15,6 +15,11 @@ HEADSCALE_CONTAINER_NAME="headscale"
 HEADSCALE_DEFAULT_HOST_PORT="18080"
 HEADSCALE_DEFAULT_UI_HOST_PORT="18081"
 
+_headscale_resolved_unit_path() {
+  local unit="$1"
+  _quadlet_runtime_or_legacy_unit_path "$unit" "headscale"
+}
+
 _headscale_load_tailscale_module() {
   if declare -F tgdb_load_module >/dev/null 2>&1; then
     tgdb_load_module "tailscale-p" || return 1
@@ -161,7 +166,7 @@ _headscale_prompt_pg_password() {
 
 _headscale_read_ports_from_installed_pod_unit() {
   local pod_unit
-  pod_unit="$(rm_user_unit_path "${HEADSCALE_CONTAINER_NAME}.pod" 2>/dev/null || true)"
+  pod_unit="$(_headscale_resolved_unit_path "${HEADSCALE_CONTAINER_NAME}.pod" 2>/dev/null || true)"
   [ -f "$pod_unit" ] || return 1
 
   local hp="" uhp="" line
@@ -556,9 +561,11 @@ _headscale_install_quadlet_units() {
     "$tmp_dir/${HEADSCALE_CONTAINER_NAME}-headplane.container"
   )
 
-  _install_quadlet_units_from_files "${units[@]}"
+  local rc=0
+  _install_service_quadlet_units_from_files "headscale" "$HEADSCALE_CONTAINER_NAME" "${units[@]}" || rc=$?
 
   rm -rf "$tmp_dir" 2>/dev/null || true
+  [ "$rc" -eq 0 ] || return "$rc"
   return 0
 }
 
@@ -910,9 +917,15 @@ headscale_p_deploy() {
     "container-${HEADSCALE_CONTAINER_NAME}-ui.service" \
     "${HEADSCALE_CONTAINER_NAME}-ui.service" 2>/dev/null || true
   local old_ui_unit
-  old_ui_unit="$(rm_user_unit_path "${HEADSCALE_CONTAINER_NAME}-ui.container" 2>/dev/null || true)"
+  old_ui_unit="$(_headscale_resolved_unit_path "${HEADSCALE_CONTAINER_NAME}-ui.container" 2>/dev/null || true)"
   if [ -n "${old_ui_unit:-}" ] && [ -f "$old_ui_unit" ]; then
     rm -f "$old_ui_unit" 2>/dev/null || true
+    _systemctl_user_try daemon-reload || true
+  fi
+  local old_ui_legacy=""
+  old_ui_legacy="$(rm_legacy_quadlet_unit_path_by_mode "${HEADSCALE_CONTAINER_NAME}-ui.container" rootless 2>/dev/null || true)"
+  if [ -n "${old_ui_legacy:-}" ] && [ "$old_ui_legacy" != "$old_ui_unit" ] && [ -f "$old_ui_legacy" ]; then
+    rm -f "$old_ui_legacy" 2>/dev/null || true
     _systemctl_user_try daemon-reload || true
   fi
   podman rm -f "${HEADSCALE_CONTAINER_NAME}-ui" 2>/dev/null || true
@@ -1052,9 +1065,14 @@ headscale_p_full_remove() {
     "${HEADSCALE_CONTAINER_NAME}-headplane.container" \
     "${HEADSCALE_CONTAINER_NAME}-ui.container"; do
     local p
-    p="$(rm_user_unit_path "$unit" 2>/dev/null || true)"
+    p="$(_headscale_resolved_unit_path "$unit" 2>/dev/null || true)"
     if [ -n "${p:-}" ] && [ -f "$p" ]; then
       rm -f "$p" 2>/dev/null || true
+    fi
+    local legacy_p=""
+    legacy_p="$(rm_legacy_quadlet_unit_path_by_mode "$unit" rootless 2>/dev/null || true)"
+    if [ -n "${legacy_p:-}" ] && [ "$legacy_p" != "$p" ] && [ -f "$legacy_p" ]; then
+      rm -f "$legacy_p" 2>/dev/null || true
     fi
   done
 

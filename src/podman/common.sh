@@ -27,19 +27,47 @@ _podman_scope_display_name() {
 _podman_unit_dir() {
     local scope
     scope="$(_podman_scope_normalize "${1:-user}")"
+    if declare -F rm_quadlet_root_dir_by_mode >/dev/null 2>&1; then
+        case "$scope" in
+            system) rm_quadlet_root_dir_by_mode rootful ;;
+            *) rm_quadlet_root_dir_by_mode rootless ;;
+        esac
+        return 0
+    fi
     case "$scope" in
-        system)
-            printf '%s\n' "/etc/containers/systemd"
-            ;;
-        *)
-            rm_user_units_dir
-            ;;
+        system) printf '%s\n' "/etc/containers/systemd" ;;
+        *) rm_user_units_dir ;;
     esac
 }
 
 _podman_unit_path() {
     local scope="$1" filename="$2"
     printf '%s\n' "$(_podman_unit_dir "$scope")/$filename"
+}
+
+_podman_tgdb_runtime_unit_root() {
+    local scope
+    scope="$(_podman_scope_normalize "${1:-user}")"
+    if declare -F rm_tgdb_runtime_quadlet_root_dir_by_mode >/dev/null 2>&1; then
+        case "$scope" in
+            system) rm_tgdb_runtime_quadlet_root_dir_by_mode rootful ;;
+            *) rm_tgdb_runtime_quadlet_root_dir_by_mode rootless ;;
+        esac
+        return 0
+    fi
+    printf '%s\n' "$(_podman_unit_dir "$scope")/tgdb"
+}
+
+_podman_service_runtime_unit_dir() {
+    local scope="$1" service="$2"
+    if declare -F rm_service_runtime_quadlet_dir_by_mode >/dev/null 2>&1; then
+        case "$(_podman_scope_normalize "$scope")" in
+            system) rm_service_runtime_quadlet_dir_by_mode "$service" rootful ;;
+            *) rm_service_runtime_quadlet_dir_by_mode "$service" rootless ;;
+        esac
+        return 0
+    fi
+    printf '%s\n' "$(_podman_tgdb_runtime_unit_root "$scope")/$service"
 }
 
 _podman_unit_scope_from_path() {
@@ -51,6 +79,27 @@ _podman_unit_scope_from_path() {
             printf '%s\n' "user"
             ;;
     esac
+}
+
+_podman_unit_service_from_path() {
+    local path="$1"
+    if declare -F rm_runtime_quadlet_service_from_path >/dev/null 2>&1; then
+        rm_runtime_quadlet_service_from_path "$path" 2>/dev/null || true
+        return 0
+    fi
+    printf '%s\n' ""
+}
+
+_podman_unit_is_tgdb_managed() {
+    local path="$1"
+    if declare -F rm_runtime_quadlet_is_tgdb_managed >/dev/null 2>&1; then
+        rm_runtime_quadlet_is_tgdb_managed "$path"
+        return $?
+    fi
+    case "$path" in
+        */tgdb/*) return 0 ;;
+    esac
+    return 1
 }
 
 _podman_runtime_dir_for_scope() {
@@ -325,16 +374,16 @@ _podman_collect_unit_records() {
     scope="$(_podman_scope_normalize "${1:-user}")"
     shift || true
 
-    local dir
-    dir="$(_podman_unit_dir "$scope")"
-    [ -d "$dir" ] || return 0
-
     local exts=("$@")
     if [ ${#exts[@]} -eq 0 ]; then
         exts=(container network volume pod device kube image)
     fi
 
-    local find_args=("$dir" -maxdepth 1 \( -type f -o -type l \) \()
+    local dir
+    dir="$(_podman_unit_dir "$scope")"
+    [ -d "$dir" ] || return 0
+
+    local find_args=("$dir" \( -type f -o -type l \) \()
     local first=true
     local e
     for e in "${exts[@]}"; do
@@ -405,7 +454,7 @@ _podman_resolve_unit_records() {
     fi
 
     local -A seen=()
-    local scope candidate dir path record
+    local scope candidate dir path record candidate_path
     for scope in user system; do
         if [ -n "$scope_hint" ] && [ "$scope" != "$scope_hint" ]; then
             continue
@@ -422,6 +471,27 @@ _podman_resolve_unit_records() {
                     printf '%s\n' "$record"
                 fi
             fi
+
+            if [ "$scope" = "system" ] && ! _podman_is_root; then
+                while IFS= read -r candidate_path; do
+                    [ -n "$candidate_path" ] || continue
+                    record="$scope"$'\t'"$candidate"$'\t'"$candidate_path"
+                    if [ -z "${seen[$record]+x}" ]; then
+                        seen["$record"]=1
+                        printf '%s\n' "$record"
+                    fi
+                done < <(_podman_run_scope_cmd "$scope" find "$dir" \( -type f -o -type l \) -name "$candidate" -print 2>/dev/null)
+                continue
+            fi
+
+            while IFS= read -r candidate_path; do
+                [ -n "$candidate_path" ] || continue
+                record="$scope"$'\t'"$candidate"$'\t'"$candidate_path"
+                if [ -z "${seen[$record]+x}" ]; then
+                    seen["$record"]=1
+                    printf '%s\n' "$record"
+                fi
+            done < <(find "$dir" \( -type f -o -type l \) -name "$candidate" -print 2>/dev/null)
         done
     done
 }
@@ -431,26 +501,11 @@ _podman_user_units_dir() {
 }
 
 _list_user_units() {
-    local dir
-    dir="$(_podman_user_units_dir)"
-    [ -d "$dir" ] || return 0
     local exts=("$@")
     if [ ${#exts[@]} -eq 0 ]; then
         exts=(container network volume pod device kube)
     fi
-    local find_args=("$dir" -maxdepth 1 \( -type f -o -type l \) \()
-    local first=true
-    local e
-    for e in "${exts[@]}"; do
-        if [ "$first" = true ]; then
-            find_args+=( -name "*.${e}" )
-            first=false
-        else
-            find_args+=( -o -name "*.${e}" )
-        fi
-    done
-    find_args+=( \) -exec basename {} \; )
-    find "${find_args[@]}" 2>/dev/null | sort -u
+    _podman_collect_unit_records user "${exts[@]}" | awk -F'\t' 'NF>=2 {print $2}' | sort -u
 }
 
 _list_podman_units() {
