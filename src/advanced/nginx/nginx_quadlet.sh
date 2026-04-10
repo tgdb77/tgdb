@@ -17,13 +17,16 @@ _render_quadlet_to_user() {
     _ensure_user_units_dir
     local tpl="$ROOT_DIR/config/nginx/quadlet/default.container"
     local out
-    out="$(rm_user_unit_path "nginx.container")"
+    out="$(_quadlet_runtime_unit_path "nginx.container" "nginx")"
     if [ ! -f "$tpl" ]; then
         tgdb_fail "找不到 Quadlet 樣板：$tpl" 1 || return $?
     fi
     local esc_tgdb
     esc_tgdb=$(_esc "$TGDB_DIR")
-    sed "s|\${TGDB_DIR}|$esc_tgdb|g" "$tpl" >"$out"
+    local content
+    content="$(sed "s|\${TGDB_DIR}|$esc_tgdb|g" "$tpl")"
+    content="$(_quadlet_runtime_unit_with_markers "$content" "nginx" "nginx")"
+    _write_file "$out" "$content"
     echo "$out"
 }
 
@@ -94,7 +97,7 @@ nginx_p_remove() {
     echo "=== 完全移除 Nginx（Quadlet） ==="
     _systemd_user_try_stop nginx
     _systemctl_user_try disable --now -- nginx.container nginx.service container-nginx.service || true
-    rm -f "$(rm_user_unit_path "nginx.container")" 2>/dev/null || true
+    rm -f "$(_quadlet_runtime_unit_path "nginx.container" "nginx")" 2>/dev/null || true
     _systemctl_user_try daemon-reload || true
     bash "$SSL_AUTO_RENEW_P" remove-timers || true
     if [ -f "$NGINX_WAF_MAINT_P" ]; then
@@ -125,7 +128,7 @@ nginx_p_remove_cli() {
 
     _systemd_user_try_stop nginx
     _systemctl_user_try disable --now -- nginx.container nginx.service container-nginx.service || true
-    rm -f "$(rm_user_unit_path "nginx.container")" 2>/dev/null || true
+    rm -f "$(_quadlet_runtime_unit_path "nginx.container" "nginx")" 2>/dev/null || true
     _systemctl_user_try daemon-reload || true
     bash "$SSL_AUTO_RENEW_P" remove-timers || true
     if [ -f "$NGINX_WAF_MAINT_P" ]; then

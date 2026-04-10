@@ -65,13 +65,52 @@ _apps_instance_dir_for_mode() {
   printf '%s\n' "$(_apps_runtime_dir_for_mode "$mode")/$name"
 }
 
-_apps_unit_dir_for_mode() {
+_apps_legacy_unit_dir_for_mode() {
   local scope
   scope="$(_apps_scope_for_mode "${1:-rootless}")" || return 1
   case "$scope" in
     system) rm_system_units_dir ;;
     user) rm_user_units_dir ;;
   esac
+}
+
+_apps_runtime_quadlet_root_for_mode() {
+  local mode
+  mode="$(_apps_normalize_deploy_mode "${1:-rootless}")" || return 1
+  if declare -F rm_tgdb_runtime_quadlet_root_dir_by_mode >/dev/null 2>&1; then
+    rm_tgdb_runtime_quadlet_root_dir_by_mode "$mode"
+    return 0
+  fi
+  printf '%s\n' "$(_apps_legacy_unit_dir_for_mode "$mode")/tgdb"
+}
+
+_apps_service_runtime_quadlet_dir_for_mode() {
+  local mode="$1" service="$2"
+  mode="$(_apps_normalize_deploy_mode "$mode")" || return 1
+  if declare -F rm_service_runtime_quadlet_dir_by_mode >/dev/null 2>&1; then
+    rm_service_runtime_quadlet_dir_by_mode "$service" "$mode"
+    return 0
+  fi
+  printf '%s\n' "$(_apps_runtime_quadlet_root_for_mode "$mode")/$service"
+}
+
+_apps_runtime_unit_path_for_service() {
+  local mode="$1" service="$2" filename="$3"
+  mode="$(_apps_normalize_deploy_mode "$mode")" || return 1
+  if declare -F rm_runtime_quadlet_unit_path_by_mode >/dev/null 2>&1; then
+    rm_runtime_quadlet_unit_path_by_mode "$service" "$filename" "$mode"
+    return 0
+  fi
+  printf '%s\n' "$(_apps_service_runtime_quadlet_dir_for_mode "$mode" "$service")/$filename"
+}
+
+_apps_unit_dir_for_mode() {
+  local mode="${1:-rootless}" service="${2:-}"
+  if [ -n "$service" ]; then
+    _apps_service_runtime_quadlet_dir_for_mode "$mode" "$service"
+    return $?
+  fi
+  _apps_runtime_quadlet_root_for_mode "$mode"
 }
 
 _apps_scope_label_for_mode() {
@@ -405,20 +444,25 @@ _apps_write_instance_metadata() {
 
 _apps_instance_exists_in_mode() {
   local name="$1" mode="$2"
-  local instance_dir units_dir persist_dir
+  local instance_dir units_dir legacy_units_dir persist_dir
   instance_dir="$(_apps_instance_dir_for_mode "$mode" "$name")"
   units_dir="$(_apps_unit_dir_for_mode "$mode")"
+  legacy_units_dir="$(_apps_legacy_unit_dir_for_mode "$mode" 2>/dev/null || echo "")"
   persist_dir="$(rm_persist_config_dir_by_mode "$mode" 2>/dev/null || true)"
 
   if _apps_dir_exists "$mode" "$instance_dir"; then
     return 0
   fi
 
-  if [ -n "$units_dir" ]; then
-    if _apps_path_exists "$mode" "$units_dir/$name.container" || \
-      _apps_path_exists "$mode" "$units_dir/$name.pod" || \
-      _apps_path_exists "$mode" "$units_dir/$name.service" || \
-      _apps_path_exists "$mode" "$units_dir/container-$name.service"; then
+  if [ -n "$units_dir" ] && _apps_dir_exists "$mode" "$units_dir"; then
+    if _apps_find_lines "$mode" "$units_dir" -type f \( -name "$name.container" -o -name "$name.pod" \) -print -quit 2>/dev/null | grep -q .; then
+      return 0
+    fi
+  fi
+
+  if [ -n "$legacy_units_dir" ]; then
+    if _apps_path_exists "$mode" "$legacy_units_dir/$name.container" || \
+      _apps_path_exists "$mode" "$legacy_units_dir/$name.pod"; then
       return 0
     fi
   fi

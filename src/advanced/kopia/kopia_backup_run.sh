@@ -79,34 +79,13 @@ cmd_generate_ignore() {
 }
 
 _kopia_stage_quadlet_units() {
-  local backup_root user_units_dir dest
+  local backup_root dest
   backup_root="$(tgdb_backup_root)"
-  user_units_dir="$(rm_user_units_dir)"
-  dest="$backup_root/quadlet"
-
-  if [ ! -d "$user_units_dir" ]; then
-    tgdb_warn "未找到 Quadlet 單元目錄：$user_units_dir（略過同步 quadlet）。"
-    return 0
-  fi
+  dest="$(_kopia_quadlet_runtime_stage_dir)"
 
   mkdir -p "$backup_root" 2>/dev/null || true
-  local tmp_dir
-  tmp_dir="$(mktemp -d "$backup_root/.quadlet.tmp.XXXXXX" 2>/dev/null || true)"
-  if [ -z "${tmp_dir:-}" ] || [ ! -d "$tmp_dir" ]; then
-    tgdb_warn "無法建立暫存目錄（略過同步 quadlet）：$backup_root"
-    return 0
-  fi
-
-  if ! cp -a "$user_units_dir/." "$tmp_dir/" 2>/dev/null; then
-    rm -rf "$tmp_dir" 2>/dev/null || true
-    tgdb_warn "同步 Quadlet 單元失敗（已略過）：$user_units_dir -> $dest"
-    return 0
-  fi
-
-  rm -rf -- "$dest" 2>/dev/null || true
-  if ! mv -f "$tmp_dir" "$dest" 2>/dev/null; then
-    rm -rf "$tmp_dir" 2>/dev/null || true
-    tgdb_warn "同步 Quadlet 單元失敗（無法原子改名，已略過）：$tmp_dir -> $dest"
+  if ! _kopia_stage_runtime_quadlet_tree "$dest"; then
+    tgdb_warn "找不到可同步的 TGDB Quadlet runtime，已略過。"
     return 0
   fi
   return 0
@@ -227,7 +206,7 @@ _kopia_snapshot_sources() {
   # 目標對齊 backup.sh 的 tar 冷備份範圍：
   # - /data/<tgdb_name>（TGDB_DIR）
   # - /data/config
-  # - /data/quadlet
+  # - /data/quadlet-runtime
   local backup_root tgdb_name
   backup_root="$(tgdb_backup_root)"
   tgdb_name="$(basename "$TGDB_DIR" 2>/dev/null || echo "app")"
@@ -244,7 +223,9 @@ _kopia_snapshot_sources() {
   if [ -d "$backup_root/config" ]; then
     paths+=("/data/config")
   fi
-  if [ -d "$backup_root/quadlet" ]; then
+  if [ -d "$backup_root/$(_kopia_quadlet_runtime_archive_dirname)" ]; then
+    paths+=("/data/$(_kopia_quadlet_runtime_archive_dirname)")
+  elif [ -d "$backup_root/quadlet" ]; then
     paths+=("/data/quadlet")
   fi
 
@@ -266,7 +247,7 @@ cmd_run() {
   backup_root="$(tgdb_backup_root)"
   mkdir -p "$backup_root" 2>/dev/null || true
 
-  # 先同步 Quadlet（保留在 $backup_root/quadlet，供快照納入）
+  # 先同步 Quadlet runtime（保留在 $backup_root/quadlet-runtime，供快照納入）
   _kopia_stage_quadlet_units || return 1
   tgdb_timer_units_stage_to_persist || true
 

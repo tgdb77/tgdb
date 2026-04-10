@@ -185,11 +185,12 @@ appspec_update_and_restart_instance() {
 
 appspec_full_remove_instance() {
   local service="$1" name="$2" deld="${3:-n}" delv="${4:-n}"
-  local deploy_mode unit_dir
+  local deploy_mode unit_dir legacy_unit_dir
 
   _appspec_maybe_enable_podman_socket "$service" || true
   deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
-  unit_dir="$(_apps_unit_dir_for_mode "$deploy_mode" 2>/dev/null || rm_user_units_dir)"
+  unit_dir="$(_apps_unit_dir_for_mode "$deploy_mode" "$service" 2>/dev/null || echo "")"
+  legacy_unit_dir="$(_apps_legacy_unit_dir_for_mode "$deploy_mode" 2>/dev/null || rm_user_units_dir)"
 
   local -a units=()
   local u
@@ -198,11 +199,16 @@ appspec_full_remove_instance() {
   done < <(_appspec_units_for_instance "$service" "$name" 2>/dev/null || true)
 
   if [ ${#units[@]} -gt 0 ] && declare -F _app_full_remove_units_by_filenames >/dev/null 2>&1; then
-    _app_full_remove_units_by_filenames "${units[@]}"
+    _app_full_remove_units_by_filenames "$service" "${units[@]}"
   else
     tgdb_systemctl_try "$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")" disable --now -- "${name}.container" "${name}.service" "container-${name}.service" || true
     tgdb_podman rm -f "$name" 2>/dev/null || true
-    _apps_remove_file "$deploy_mode" "$unit_dir/${name}.container" 2>/dev/null || true
+    if [ -n "$unit_dir" ]; then
+      _apps_remove_file "$deploy_mode" "$unit_dir/${name}.container" 2>/dev/null || true
+    fi
+    if [ -n "$legacy_unit_dir" ]; then
+      _apps_remove_file "$deploy_mode" "$legacy_unit_dir/${name}.container" 2>/dev/null || true
+    fi
   fi
 
   if [[ "${deld:-n}" =~ ^[Yy]$ ]]; then
