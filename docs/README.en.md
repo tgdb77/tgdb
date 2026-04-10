@@ -67,7 +67,7 @@
 |:------------:|:--------|
 | **Containerized Apps** | Built-in support for 100+ app specs across media, AI, knowledge management, monitoring, databases, and network services (rootless by default; some apps support rootful) |
 | **Security Stack** | nftables firewall + Fail2ban intrusion protection |
-| **Automated Backups** | Cold backup/restore, Kopia hot backup, Rclone sync, and systemd timer scheduling |
+| **Automated Backups** | Full backup/restore, selected-instance backup/restore, Kopia hot backup, Rclone sync + pullback, systemd timers, and archive management |
 | **Cloud Storage** | Rclone integration for mounting and syncing cloud storage |
 | **Reverse Proxy** | Containerized Nginx with SSL renewal, Cloudflare Real-IP updates, and WAF support |
 | **Timers** | Built-in backup, DB export, Kopia, and Nginx tasks, plus custom scripts and Healthchecks integration |
@@ -138,7 +138,7 @@ t
  7. Advanced Modules      → Rclone / Nginx / tmux / Tunnel / DB / Game Server
  8. Third-party Scripts   → Handy external tools
  9. Shortcut Management   → Manage command shortcuts
-10. Full Backup Manager   → Cold backup / restore / auto backup / Kopia
+10. Full Backup Manager   → Full backup / selected-instance backup / restore / auto backup / archive management / Kopia
 11. Timer Management      → Backup / DB / Nginx / custom timer / Healthchecks
 ══════════════════════════════════════════
 777. Quick Environment Setup → Bootstrap a fresh environment
@@ -191,6 +191,20 @@ Use TGDB directly from the terminal for scripting and automation:
 | `t 10 2` | Restore the latest backup |
 
 </details>
+
+### Backup / Restore Summary
+
+- `Main Menu 10` currently includes:
+  - **full backup / full restore**
+  - **selected-instance backup / restore** (single or multi-select)
+  - **systemd timer automation**
+  - **archive management** (list, retention, delete, restore)
+  - **Rclone remote sync / selective pullback to local**
+- The default backup scope focuses on:
+  - `instance_dir`
+  - app config / records
+  - Quadlet units
+- `volume_dir` contents are **not included** in the main backup by default. If an app uses `volume_dir`, TGDB recreates the required directory and `volume_subdirs` after both full restore and selected restore to avoid startup failures caused by missing directory structure.
 
 ---
 
@@ -342,7 +356,7 @@ TGDB includes a full backup system. By default it uses **cold backups**, stoppin
 
 # Configure scheduled backups from the menu
 ./tgdb.sh
-# Choose 10 → 3
+# Choose 10 → 5
 ```
 
 **Backup scope**:
@@ -357,6 +371,7 @@ TGDB includes a full backup system. By default it uses **cold backups**, stoppin
 
 - Keeps up to 3 local backups
 - Restore syncs Quadlet and timer units back into place and re-enables them
+- `volume_dir` data itself is not included in TGDB backups by default; however, after both full restore and selected restore, TGDB recreates the required directory and `volume_subdirs` for apps that use `volume_dir`
 - Optional automatic Rclone sync after each backup
 - When restoring onto a new system, it is recommended to use the same username as the source environment
 
@@ -371,7 +386,7 @@ Entry point:
 
 ```bash
 ./tgdb.sh
-# Choose 10 → 4 (Kopia Management)
+# Choose 10 → 7 (Kopia Management)
 ```
 
 ---
