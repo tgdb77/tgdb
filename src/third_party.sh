@@ -4,8 +4,40 @@
 # 注意：此檔案會被 source，請避免在此更改 shell options（例如 set -euo pipefail）。
 
 THIRD_PARTY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=src/core/bootstrap.sh
+THIRD_PARTY_SUBSCRIPT_DIR="$THIRD_PARTY_SCRIPT_DIR/third_party"
+# shellcheck source=src/core/bootstrap.sh disable=SC1091
 [ -f "$THIRD_PARTY_SCRIPT_DIR/core/bootstrap.sh" ] && source "$THIRD_PARTY_SCRIPT_DIR/core/bootstrap.sh"
+
+_third_party_source_script() {
+  local script_name="$1"
+  local path="$THIRD_PARTY_SUBSCRIPT_DIR/${script_name}.sh"
+
+  if [ ! -f "$path" ]; then
+    tgdb_fail "找不到第三方子腳本：$path" 1 || true
+    return 1
+  fi
+
+  # shellcheck disable=SC1090 # 子腳本名稱由選單映射決定，於執行期載入
+  source "$path"
+}
+
+_third_party_run_handler() {
+  local script_name="$1"
+  local handler="$2"
+
+  _third_party_source_script "$script_name" || {
+    ui_pause "載入第三方子腳本失敗，按任意鍵返回..." "main"
+    return 1
+  }
+
+  if ! declare -F "$handler" >/dev/null 2>&1; then
+    tgdb_fail "找不到第三方處理函式：$handler" 1 || true
+    ui_pause "按任意鍵返回..." "main"
+    return 1
+  fi
+
+  "$handler"
+}
 
 third_party_menu() {
   if ! ui_is_interactive; then
@@ -20,14 +52,16 @@ third_party_menu() {
     echo "提醒：以下腳本為第三方提供，請自行評估來源與風險。"
     echo "----------------------------------"
     echo "1. YABS 綜合測試 https://github.com/masonr/yet-another-bench-script"
+    echo "2. VPS 系統重裝 https://github.com/bin456789/reinstall"
     echo "----------------------------------"
     echo "00. 自訂義指令"
     echo "----------------------------------"
     echo "0. 返回主選單"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-1,00]: " choice
+    read -r -e -p "請輸入選擇 [0-2,00]: " choice
     case "$choice" in
-      1) third_party_run_yabs ;;
+      1) _third_party_run_handler "yabs" "third_party_run_yabs" ;;
+      2) _third_party_run_handler "reinstall" "third_party_run_reinstall" ;;
       00) third_party_run_rclone_custom_commands ;;
       0) return 0 ;;
       *) echo "無效選項"; sleep 1 ;;
@@ -69,32 +103,4 @@ third_party_run_rclone_custom_commands() {
   fi
 
   custom_commands_menu
-}
-
-third_party_run_yabs() {
-  clear || true
-  echo "=================================="
-  echo "❖ YABS 綜合測試 ❖"
-  echo "=================================="
-  echo "即將執行：curl -sL https://yabs.sh | bash"
-  echo ""
-
-  if ! command -v curl >/dev/null 2>&1; then
-    tgdb_fail "系統未安裝 curl，無法執行 YABS。請先到「基礎工具管理」安裝 curl。" 1 || true
-    ui_pause "按任意鍵返回..." "main"
-    return 1
-  fi
-
-  local rc=0
-  ( set +e; set +o pipefail; curl -sL https://yabs.sh | bash -s -- -r -5) || rc=$?
-  echo ""
-
-  if [ "$rc" -eq 0 ]; then
-    echo "✅ YABS 執行完成"
-  else
-    tgdb_warn "YABS 執行結束（返回碼：$rc），請自行檢查輸出是否完整。"
-  fi
-
-  ui_pause "執行完成，按任意鍵繼續..." "main"
-  return 0
 }
