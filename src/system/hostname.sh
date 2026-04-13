@@ -54,16 +54,68 @@ change_hostname() {
         echo "✅ 主機名稱已成功變更為 '$new_hostname'。"
         
         if [ -f /etc/hosts ]; then
-            if grep -qE '^127\.0\.1\.1\b' /etc/hosts; then
-                if sudo sed -i "s/^127\.0\.1\.1\b.*/127.0.1.1\t$new_hostname/" /etc/hosts; then
+            local hosts_tmp
+            hosts_tmp=$(mktemp)
+
+            if [ -n "$hosts_tmp" ] && awk -v current_hostname="$current_hostname" -v new_hostname="$new_hostname" '
+                BEGIN {
+                    updated = 0
+                }
+                /^127\.0\.0\.1([[:space:]]|$)/ && !updated {
+                    delete seen
+                    delete aliases
+                    alias_count = 0
+                    has_new = 0
+
+                    for (i = 2; i <= NF; i++) {
+                        alias = $i
+
+                        if (alias == current_hostname) {
+                            alias = new_hostname
+                        }
+
+                        if (alias == new_hostname) {
+                            has_new = 1
+                        }
+
+                        if (!(alias in seen)) {
+                            seen[alias] = 1
+                            aliases[++alias_count] = alias
+                        }
+                    }
+
+                    printf "127.0.0.1"
+                    for (i = 1; i <= alias_count; i++) {
+                        printf "\t%s", aliases[i]
+                    }
+
+                    if (!has_new && !(new_hostname in seen)) {
+                        printf "\t%s", new_hostname
+                    }
+
+                    printf "\n"
+                    updated = 1
+                    next
+                }
+                {
+                    print
+                }
+                END {
+                    if (!updated) {
+                        printf "127.0.0.1\t%s\n", new_hostname
+                    }
+                }
+            ' /etc/hosts > "$hosts_tmp" && sudo cp "$hosts_tmp" /etc/hosts; then
+                if grep -qE "^127\\.0\\.0\\.1\\b.*(^|[[:space:]])${new_hostname}([[:space:]]|$)" /etc/hosts; then
                     echo "✅ /etc/hosts 文件已更新。"
                 else
-                    tgdb_warn "更新 /etc/hosts 文件失敗，可能需要手動檢查。"
+                    tgdb_warn "已嘗試更新 /etc/hosts，但未確認到 127.0.0.1 主機名對應，請手動檢查。"
                 fi
             else
-                echo -e "127.0.1.1\t$new_hostname" | sudo tee -a /etc/hosts > /dev/null
-                echo "✅ /etc/hosts 文件已追加主機名。"
+                tgdb_warn "更新 /etc/hosts 文件失敗，可能需要手動檢查。"
             fi
+
+            [ -n "$hosts_tmp" ] && rm -f "$hosts_tmp"
         fi
         
         echo ""

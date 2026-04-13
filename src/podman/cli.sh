@@ -421,32 +421,6 @@ podman_uninstall_cli() {
     echo "=================================="
     tgdb_warn "(CLI) 完全移除 Podman/Quadlet 環境（不可逆）"
     echo "=================================="
-    echo "→ 停用使用者層級 Podman 相關服務..."
-    _disable_user_podman_units
-
-    echo "→ 刪除 Quadlet 單元檔..."
-    _purge_user_quadlet_files
-
-    echo "→ 刪除 rootless Podman 全部資源..."
-    _nuke_rootless_podman_resources
-
-    echo "→ 清理使用者 Podman 目錄..."
-    _purge_user_podman_dirs
-
-    echo "→ 關閉使用者 linger..."
-    if command -v loginctl >/dev/null 2>&1; then
-        if command -v sudo >/dev/null 2>&1; then
-            sudo loginctl disable-linger "$USER" >/dev/null 2>&1 || true
-        else
-            loginctl disable-linger "$USER" >/dev/null 2>&1 || true
-        fi
-    fi
-
-    echo "→ 移除系統套件 podman（以及 TGDB 自動安裝的 polkit/policykit-1）..."
-    _remove_podman_packages
-
-    echo "→ 復原 sysctl 特權埠設定..."
-    _revert_sysctl_unprivileged_ports
-
-    echo "✅ 已完成移除流程（rootless 範疇）。"
+    _run_podman_uninstall_flow
+    echo "✅ 已完成移除流程（包含 rootless/rootful 資源，並清理 TGDB 管理的 rootful 單元）。"
 }
