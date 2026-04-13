@@ -175,9 +175,18 @@ update_tgdb() {
         fi
 
         if ! git -C "$repo_dir" diff --quiet 2>/dev/null || ! git -C "$repo_dir" diff --cached --quiet 2>/dev/null; then
-            tgdb_fail "偵測到未提交變更，為避免覆蓋修改，已停止自動更新。" 1 || true
-            echo "請先提交或還原變更後再更新。"
-            return 1
+            tgdb_warn "偵測到未提交變更。"
+            echo "若繼續強制覆蓋，將捨棄目前已追蹤檔案的未提交修改。"
+            echo "即將執行：git reset --hard HEAD"
+            if ! ui_confirm_yn "是否強制覆蓋本機變更後繼續更新？(y/N，預設 N，輸入 0 取消): " "N"; then
+                echo "已取消更新，請先提交或還原變更後再更新。"
+                return 1
+            fi
+
+            if ! git -C "$repo_dir" reset --hard HEAD; then
+                tgdb_fail "強制覆蓋本機變更失敗，已停止更新。" 1 || true
+                return 1
+            fi
         fi
 
         echo "正在從 Git 倉庫更新 main（僅允許 fast-forward）..."

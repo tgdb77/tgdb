@@ -56,7 +56,7 @@
     <td align="center" width="25%">
       <img src="https://img.shields.io/badge/🌐-Cross%20Distro-orange?style=flat-square" alt="Cross-distro">
       <br><strong>Cross-distro Support</strong>
-      <br><sub>apt/dnf/yum/zypper/pacman</sub>
+      <br><sub>apt/dnf/zypper/pacman</sub>
     </td>
   </tr>
 </table>

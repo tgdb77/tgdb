@@ -56,7 +56,7 @@
     <td align="center" width="25%">
       <img src="https://img.shields.io/badge/🌐-跨發行版-orange?style=flat-square" alt="Cross-distro">
       <br><strong>跨發行版支援</strong>
-      <br><sub>apt/dnf/yum/zypper/pacman</sub>
+      <br><sub>apt/dnf/zypper/pacman</sub>
     </td>
   </tr>
 </table>
