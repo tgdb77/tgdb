@@ -1,0 +1,45 @@
+[Unit]
+Description=Rybbit（backend）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-clickhouse.service container-${container_name}-clickhouse.service
+Wants=${container_name}-clickhouse.service container-${container_name}-clickhouse.service
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+[Container]
+Image=ghcr.io/rybbit-io/rybbit-backend:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-backend
+Label=app=rybbit
+
+Pod=${container_name}.pod
+EnvironmentFile=${instance_dir}/.env
+
+Environment=NODE_ENV=production
+Environment=CLICKHOUSE_HOST=http://127.0.0.1:8123
+Environment=CLICKHOUSE_DB=analytics
+Environment=CLICKHOUSE_USER=default
+Environment=CLICKHOUSE_PASSWORD=${clickhouse_pass}
+Environment=POSTGRES_HOST=127.0.0.1
+Environment=POSTGRES_PORT=5432
+Environment=POSTGRES_DB=analytics
+Environment=POSTGRES_USER=${pg_user}
+Environment=POSTGRES_PASSWORD=${pg_pass}
+Environment=BETTER_AUTH_SECRET=${better_auth_secret}
+Environment=BASE_URL=http://127.0.0.1:${host_port}
+Environment=DISABLE_SIGNUP=false
+Environment=DISABLE_TELEMETRY=true
+
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

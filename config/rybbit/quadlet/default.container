@@ -1,0 +1,32 @@
+[Unit]
+Description=Rybbit（nginx）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-backend.service container-${container_name}-backend.service
+Wants=${container_name}-backend.service container-${container_name}-backend.service
+After=${container_name}-client.service container-${container_name}-client.service
+Wants=${container_name}-client.service container-${container_name}-client.service
+
+[Container]
+Image=docker.io/library/nginx:stable-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=rybbit
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/nginx:/etc/nginx/conf.d:ro
+
+User=0:0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
