@@ -1,0 +1,33 @@
+[Unit]
+Description=Rybbit（client）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-backend.service container-${container_name}-backend.service
+Wants=${container_name}-backend.service container-${container_name}-backend.service
+
+[Container]
+Image=ghcr.io/rybbit-io/rybbit-client:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-client
+Label=app=rybbit
+
+Pod=${container_name}.pod
+EnvironmentFile=${instance_dir}/.env
+
+Environment=NODE_ENV=production
+Environment=PORT=3002
+Environment=HOSTNAME=0.0.0.0
+Environment=NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:${host_port}
+Environment=NEXT_PUBLIC_DISABLE_SIGNUP=false
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

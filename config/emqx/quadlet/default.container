@@ -1,0 +1,42 @@
+[Unit]
+Description=EMQX
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/emqx/emqx:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=emqx
+
+UserNS=keep-id
+
+EnvironmentFile=${instance_dir}/.env
+
+# 固定容器 hostname，讓 EMQX 節點名稱可穩定對應持久化資料
+PodmanArgs=--hostname=${container_name}
+
+# Dashboard（HTTP）
+PublishPort=127.0.0.1:${host_port}:18083/tcp
+
+# MQTT TCP
+PublishPort=127.0.0.1:${mqtt_port}:1883/tcp
+
+# 如需 WebSocket / WSS / TLS MQTT，請先完成驗證器與 TLS 設定後再自行開啟
+#PublishPort=127.0.0.1:18083:8083/tcp
+#PublishPort=127.0.0.1:18084:8084/tcp
+#PublishPort=127.0.0.1:18883:8883/tcp
+
+Volume=${instance_dir}/data:/opt/emqx/data
+Volume=${instance_dir}/log:/opt/emqx/log
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
