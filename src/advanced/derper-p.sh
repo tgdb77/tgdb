@@ -107,6 +107,85 @@ _derper_is_valid_fqdn() {
   [[ "$fqdn" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$ ]]
 }
 
+_derper_is_ipv4_addr() {
+  local ip="${1:-}"
+  [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+_derper_is_ipv6_addr() {
+  local ip="${1:-}"
+  [[ -n "$ip" ]] || return 1
+  [[ "$ip" == *:* ]] || return 1
+  [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]]
+}
+
+_derper_detect_public_ipv4() {
+  local ip=""
+
+  if declare -F get_ipv4_address >/dev/null 2>&1; then
+    ip="$(get_ipv4_address 2>/dev/null || true)"
+    if _derper_is_ipv4_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(
+      ip -4 route get 1 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) {
+          if ($i == "src") { print $(i + 1); exit }
+        }
+      }' || true
+    )"
+    if _derper_is_ipv4_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+_derper_detect_public_ipv6() {
+  local ip=""
+
+  if command -v curl >/dev/null 2>&1; then
+    ip="$(
+      curl -6 -fsS --connect-timeout 3 --max-time 5 https://api64.ipify.org 2>/dev/null \
+        | tr -d '\r\n' \
+        | head -n1 \
+        || true
+    )"
+    ip="${ip%%%*}"
+    if _derper_is_ipv6_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(
+      ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) {
+          if ($i == "src") {
+            gsub(/%.*/, "", $(i + 1))
+            print $(i + 1)
+            exit
+          }
+        }
+      }' || true
+    )"
+    ip="${ip%%%*}"
+    if _derper_is_ipv6_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 _derper_detect_fqdn_from_env() {
   local env_path
   env_path="$(_derper_env_path)"
@@ -404,6 +483,7 @@ _derper_node_name_from_region_id() {
 
 _derper_render_derpmap_region_block() {
   local root_domain="$1" derp_port="$2" region_id="$3" region_name="$4"
+  local public_ipv4="${5:-}" public_ipv6="${6:-}"
 
   local region_code node_name hostname
   region_code="$(_derper_region_code_from_id "$region_id")"
@@ -419,6 +499,14 @@ _derper_render_derpmap_region_block() {
       - name: "${node_name}"
         regionid: ${region_id}
         hostname: "${hostname}"
+EOF
+  if _derper_is_ipv4_addr "$public_ipv4"; then
+    printf '        ipv4: "%s"\n' "$public_ipv4"
+  fi
+  if _derper_is_ipv6_addr "$public_ipv6"; then
+    printf '        ipv6: "%s"\n' "$public_ipv6"
+  fi
+  cat <<EOF
         derpport: ${derp_port}
         stunport: ${DERPER_STUN_PORT}
 EOF
@@ -447,6 +535,7 @@ EOF
 
 _derper_upsert_derpmap_yaml() {
   local root_domain="$1" derp_port="$2" region_id="$3" region_name="$4"
+  local public_ipv4="${5:-}" public_ipv6="${6:-}"
   local out tmp
   out="$(_derper_headscale_derpmap_path)"
   tmp="${out}.tmp"
@@ -454,7 +543,7 @@ _derper_upsert_derpmap_yaml() {
   _derper_ensure_derpmap_file_base "$out" || return 1
 
   local block
-  block="$(_derper_render_derpmap_region_block "$root_domain" "$derp_port" "$region_id" "$region_name")"
+  block="$(_derper_render_derpmap_region_block "$root_domain" "$derp_port" "$region_id" "$region_name" "$public_ipv4" "$public_ipv6")"
 
   # 目標：
   # - 若 regions: 下已有相同 region_id，取代該 block
@@ -620,6 +709,7 @@ derper_p_inject_headscale() {
   load_system_config || true
 
   local root_domain="$1" derp_port="$2" region_id="$3" region_name="$4" force_only="${5:-0}"
+  local public_ipv4="" public_ipv6=""
   local config_path
   config_path="$(_derper_headscale_config_path)"
 
@@ -630,10 +720,26 @@ derper_p_inject_headscale() {
     return 1
   fi
 
-  _derper_upsert_derpmap_yaml "$root_domain" "$derp_port" "$region_id" "$region_name" || { ui_pause "按任意鍵返回..."; return 1; }
+  public_ipv4="$(_derper_detect_public_ipv4 2>/dev/null || true)"
+  public_ipv6="$(_derper_detect_public_ipv6 2>/dev/null || true)"
+
+  if _derper_is_ipv4_addr "$public_ipv4"; then
+    echo "ℹ️ 偵測到公網 IPv4：$public_ipv4"
+  else
+    tgdb_warn "未能自動偵測公網 IPv4，將保留既有設定值。"
+    public_ipv4=""
+  fi
+  if _derper_is_ipv6_addr "$public_ipv6"; then
+    echo "ℹ️ 偵測到公網 IPv6：$public_ipv6"
+  else
+    tgdb_warn "未能自動偵測公網 IPv6，將保留既有設定值。"
+    public_ipv6=""
+  fi
+
+  _derper_upsert_derpmap_yaml "$root_domain" "$derp_port" "$region_id" "$region_name" "$public_ipv4" "$public_ipv6" || { ui_pause "按任意鍵返回..."; return 1; }
 
   if _derper_patch_headscale_config_derp "$config_path" "$force_only"; then
-    echo "✅ 已更新：$config_path（derp.paths 已加入 /etc/headscale/derpmap.yaml）"
+    echo "✅ 已更新：$config_path（已同步修正 derp.paths）"
     if [ "$force_only" -eq 1 ]; then
       echo "✅ 已套用：強制只使用自建 DERP（urls: []、auto_update_enabled: false）"
     fi
@@ -826,6 +932,34 @@ derper_p_full_remove_integrated() {
   else
     tgdb_warn "無法推導 DERP FQDN，已略過憑證資料清理。"
   fi
+  return 0
+}
+
+derper_p_full_remove() {
+  _derper_require_tty || return $?
+  load_system_config || true
+
+  local instance_dir
+  instance_dir="$(_derper_instance_dir)"
+
+  echo "=================================="
+  echo "❖ DERP：移除 derper ❖"
+  echo "=================================="
+  echo "此操作會："
+  echo "1) 停止/停用 DERP 容器單元"
+  echo "2) 移除 Quadlet 單元檔"
+  echo "3) 刪除持久化目錄：$instance_dir"
+  echo "4) 嘗試清理 derp.<root_domain> 憑證資料"
+  echo "----------------------------------"
+
+  if ! ui_confirm_yn "確定要移除 DERP（derper）嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+    [ "$?" -eq 2 ] && return 0
+    ui_pause "按任意鍵返回..."
+    return 0
+  fi
+
+  derper_p_full_remove_integrated || true
+  ui_pause "按任意鍵返回..."
   return 0
 }
 
