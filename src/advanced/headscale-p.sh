@@ -92,6 +92,85 @@ _headscale_is_valid_root_domain() {
   [[ "$d" != .* ]] && [[ "$d" != *. ]]
 }
 
+_headscale_is_ipv4_addr() {
+  local ip="${1:-}"
+  [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+_headscale_is_ipv6_addr() {
+  local ip="${1:-}"
+  [[ -n "$ip" ]] || return 1
+  [[ "$ip" == *:* ]] || return 1
+  [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]]
+}
+
+_headscale_detect_public_ipv4() {
+  local ip=""
+
+  if declare -F get_ipv4_address >/dev/null 2>&1; then
+    ip="$(get_ipv4_address 2>/dev/null || true)"
+    if _headscale_is_ipv4_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(
+      ip -4 route get 1 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) {
+          if ($i == "src") { print $(i + 1); exit }
+        }
+      }' || true
+    )"
+    if _headscale_is_ipv4_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+_headscale_detect_public_ipv6() {
+  local ip=""
+
+  if command -v curl >/dev/null 2>&1; then
+    ip="$(
+      curl -6 -fsS --connect-timeout 3 --max-time 5 https://api64.ipify.org 2>/dev/null \
+        | tr -d '\r\n' \
+        | head -n1 \
+        || true
+    )"
+    ip="${ip%%%*}"
+    if _headscale_is_ipv6_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(
+      ip -6 route get 2606:4700:4700::1111 2>/dev/null | awk '{
+        for (i = 1; i <= NF; i++) {
+          if ($i == "src") {
+            gsub(/%.*/, "", $(i + 1))
+            print $(i + 1)
+            exit
+          }
+        }
+      }' || true
+    )"
+    ip="${ip%%%*}"
+    if _headscale_is_ipv6_addr "$ip"; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 _headscale_is_safe_pg_user() {
   local u="${1:-}"
   [ -n "$u" ] || return 1
@@ -341,7 +420,7 @@ _headscale_config_get_pg_creds() {
 }
 
 _headscale_render_config_yaml() {
-  local root_domain="$1" db_user="$2" db_password="$3"
+  local root_domain="$1" db_user="$2" db_password="$3" public_ipv4="${4:-}" public_ipv6="${5:-}"
 
   local tpl
   tpl="$(_headscale_repo_configs_dir)/config.yaml.example"
@@ -362,7 +441,15 @@ _headscale_render_config_yaml() {
     -e "s/<root_domain>/${esc_root}/g" \
     -e "s/<db_password>/${esc_pass}/g" \
     -e "s/^[[:space:]]*user:[[:space:]]*\"[^\"]*\"/    user: \"${esc_user}\"/g" \
+    -e 's/^    enabled: false$/    enabled: true/g' \
     "$tpl" >"$out"
+
+  if _headscale_is_ipv4_addr "$public_ipv4"; then
+    sed -i "s/^    ipv4: \".*\"$/    ipv4: \"${public_ipv4}\"/g" "$out" 2>/dev/null || true
+  fi
+  if _headscale_is_ipv6_addr "$public_ipv6"; then
+    sed -i "s/^    ipv6: \".*\"$/    ipv6: \"${public_ipv6}\"/g" "$out" 2>/dev/null || true
+  fi
 
   chmod 600 "$out" 2>/dev/null || true
   return 0
@@ -836,6 +923,7 @@ headscale_p_deploy() {
   # 不詢問：若檔案存在就沿用，避免覆蓋使用者修改。
 
   local root_domain="" db_user="" db_password=""
+  local public_ipv4="" public_ipv6=""
 
   # 盡量從既有檔案抽取，以避免 .env 與 config.yaml 帳密不一致
   if [ -f "$env_path" ] && [ ! -f "$config_path" ]; then
@@ -878,7 +966,23 @@ headscale_p_deploy() {
   fi
 
   if [ ! -f "$config_path" ]; then
-    _headscale_render_config_yaml "$root_domain" "$db_user" "$db_password" || { ui_pause "按任意鍵返回..."; return 1; }
+    public_ipv4="$(_headscale_detect_public_ipv4 2>/dev/null || true)"
+    public_ipv6="$(_headscale_detect_public_ipv6 2>/dev/null || true)"
+
+    if _headscale_is_ipv4_addr "$public_ipv4"; then
+      echo "ℹ️ 初次生成 config.yaml：已偵測公網 IPv4：$public_ipv4"
+    else
+      tgdb_warn "初次生成 config.yaml：未能自動偵測公網 IPv4，將保留範本預設值。"
+      public_ipv4=""
+    fi
+    if _headscale_is_ipv6_addr "$public_ipv6"; then
+      echo "ℹ️ 初次生成 config.yaml：已偵測公網 IPv6：$public_ipv6"
+    else
+      tgdb_warn "初次生成 config.yaml：未能自動偵測公網 IPv6，將保留範本預設值。"
+      public_ipv6=""
+    fi
+
+    _headscale_render_config_yaml "$root_domain" "$db_user" "$db_password" "$public_ipv4" "$public_ipv6" || { ui_pause "按任意鍵返回..."; return 1; }
     echo "✅ 已生成：$config_path"
   else
     echo "已沿用：$config_path"
@@ -996,6 +1100,87 @@ _headscale_remove_nginx_site_auto() {
   return 0
 }
 
+_headscale_remove_tailscale_client_action() {
+  _headscale_require_tty || return $?
+
+  if ! _headscale_load_tailscale_module; then
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  echo "=================================="
+  echo "❖ Tailscale：清理客戶端 ❖"
+  echo "=================================="
+  echo "此操作會嘗試："
+  echo "1) tailscale down / logout"
+  echo "2) 停用 tailscaled"
+  echo "3) 若偵測為 TGDB 安裝，則嘗試卸載套件"
+  echo "----------------------------------"
+
+  if ! command -v tailscale >/dev/null 2>&1 && ! command -v tailscaled >/dev/null 2>&1; then
+    tgdb_warn "未偵測到 tailscale/tailscaled。"
+    ui_pause "按任意鍵返回..."
+    return 0
+  fi
+
+  if ! ui_confirm_yn "確定要清理 Tailscale 客戶端嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+    [ "$?" -eq 2 ] && return 0
+    ui_pause "按任意鍵返回..."
+    return 0
+  fi
+
+  local managed=0
+  if { declare -F _tailscale_p_installed_by_tgdb >/dev/null 2>&1 && _tailscale_p_installed_by_tgdb; } || \
+     { declare -F _tailscale_p_joined_by_tgdb >/dev/null 2>&1 && _tailscale_p_joined_by_tgdb; }; then
+    managed=1
+  fi
+
+  tailscale_p_cleanup_if_needed || true
+
+  if [ "$managed" -eq 1 ]; then
+    echo "✅ 已完成 Tailscale 客戶端清理。"
+  else
+    tgdb_warn "未偵測到 TGDB 安裝/加入標記；已略過自動卸載。若需完全移除，請再用系統套件管理器手動卸載。"
+  fi
+
+  ui_pause "按任意鍵返回..."
+  return 0
+}
+
+_headscale_remove_menu() {
+  _headscale_require_tty || return $?
+
+  while true; do
+    clear
+    echo "=================================="
+    echo "❖ 移除應用 ❖"
+    echo "=================================="
+    echo "1. 移除 Headscale（含 Postgres / Headplane / Nginx 站點）"
+    echo "2. 移除 DERP（derper）"
+    echo "3. 清理 Tailscale 客戶端"
+    echo "----------------------------------"
+    echo "0. 返回上一層"
+    echo "=================================="
+    read -r -e -p "請輸入選擇 [0-3]: " choice
+
+    case "$choice" in
+      1) headscale_p_full_remove || true ;;
+      2)
+        if declare -F tgdb_load_module >/dev/null 2>&1; then
+          tgdb_load_module "derper-p" || { ui_pause "按任意鍵返回..."; continue; }
+        else
+          # shellcheck source=src/advanced/derper-p.sh
+          source "$SCRIPT_DIR/derper-p.sh"
+        fi
+        derper_p_full_remove || true
+        ;;
+      3) _headscale_remove_tailscale_client_action || true ;;
+      0) return 0 ;;
+      *) echo "無效選項，請重新輸入。"; sleep 1 ;;
+    esac
+  done
+}
+
 headscale_p_full_remove() {
   _headscale_require_tty || return $?
 
@@ -1007,7 +1192,7 @@ headscale_p_full_remove() {
   root_domain="$(_headscale_detect_root_domain_from_config 2>/dev/null || true)"
 
   echo "=================================="
-  echo "❖ Headscale：完整移除 ❖"
+  echo "❖ Headscale：移除應用 ❖"
   echo "=================================="
   echo "此操作會："
   echo "1) 停止/停用 systemd user 單元（pod/container）"
@@ -1042,13 +1227,6 @@ headscale_p_full_remove() {
 
   # 一條龍：移除 nginx 站點（若曾部署 hs.<root_domain> 反向代理）
   _headscale_remove_nginx_site_auto "$root_domain" || true
-
-  # 一條龍：若有安裝/加入 tailscale 客戶端，完整移除時可選同步退出並停用（必要時卸載）
-  if _headscale_load_tailscale_module 2>/dev/null; then
-    if ui_confirm_yn "偵測到 tailscale 客戶端（可能曾由 TGDB 安裝/加入）。要同步清理（down/logout、停用 tailscaled；若是 TGDB 安裝則嘗試卸載）嗎？(y/N，預設 Y，輸入 0 取消): " "Y"; then
-      tailscale_p_cleanup_if_needed || true
-    fi
-  fi
 
   podman pod rm -f "$HEADSCALE_CONTAINER_NAME" 2>/dev/null || true
   podman rm -f \
@@ -1101,19 +1279,6 @@ headscale_p_full_remove() {
     echo "✅ 已移除並刪除持久化目錄：$instance_dir"
   else
     echo "✅ 已移除單元，已保留持久化目錄：$instance_dir"
-  fi
-
-  # 一條龍：可選同步移除 DERP（derper）
-  if ui_confirm_yn "要同時移除 DERP（derper）嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
-    if declare -F tgdb_load_module >/dev/null 2>&1; then
-      tgdb_load_module "derper-p" || { ui_pause "按任意鍵返回..."; return 0; }
-    else
-      # shellcheck source=src/advanced/derper-p.sh
-      source "$SCRIPT_DIR/derper-p.sh"
-    fi
-    if declare -F derper_p_full_remove_integrated >/dev/null 2>&1; then
-      derper_p_full_remove_integrated || true
-    fi
   fi
 
   ui_pause "按任意鍵返回..."
@@ -1198,6 +1363,7 @@ headscale_p_menu() {
     echo "❖ Headscale / DERP（Headscale + Postgres + Headplane）❖"
     echo "=================================="
     echo "教學與文件：https://headscale.net/"
+    echo "部屬前須確認已添加hs/derp子域名"
     _headscale_print_runtime_status || true
     echo "----------------------------------"
     echo "1. 部署 headscale"
@@ -1211,7 +1377,7 @@ headscale_p_menu() {
     echo "9. 部署/更新 DERP（derper）"
     echo "10. 注入自建 DERP（derpmap + config.yaml）"
     echo "----------------------------------"
-    echo "d. 完整移除"
+    echo "d. 移除應用"
     echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
@@ -1253,7 +1419,7 @@ headscale_p_menu() {
         fi
         derper_p_inject_headscale_detected || true
         ;;
-      d|D) headscale_p_full_remove || true ;;
+      d|D) _headscale_remove_menu || true ;;
       0) return 0 ;;
       *) echo "無效選項，請重新輸入。"; sleep 1 ;;
     esac

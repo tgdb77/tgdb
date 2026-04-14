@@ -1,24 +1,26 @@
 [Unit]
-Description=NocoDB
+Description=NodeBB
 After=network-online.target
 Wants=network-online.target
 
 After=${container_name}-postgres.service container-${container_name}-postgres.service
 Wants=${container_name}-postgres.service container-${container_name}-postgres.service
-After=${container_name}-redis.service container-${container_name}-redis.service
-Wants=${container_name}-redis.service container-${container_name}-redis.service
 
 [Container]
-Image=docker.io/nocodb/nocodb:latest
+Image=ghcr.io/nodebb/nodebb:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=nocodb
+Label=app=nodebb
 
 Pod=${container_name}.pod
 
-EnvironmentFile=${instance_dir}/.env
+UserNS=keep-id
+User=0
 
-Volume=${instance_dir}/data:/usr/app/data
+Volume=${instance_dir}/config:/opt/config
+Volume=${instance_dir}/build:/usr/src/app/build
+Volume=${instance_dir}/uploads:/usr/src/app/public/uploads
+Volume=${instance_dir}/setup.json:/usr/src/app/setup.json:ro
 
 [Service]
 Restart=always
