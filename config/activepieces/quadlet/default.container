@@ -1,0 +1,31 @@
+[Unit]
+Description=Activepieces
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service ${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service ${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=ghcr.io/activepieces/activepieces:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=activepieces
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/cache:/usr/src/app/cache
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 90 ]; do /usr/bin/podman exec ${container_name}-postgres pg_isready -h 127.0.0.1 -p 5432 -U ${db_user} -d activepieces >/dev/null 2>&1 && /usr/bin/podman exec ${container_name}-redis redis-cli ping >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "PostgreSQL/Redis 尚未就緒，取消啟動 Activepieces" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

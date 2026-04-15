@@ -215,31 +215,31 @@ TGDB uses **Podman + Quadlet** for **rootless / rootful** container deployment (
 <table>
   <tr>
     <td>📦 <b>Storage & Sync</b></td>
-    <td>OpenList • SeaweedFS • Syncthing • Gokapi • Kopia</td>
+    <td>SeaweedFS • Syncthing • Gokapi</td>
   </tr>
   <tr>
     <td>🎬 <b>Media & Downloads</b></td>
-    <td>Immich • Jellyfin • Navidrome • qBittorrent • Pinchflat • JDownloader 2 </td>
+    <td>Immich • Jellyfin • qBittorrent</td>
   </tr>
   <tr>
     <td>📝 <b>Productivity & Content</b></td>
-    <td>Outline • Linkwarden • Memos • Vikunja • Stirling PDF • Paperless-ngx • Excalidraw • IT-Tools • Ghost • WordPress • Kutt</td>
+    <td>Stirling PDF • Ghost • WordPress</td>
   </tr>
   <tr>
     <td>🤖 <b>Automation & AI</b></td>
-    <td>n8n • Open WebUI • Ollama • GPTLoad • New API • CLI Proxy API • SillyTavern • Chromium • Webtop • Homepage</td>
+    <td>n8n • Open WebUI • Ollama</td>
   </tr>
   <tr>
     <td>📊 <b>Monitoring & Notifications</b></td>
-    <td>Uptime Kuma • Healthchecks • Gotify • Beszel • Beszel Agent • Changedetection.io • Umami • RSS Stack</td>
+    <td>Uptime Kuma • Healthchecks • Gotify</td>
   </tr>
   <tr>
     <td>🗄️ <b>Databases & Management</b></td>
-    <td>PostgreSQL • Redis • pgAdmin • RedisInsight • Portainer • Gitea</td>
+    <td>PostgreSQL • Redis • Gitea</td>
   </tr>
   <tr>
     <td>🔐 <b>Security, Search & Personal Use</b></td>
-    <td>Vaultwarden • Authentik • AdGuard Home • SearXNG • Whoogle • Firefly III • Ghostfolio • Wallos</td>
+    <td>Vaultwarden • Authentik • AdGuard Home</td>
   </tr>
 </table>
 
