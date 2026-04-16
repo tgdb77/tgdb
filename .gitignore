@@ -23,6 +23,8 @@
 !/scripts/**/*
 !/docs/
 !/docs/**/*
+!/skills/
+!/skills/**/*
 
 # 遞歸包含 config 和 src 的所有內容
 !/config/**/*

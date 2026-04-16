@@ -1,0 +1,4 @@
+interface:
+  display_name: "TGDB Add App"
+  short_description: "評估並整合 TGDB 應用（AppSpec/進階）"
+  default_prompt: "請依 TGDB 架構評估此專案是否可走 AppSpec，並完成新增與驗證。"
