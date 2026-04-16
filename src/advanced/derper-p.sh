@@ -310,9 +310,91 @@ _derper_prompt_root_domain() {
       continue
     fi
 
+    if ! _derper_check_subdomain_dns_for_cert "$domain"; then
+      case "$?" in
+        2) return 2 ;;
+        *) continue ;;
+      esac
+    fi
+
     printf -v "$__outvar" '%s' "$domain"
     return 0
   done
+}
+
+_derper_dns_ip_list_label() {
+  local lines="${1:-}"
+  local joined=""
+
+  if [ -z "${lines:-}" ]; then
+    printf '%s\n' "未解析到"
+    return 0
+  fi
+
+  joined="$(printf '%s\n' "$lines" | tgdb_join_lines_csv 2>/dev/null || true)"
+  if [ -n "${joined:-}" ]; then
+    printf '%s\n' "$joined"
+  else
+    printf '%s\n' "未解析到"
+  fi
+}
+
+_derper_dns_contains_ip() {
+  local lines="${1:-}"
+  local target_ip="${2:-}"
+  [ -n "${lines:-}" ] || return 1
+  [ -n "${target_ip:-}" ] || return 1
+  printf '%s\n' "$lines" | grep -Fx -- "$target_ip" >/dev/null 2>&1
+}
+
+_derper_check_subdomain_dns_for_cert() {
+  local root_domain="${1:-}"
+  local fqdn=""
+  local public_ipv4="" public_ipv6=""
+  local resolved_ipv4="" resolved_ipv6=""
+  local matched=1
+  local status=0
+
+  [ -n "${root_domain:-}" ] || return 1
+  fqdn="derp.${root_domain}"
+
+  echo "----------------------------------"
+  echo "檢查 ${fqdn} DNS 是否已指向本機公網 IP..."
+
+  public_ipv4="$(_derper_detect_public_ipv4 2>/dev/null || true)"
+  public_ipv6="$(_derper_detect_public_ipv6 2>/dev/null || true)"
+  resolved_ipv4="$(tgdb_resolve_dns_ips "$fqdn" 4 2>/dev/null || true)"
+  resolved_ipv6="$(tgdb_resolve_dns_ips "$fqdn" 6 2>/dev/null || true)"
+
+  echo " - 本機公網 IPv4：${public_ipv4:-未偵測到}"
+  echo " - 本機公網 IPv6：${public_ipv6:-未偵測到}"
+  echo " - DNS A：$(_derper_dns_ip_list_label "$resolved_ipv4")"
+  echo " - DNS AAAA：$(_derper_dns_ip_list_label "$resolved_ipv6")"
+
+  if _derper_is_ipv4_addr "$public_ipv4" && _derper_dns_contains_ip "$resolved_ipv4" "$public_ipv4"; then
+    matched=0
+  fi
+  if _derper_is_ipv6_addr "$public_ipv6" && _derper_dns_contains_ip "$resolved_ipv6" "$public_ipv6"; then
+    matched=0
+  fi
+
+  if [ "$matched" -eq 0 ]; then
+    echo "✅ ${fqdn} 已對到本機公網 IP，可繼續申請憑證。"
+    return 0
+  fi
+
+  tgdb_warn "${fqdn} 目前尚未對到本機公網 IP，憑證申請可能失敗。"
+  echo "建議先確認："
+  echo " - derp 子域名的 A / AAAA 記錄是否已指向這台機器"
+  echo " - 若使用 Cloudflare，請先切到 DNS only（灰雲）"
+  echo " - DNS 剛修改時，請稍候數分鐘再重試"
+
+  if ! ui_confirm_yn "仍要使用此 root_domain 繼續部署 DERP 嗎？(y/N，預設 N，輸入 0 取消): " "N"; then
+    status=$?
+    [ "$status" -eq 2 ] && return 2
+    return 1
+  fi
+  return 0
 }
 
 _derper_prompt_region_id() {

@@ -28,15 +28,9 @@ _dbadmin_pick_tool() {
     echo "=================================="
     echo "$prompt"
     echo "----------------------------------"
-
-    local s1 s2 s3
-    s1="pgAdmin（$(_dbadmin_podman_container_status_label "pgadmin")）"
-    s2="RedisInsight（$(_dbadmin_podman_container_status_label "redisinsight")）"
-    s3="CloudBeaver（$(_dbadmin_podman_container_status_label "cloudbeaver")）"
-
-    echo "1. $s1"
-    echo "2. $s2"
-    echo "3. $s3"
+    echo "1. pgAdmin"
+    echo "2. RedisInsight"
+    echo "3. CloudBeaver"
     echo "----------------------------------"
     echo "0. 取消"
     echo "=================================="
@@ -70,41 +64,6 @@ _dbadmin_is_tool_installed() {
   fi
 
   return 1
-}
-
-_dbadmin_podman_container_status_label() {
-  local name="$1"
-
-  if ! command -v podman >/dev/null 2>&1; then
-    echo "未知（缺少 podman）"
-    return 0
-  fi
-
-  if podman ps --format '{{.Names}}' 2>/dev/null | grep -qx "$name"; then
-    echo "✅ 執行中"
-    return 0
-  fi
-
-  if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$name"; then
-    echo "⏸ 已部署"
-    return 0
-  fi
-
-  echo "❌ 未部署"
-  return 0
-}
-
-_dbadmin_print_runtime_status() {
-  local pg_label ri_label cb_label
-  pg_label="$(_dbadmin_podman_container_status_label "pgadmin")"
-  ri_label="$(_dbadmin_podman_container_status_label "redisinsight")"
-  cb_label="$(_dbadmin_podman_container_status_label "cloudbeaver")"
-
-  echo "狀態："
-  echo " - pgAdmin：$pg_label"
-  echo " - RedisInsight：$ri_label"
-  echo " - CloudBeaver：$cb_label"
-  return 0
 }
 
 _dbadmin_is_instance_name_conflict() {

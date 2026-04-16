@@ -916,6 +916,7 @@ cloudflared_p_menu() {
     echo "❖ Cloudflare Tunnel（cloudflared）❖"
     echo "教學與文件：https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/"
     echo "=================================="
+    podman ps --filter label=app=cloudflared || true
     local -a tunnels=()
     mapfile -t tunnels < <(_cloudflared_list_tunnels)
     if [ ${#tunnels[@]} -eq 0 ]; then

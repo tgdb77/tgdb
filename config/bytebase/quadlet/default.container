@@ -1,20 +1,18 @@
 [Unit]
-Description=CloudBeaver
+Description=Bytebase
 After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=docker.io/dbeaver/cloudbeaver:latest
+Image=docker.io/bytebase/bytebase:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=dbdmin
+Label=app=bytebase
+#Network=tgdb.network
 
-PublishPort=127.0.0.1:${host_port}:8978/tcp
+PublishPort=127.0.0.1:${host_port}:8080/tcp
 
-Network=tgdb.network
-
-EnvironmentFile=${instance_dir}/.env
-Volume=${instance_dir}/workspace:/opt/cloudbeaver/workspace
+Volume=${instance_dir}/data:/var/opt/bytebase
 
 [Service]
 Restart=always

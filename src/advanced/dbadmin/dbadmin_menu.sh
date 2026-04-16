@@ -17,7 +17,7 @@ dbadmin_p_menu() {
     echo "❖ 數據庫管理 ❖"
     echo "教學與文件：pgAdmin：https://www.pgadmin.org/docs/ ｜ RedisInsight：https://redis.io/docs/latest/operate/redisinsight/ ｜ CloudBeaver：https://dbeaver.com/docs/cloudbeaver/"
     echo "=================================="
-    _dbadmin_print_runtime_status || true
+    podman ps --filter label=app=dbdmin || true
     echo "----------------------------------"
     echo "1. 部署 pgAdmin 4（PostgreSQL Web 管理）"
     echo "2. 部署 RedisInsight（Redis Web 管理）"

@@ -479,6 +479,69 @@ get_ipv4_address() {
   printf '%s\n' "$ipv4"
 }
 
+tgdb_resolve_dns_ips() {
+  # 解析指定主機的 A / AAAA 紀錄。
+  # 用法：tgdb_resolve_dns_ips <hostname> <4|6>
+  local hostname="${1:-}"
+  local family="${2:-4}"
+  local out=""
+  local mode="" rr=""
+
+  [ -n "$hostname" ] || return 1
+  case "$family" in
+    4)
+      mode="ahostsv4"
+      rr="A"
+      ;;
+    6)
+      mode="ahostsv6"
+      rr="AAAA"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  if command -v getent >/dev/null 2>&1; then
+    out="$(
+      getent "$mode" "$hostname" 2>/dev/null \
+        | awk '{ gsub(/%.*/, "", $1); print $1 }' \
+        | awk 'NF && !seen[$0]++'
+    )"
+  fi
+
+  if [ -z "${out:-}" ] && command -v dig >/dev/null 2>&1; then
+    out="$(dig +short "$hostname" "$rr" 2>/dev/null | awk 'NF && !seen[$0]++')"
+  fi
+
+  if [ -z "${out:-}" ] && command -v host >/dev/null 2>&1; then
+    if [ "$family" = "6" ]; then
+      out="$(host -t AAAA "$hostname" 2>/dev/null | awk '/has IPv6 address/ {print $NF}' | awk 'NF && !seen[$0]++')"
+    else
+      out="$(host -t A "$hostname" 2>/dev/null | awk '/has address/ {print $NF}' | awk 'NF && !seen[$0]++')"
+    fi
+  fi
+
+  [ -n "${out:-}" ] || return 1
+  printf '%s\n' "$out"
+}
+
+tgdb_join_lines_csv() {
+  awk '
+    NF {
+      if (count++ > 0) {
+        printf ", "
+      }
+      printf "%s", $0
+    }
+    END {
+      if (count > 0) {
+        printf "\n"
+      }
+    }
+  '
+}
+
 _select_editor() {
     local editor_env="${EDITOR-}"
     if [ -n "$editor_env" ] && command -v "$editor_env" >/dev/null 2>&1; then

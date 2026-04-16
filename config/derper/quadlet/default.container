@@ -7,7 +7,7 @@ Wants=network-online.target
 Image=docker.io/fredliang/derper:a71fc43adf9fdea7e5ea6dc4fa1b570ab4010929
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=derper
+Label=app=headscale
 
 # DERP HTTPS
 PublishPort=${derp_port}:443/tcp

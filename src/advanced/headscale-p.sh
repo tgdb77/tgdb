@@ -186,11 +186,92 @@ _headscale_prompt_root_domain() {
       return 2
     fi
     if _headscale_is_valid_root_domain "$value"; then
+      if ! _headscale_check_subdomain_dns_for_cert "$value"; then
+        case "$?" in
+          2) return 2 ;;
+          *) continue ;;
+        esac
+      fi
       printf -v "$out_var" '%s' "$value"
       return 0
     fi
     tgdb_err "root_domain 格式不正確（例：example.com；不可包含空白、/、:、@）。"
   done
+}
+
+_headscale_dns_ip_list_label() {
+  local lines="${1:-}"
+  local joined=""
+
+  if [ -z "${lines:-}" ]; then
+    printf '%s\n' "未解析到"
+    return 0
+  fi
+
+  joined="$(printf '%s\n' "$lines" | tgdb_join_lines_csv 2>/dev/null || true)"
+  if [ -n "${joined:-}" ]; then
+    printf '%s\n' "$joined"
+  else
+    printf '%s\n' "未解析到"
+  fi
+}
+
+_headscale_dns_contains_ip() {
+  local lines="${1:-}"
+  local target_ip="${2:-}"
+  [ -n "${lines:-}" ] || return 1
+  [ -n "${target_ip:-}" ] || return 1
+  printf '%s\n' "$lines" | grep -Fx -- "$target_ip" >/dev/null 2>&1
+}
+
+_headscale_check_subdomain_dns_for_cert() {
+  local root_domain="${1:-}"
+  local fqdn=""
+  local public_ipv4="" public_ipv6=""
+  local resolved_ipv4="" resolved_ipv6=""
+  local matched=1
+  local status=0
+
+  [ -n "${root_domain:-}" ] || return 1
+  fqdn="hs.${root_domain}"
+
+  echo "----------------------------------"
+  echo "檢查 ${fqdn} DNS 是否已指向本機公網 IP..."
+
+  public_ipv4="$(_headscale_detect_public_ipv4 2>/dev/null || true)"
+  public_ipv6="$(_headscale_detect_public_ipv6 2>/dev/null || true)"
+  resolved_ipv4="$(tgdb_resolve_dns_ips "$fqdn" 4 2>/dev/null || true)"
+  resolved_ipv6="$(tgdb_resolve_dns_ips "$fqdn" 6 2>/dev/null || true)"
+
+  echo " - 本機公網 IPv4：${public_ipv4:-未偵測到}"
+  echo " - 本機公網 IPv6：${public_ipv6:-未偵測到}"
+  echo " - DNS A：$(_headscale_dns_ip_list_label "$resolved_ipv4")"
+  echo " - DNS AAAA：$(_headscale_dns_ip_list_label "$resolved_ipv6")"
+
+  if _headscale_is_ipv4_addr "$public_ipv4" && _headscale_dns_contains_ip "$resolved_ipv4" "$public_ipv4"; then
+    matched=0
+  fi
+  if _headscale_is_ipv6_addr "$public_ipv6" && _headscale_dns_contains_ip "$resolved_ipv6" "$public_ipv6"; then
+    matched=0
+  fi
+
+  if [ "$matched" -eq 0 ]; then
+    echo "✅ ${fqdn} 已對到本機公網 IP，可繼續申請憑證。"
+    return 0
+  fi
+
+  tgdb_warn "${fqdn} 目前尚未對到本機公網 IP，憑證申請可能失敗。"
+  echo "建議先確認："
+  echo " - hs 子域名的 A / AAAA 記錄是否已指向這台機器"
+  echo " - 若使用 Cloudflare，請先切到 DNS only（灰雲）"
+  echo " - DNS 剛修改時，請稍候數分鐘再重試"
+
+  if ! ui_confirm_yn "仍要使用此 root_domain 繼續部署 Headscale 嗎？(y/N，預設 N，輸入 0 取消): " "N"; then
+    status=$?
+    [ "$status" -eq 2 ] && return 2
+    return 1
+  fi
+  return 0
 }
 
 _headscale_prompt_pg_user() {
@@ -1285,75 +1366,6 @@ headscale_p_full_remove() {
   return 0
 }
 
-_headscale_podman_container_status_label() {
-  local name="$1"
-
-  if ! command -v podman >/dev/null 2>&1; then
-    echo "未知（缺少 podman）"
-    return 0
-  fi
-
-  if podman ps --format '{{.Names}}' 2>/dev/null | grep -qx "$name"; then
-    echo "✅ 執行中"
-    return 0
-  fi
-
-  if podman ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$name"; then
-    echo "⏸ 已部署"
-    return 0
-  fi
-
-  echo "❌ 未執行"
-  return 0
-}
-
-_headscale_system_unit_active_label() {
-  local unit="$1"
-
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo "未知（缺少 systemctl）"
-    return 0
-  fi
-
-  if systemctl is-active --quiet "$unit" 2>/dev/null; then
-    echo "✅ 執行中"
-    return 0
-  fi
-
-  if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
-    echo "⏸ 已安裝"
-    return 0
-  fi
-
-  echo "❌ 未執行"
-  return 0
-}
-
-_headscale_print_runtime_status() {
-  load_system_config || true
-
-  local hs_label tsd_label ts_label derp_label
-  hs_label="$(_headscale_podman_container_status_label "$HEADSCALE_CONTAINER_NAME")"
-  derp_label="$(_headscale_podman_container_status_label "derper")"
-  tsd_label="$(_headscale_system_unit_active_label "tailscaled.service")"
-  ts_label="未知"
-  if declare -F tailscale_p_login_label >/dev/null 2>&1; then
-    ts_label="$(tailscale_p_login_label)"
-  elif [ -f "$SCRIPT_DIR/tailscale-p.sh" ]; then
-    # shellcheck source=src/advanced/tailscale-p.sh
-    source "$SCRIPT_DIR/tailscale-p.sh"
-    if declare -F tailscale_p_login_label >/dev/null 2>&1; then
-      ts_label="$(tailscale_p_login_label)"
-    fi
-  fi
-
-  echo "狀態："
-  echo " - Headscale：$hs_label"
-  echo " - tailscaled：$tsd_label（tailscale：$ts_label）"
-  echo " - DERP（derper）：$derp_label"
-  return 0
-}
-
 headscale_p_menu() {
   _headscale_require_tty || return $?
 
@@ -1363,25 +1375,23 @@ headscale_p_menu() {
     echo "❖ Headscale / DERP（Headscale + Postgres + Headplane）❖"
     echo "=================================="
     echo "教學與文件：https://headscale.net/"
-    echo "部屬前須確認已添加hs/derp子域名"
-    _headscale_print_runtime_status || true
+    podman ps --filter label=app=headscale || true
     echo "----------------------------------"
     echo "1. 部署 headscale"
     echo "2. 產生 Headscale API Key"
     echo "3. 安裝/更新 tailscale 客戶端"
     echo "4. 加入 Headscale 伺服器"
     echo "5. Tailnet 服務埠轉發"
-    echo "6. 開啟 tailscale（tailscale up）"
-    echo "7. 關閉 tailscale（tailscale down）"
-    echo "8. 查看 tailscale status"
-    echo "9. 部署/更新 DERP（derper）"
-    echo "10. 注入自建 DERP（derpmap + config.yaml）"
+    echo "6. 切換 tailscale(up/down）"
+    echo "7. 查看 tailscale 狀態"
+    echo "8. 部署/更新 DERP"
+    echo "9. 注入自建 DERP"
     echo "----------------------------------"
     echo "d. 移除應用"
     echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-10/d]: " choice
+    read -r -e -p "請輸入選擇 [0-9/d]: " choice
 
     case "$choice" in
       1) headscale_p_deploy || true ;;
@@ -1391,17 +1401,13 @@ headscale_p_menu() {
       5) headscale_p_tailnet_port_forward || true ;;
       6)
         _headscale_load_tailscale_module || { ui_pause "按任意鍵返回..."; continue; }
-        tailscale_p_client_enable || true
+        tailscale_p_client_toggle || true
         ;;
       7)
         _headscale_load_tailscale_module || { ui_pause "按任意鍵返回..."; continue; }
-        tailscale_p_client_disable || true
-        ;;
-      8)
-        _headscale_load_tailscale_module || { ui_pause "按任意鍵返回..."; continue; }
         tailscale_p_show_status || true
         ;;
-      9)
+      8)
         if declare -F tgdb_load_module >/dev/null 2>&1; then
           tgdb_load_module "derper-p" || { ui_pause "按任意鍵返回..."; continue; }
         else
@@ -1410,7 +1416,7 @@ headscale_p_menu() {
         fi
         derper_p_deploy || true
         ;;
-      10)
+      9)
         if declare -F tgdb_load_module >/dev/null 2>&1; then
           tgdb_load_module "derper-p" || { ui_pause "按任意鍵返回..."; continue; }
         else

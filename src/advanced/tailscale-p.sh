@@ -352,6 +352,70 @@ tailscale_p_tailnet_port_forward() {
   return 0
 }
 
+_tailscale_p_current_state() {
+  if ! command -v tailscale >/dev/null 2>&1; then
+    printf '%s\n' "not-installed"
+    return 0
+  fi
+
+  local out="" backend_state=""
+  out="$(_tailscale_p_sudo tailscale status --json 2>&1 || true)"
+  if [ -z "${out:-}" ]; then
+    printf '%s\n' "unknown"
+    return 0
+  fi
+
+  if printf '%s\n' "$out" | grep -qiE "Access denied|checkprefs access denied|permission denied"; then
+    printf '%s\n' "unknown"
+    return 0
+  fi
+
+  backend_state="$(printf '%s\n' "$out" | sed -nE 's/.*"BackendState"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n1)"
+  case "$backend_state" in
+    Running)
+      printf '%s\n' "up"
+      return 0
+      ;;
+    Starting|NeedsLogin|NeedsMachineAuth|Stopped|NoState)
+      printf '%s\n' "down"
+      return 0
+      ;;
+  esac
+
+  if printf '%s\n' "$out" | grep -qiE "failed to connect to local tailscaled|tailscaled.*not.*running|no such file or directory|cannot connect|connection refused|Tailscale is stopped|Logged out|needs login|login required|not authenticated|unauthorized"; then
+    printf '%s\n' "down"
+    return 0
+  fi
+
+  printf '%s\n' "up"
+  return 0
+}
+
+tailscale_p_client_toggle() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  if ! command -v tailscale >/dev/null 2>&1; then
+    tgdb_err "尚未安裝 tailscale，請先執行「安裝/更新 tailscale 客戶端」。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  require_root || { ui_pause "按任意鍵返回..."; return 1; }
+
+  local state=""
+  state="$(_tailscale_p_current_state)"
+
+  case "$state" in
+    up)
+      tailscale_p_client_disable
+      ;;
+    *)
+      tailscale_p_client_enable
+      ;;
+  esac
+}
+
 tailscale_p_client_enable() {
   _tailscale_p_require_tty || return $?
   load_system_config || true
@@ -412,8 +476,6 @@ tailscale_p_client_disable() {
   echo "=================================="
   echo "❖ tailscale down（關閉/斷線）❖"
   echo "=================================="
-  ui_confirm_yn "確定要繼續嗎？(y/N，預設 Y，輸入 0 取消): " "Y" || { ui_pause "按任意鍵返回..."; return 0; }
-
   echo "----------------------------------"
   _tailscale_p_sudo tailscale down 2>&1 || true
 
@@ -466,33 +528,5 @@ tailscale_p_cleanup_if_needed() {
     fi
   fi
 
-  return 0
-}
-
-tailscale_p_login_label() {
-  if ! command -v tailscale >/dev/null 2>&1; then
-    echo "❌ 未安裝"
-    return 0
-  fi
-
-  # tailscale status 在部分環境會需要 sudo/operator 權限；避免在選單中造成中斷，統一吞掉錯誤並提示。
-  local out
-  out="$(tailscale status 2>&1 || true)"
-  if [ -z "${out:-}" ]; then
-    echo "未知"
-    return 0
-  fi
-
-  if printf '%s\n' "$out" | grep -qi "Logged out"; then
-    echo "⏸ 未登入"
-    return 0
-  fi
-
-  if printf '%s\n' "$out" | grep -qiE "Access denied|checkprefs access denied|permission denied|needs login"; then
-    echo "⚠️ 需要 sudo/授權"
-    return 0
-  fi
-
-  echo "✅ 已登入"
   return 0
 }
