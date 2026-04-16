@@ -7,7 +7,7 @@ Wants=network-online.target
 Image=docker.io/dpage/pgadmin4:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=pgadmin
+Label=app=dbdmin
 
 PublishPort=127.0.0.1:${host_port}:80/tcp
 

@@ -36,6 +36,7 @@ nginx_p_menu() {
         echo "❖ Nginx 管理❖"
         echo "教學與文件：https://nginx.org/en/docs/"
         echo "=================================="
+        podman ps --filter label=app=nginx || true
         _nginx_print_sites_cert_summary 0
         echo "----------------------------------"
         echo "1. 部署/初始化"
