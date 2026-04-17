@@ -227,20 +227,5 @@ appspec_index_all() {
   return 0
 }
 
-appspec_load_all() {
-  TGDB_APP_SPEC=()
-  TGDB_APP_SPEC_SERVICES=()
-  TGDB_APP_SPEC_PATHS=()
-
-  appspec_index_all || return 0
-
-  local service
-  for service in "${!TGDB_APP_SPEC_SERVICES[@]}"; do
-    _appspec_ensure_service_loaded "$service" || true
-  done
-
-  return 0
-}
-
 # 載入時只先建立索引；各服務內容在首次查詢時才載入（lazy load）。
 appspec_index_all || true

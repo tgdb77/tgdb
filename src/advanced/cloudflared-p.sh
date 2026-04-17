@@ -103,13 +103,6 @@ _cloudflared_unit_name_from_tunnel() {
   printf '%s\n' "cloudflared-${safe}"
 }
 
-_cloudflared_runtime_unit_path() {
-  local tunnel="$1"
-  local unit_name
-  unit_name="$(_cloudflared_unit_name_from_tunnel "$tunnel")"
-  _quadlet_runtime_unit_path "${unit_name}.container" "cloudflared"
-}
-
 _cloudflared_resolved_unit_path() {
   local tunnel="$1"
   local unit_name
@@ -628,29 +621,6 @@ _cloudflared_prompt_delete_dir() {
     return 2
   fi
   printf -v "$out_var" '%s' "n"
-  return 0
-}
-
-cloudflared_p_list() {
-  _cloudflared_ensure_layout
-  echo "=================================="
-  echo "❖ Cloudflare Tunnel：已建立列表 ❖"
-  echo "=================================="
-  local -a tunnels=()
-  mapfile -t tunnels < <(_cloudflared_list_tunnels)
-  if [ ${#tunnels[@]} -eq 0 ]; then
-    echo "（尚未建立任何 Tunnel）"
-    ui_pause "按任意鍵返回..."
-    return 0
-  fi
-
-  local t
-  for t in "${tunnels[@]}"; do
-    local unit_name
-    unit_name="$(_cloudflared_unit_name_from_tunnel "$t")"
-    printf '%-28s %s\n' "$t" "單元：$unit_name"
-  done
-  ui_pause "按任意鍵返回..."
   return 0
 }
 

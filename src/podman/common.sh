@@ -90,18 +90,6 @@ _podman_unit_service_from_path() {
     printf '%s\n' ""
 }
 
-_podman_unit_is_tgdb_managed() {
-    local path="$1"
-    if declare -F rm_runtime_quadlet_is_tgdb_managed >/dev/null 2>&1; then
-        rm_runtime_quadlet_is_tgdb_managed "$path"
-        return $?
-    fi
-    case "$path" in
-        */tgdb/*) return 0 ;;
-    esac
-    return 1
-}
-
 _podman_runtime_dir_for_scope() {
     local scope
     local runtime_dir=""

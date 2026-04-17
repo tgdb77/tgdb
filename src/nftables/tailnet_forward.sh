@@ -1,15 +1,6 @@
 #!/bin/bash
 
 # nftables Tailnet 服務埠轉發
-_tgdb_ts_fwd_set_name() {
-    local proto="$1"
-    case "$proto" in
-        tcp) echo "ts_fwd_tcp_ports" ;;
-        udp) echo "ts_fwd_udp_ports" ;;
-        *) echo "" ;;
-    esac
-}
-
 _tgdb_ts_fwd_chain_ensure() {
     # 確保 Tailnet 轉發相關 set/chain/rule 存在（僅管理 table inet tgdb_net）。
     if ! _has_nft_cmd; then
@@ -156,42 +147,6 @@ _prompt_tcp_udp_both_proto() {
         3) printf -v "$out_var" '%s' "udp" ;;
         *) return 1 ;;
     esac
-    return 0
-}
-
-nftables_ts_forward_show() {
-    if ! ui_is_interactive; then
-        tgdb_fail "此功能需要互動式終端（TTY）。" 2 || true
-        return 2
-    fi
-
-    clear
-    echo "=================================="
-    echo "❖ Tailnet 服務埠轉發（tailscale0 -> 127.0.0.1）❖"
-    echo "=================================="
-    require_root || { ui_pause; return 1; }
-
-    if ! _has_nft_cmd; then
-        tgdb_fail "未安裝 nftables，請先初始化" 1 || true
-        ui_pause
-        return 1
-    fi
-    if ! _tgdb_table_exists; then
-        tgdb_fail "找不到 table inet tgdb_net，請先初始化" 1 || true
-        ui_pause
-        return 1
-    fi
-
-    local tcp_list udp_list
-    tcp_list="$(_get_set_elements_line ts_fwd_tcp_ports)"
-    udp_list="$(_get_set_elements_line ts_fwd_udp_ports)"
-    echo "TCP 轉發埠：$tcp_list"
-    echo "UDP 轉發埠：$udp_list"
-    echo "----------------------------------"
-    echo "說明：當其他節點連到本機 Tailnet IPv4（100.x）的 <port> 時，會被 DNAT 到 127.0.0.1:<port>。"
-    echo "限制：目前僅支援 Tailnet IPv4；若你用節點名稱或 fd7a:... IPv6 連線，這組規則不會命中。"
-    echo "提示：請確保服務本身有登入/權限控管，並搭配 Headscale ACL 控制可訪問的節點/使用者。"
-    ui_pause
     return 0
 }
 

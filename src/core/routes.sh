@@ -135,20 +135,6 @@ TGDB_MAIN_MENU_ROUTES=(
   "0|退出|none|tgdb_exit"
 )
 
-tgdb_reserved_feature() {
-  echo "=================================="
-  echo "❖（保留功能）❖"
-  echo "=================================="
-  echo "此選項目前僅為佔位，留待未來功能擴充。"
-  if declare -F ui_pause >/dev/null 2>&1; then
-    ui_pause "按任意鍵返回..." "main"
-  else
-    echo "按 Enter 返回..."
-    read -r _ || true
-  fi
-  return 0
-}
-
 tgdb_print_main_menu() {
   local row code label
   for row in "${TGDB_MAIN_MENU_ROUTES[@]}"; do
