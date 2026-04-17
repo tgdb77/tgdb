@@ -26,6 +26,42 @@ _third_party_reinstall_join_shell_words() {
   printf -v "$out_var" '%s' "$joined"
 }
 
+third_party_reinstall_detect_virtualization() {
+  local virt=""
+  local product_name=""
+  local sys_vendor=""
+
+  if command -v systemd-detect-virt >/dev/null 2>&1; then
+    virt="$(systemd-detect-virt 2>/dev/null || true)"
+    case "$virt" in
+      kvm|qemu)
+        printf '%s\n' "$virt"
+        return 0
+        ;;
+    esac
+  fi
+
+  if [ -r /sys/class/dmi/id/product_name ]; then
+    product_name="$(tr -d '\r\n' </sys/class/dmi/id/product_name 2>/dev/null || true)"
+  fi
+  if [ -r /sys/class/dmi/id/sys_vendor ]; then
+    sys_vendor="$(tr -d '\r\n' </sys/class/dmi/id/sys_vendor 2>/dev/null || true)"
+  fi
+
+  case "${product_name} ${sys_vendor}" in
+    *KVM*|*QEMU*)
+      if [[ "${product_name} ${sys_vendor}" == *KVM* ]]; then
+        printf '%s\n' "kvm"
+      else
+        printf '%s\n' "qemu"
+      fi
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
 third_party_reinstall_print_menu() {
   clear || true
   echo "=================================="
@@ -263,10 +299,19 @@ third_party_reinstall_menu() {
 }
 
 third_party_run_reinstall() {
+  local virt_type=""
+
+  if ! virt_type="$(third_party_reinstall_detect_virtualization)"; then
+    tgdb_warn "VPS 系統重裝目前僅支援 KVM 虛擬化技術。"
+    ui_pause "按任意鍵返回上一頁..." "main"
+    return 0
+  fi
+
   require_root || {
     ui_pause "此功能需要 root 或 sudo 權限，按任意鍵返回..." "main"
     return 1
   }
 
+  tgdb_info "已偵測到虛擬化類型：$virt_type"
   third_party_reinstall_menu
 }
