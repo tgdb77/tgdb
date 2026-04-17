@@ -27,6 +27,8 @@ source "$DBADMIN_MODULE_DIR/dbbackup_common.sh"
 source "$DBADMIN_MODULE_DIR/dbbackup_postgres.sh"
 # shellcheck source=src/advanced/dbadmin/dbbackup_mysql.sh
 source "$DBADMIN_MODULE_DIR/dbbackup_mysql.sh"
+# shellcheck source=src/advanced/dbadmin/dbbackup_mongo.sh
+source "$DBADMIN_MODULE_DIR/dbbackup_mongo.sh"
 # shellcheck source=src/advanced/dbadmin/dbbackup_redis.sh
 source "$DBADMIN_MODULE_DIR/dbbackup_redis.sh"
 # shellcheck source=src/advanced/dbadmin/dbbackup_batch.sh

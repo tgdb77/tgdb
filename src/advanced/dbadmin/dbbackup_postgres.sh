@@ -131,7 +131,7 @@ _dbbackup_postgres_export() {
   } >"$out_meta" 2>/dev/null || true
   chmod 600 "$out_meta" 2>/dev/null || true
 
-  _dbbackup_prune_old_backups "$out_dir" "$DBBACKUP_MAX_KEEP" "dump" || true
+  _dbbackup_prune_old_backups "$out_dir" "$(_dbbackup_max_keep_get)" "dump" || true
 
   echo "✅ 匯出完成：$out_dump"
   if [ -f "$out_globals" ]; then
@@ -275,4 +275,3 @@ _dbbackup_postgres_import_overwrite() {
   _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
   return 0
 }
-

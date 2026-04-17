@@ -20,7 +20,7 @@ kopia_p_menu() {
     echo "----------------------------------"
     echo "1. 部署 Kopia（Quadlet）"
     echo "2. 遠端 Repository 設定（rclone）"
-    echo "3. 產生/更新 .kopiaignore（固定排除 pgdata/rdata/mysql）"
+    echo "3. 產生/更新 .kopiaignore（固定排除數據庫目錄）"
     echo "4. 編輯 .kopiaignore"
     echo "5. 統一備份排程（systemd --user timer）"
     echo "6. 還原快照（覆蓋模式）"

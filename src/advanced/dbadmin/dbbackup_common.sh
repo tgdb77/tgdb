@@ -13,6 +13,93 @@ DBBACKUP_PROJECT_SUBDIR="db-dump"
 DBBACKUP_DB_READY_TIMEOUT=120
 DBBACKUP_DB_READY_INTERVAL=2
 
+_dbbackup_config_dir() {
+  if declare -F rm_service_dir >/dev/null 2>&1; then
+    rm_service_dir "dbadmin"
+    return 0
+  fi
+
+  local persist_dir
+  persist_dir="$(rm_persist_config_dir 2>/dev/null || echo "")"
+  [ -n "${persist_dir:-}" ] || return 1
+  printf '%s\n' "$persist_dir/dbadmin"
+}
+
+_dbbackup_config_file() {
+  local dir
+  dir="$(_dbbackup_config_dir 2>/dev/null || true)"
+  [ -n "${dir:-}" ] || return 1
+  printf '%s\n' "$dir/dbbackup.conf"
+}
+
+_dbbackup_ensure_module_config() {
+  local dir file
+  dir="$(_dbbackup_config_dir 2>/dev/null || true)"
+  file="$(_dbbackup_config_file 2>/dev/null || true)"
+  [ -n "${dir:-}" ] || return 1
+  [ -n "${file:-}" ] || return 1
+
+  mkdir -p "$dir" 2>/dev/null || true
+  [ -f "$file" ] || touch "$file" 2>/dev/null || true
+}
+
+_dbbackup_max_keep_get() {
+  _dbbackup_ensure_module_config >/dev/null 2>&1 || {
+    printf '%s\n' "$DBBACKUP_MAX_KEEP"
+    return 0
+  }
+
+  local file v
+  file="$(_dbbackup_config_file 2>/dev/null || true)"
+  v="$(_read_kv_or_default "dbbackup_max_keep" "$file" "$DBBACKUP_MAX_KEEP")"
+  if [[ "$v" =~ ^[1-9][0-9]*$ ]]; then
+    printf '%s\n' "$v"
+  else
+    printf '%s\n' "$DBBACKUP_MAX_KEEP"
+  fi
+}
+
+_dbbackup_max_keep_set() {
+  local count="$1"
+  local file
+  _dbbackup_ensure_module_config >/dev/null 2>&1 || return 1
+  file="$(_dbbackup_config_file 2>/dev/null || true)"
+  [ -n "${file:-}" ] || return 1
+
+  if grep -q '^dbbackup_max_keep=' "$file" 2>/dev/null; then
+    sed -i "s|^dbbackup_max_keep=.*$|dbbackup_max_keep=$count|" "$file" 2>/dev/null || true
+  else
+    printf 'dbbackup_max_keep=%s\n' "$count" >>"$file"
+  fi
+}
+
+dbbackup_retention_config_interactive() {
+  if ! ui_is_interactive; then
+    tgdb_fail "此功能需要互動式終端（TTY）。" 2 || return $?
+  fi
+
+  local cur_keep new_keep default_keep
+  cur_keep="$(_dbbackup_max_keep_get)"
+  default_keep="$DBBACKUP_MAX_KEEP"
+
+  echo "目前熱備份保留數量：$cur_keep"
+
+  while true; do
+    read -r -e -p "輸入熱備份保留數量（正整數，直接按 Enter 使用預設 $default_keep）: " new_keep
+    new_keep="${new_keep:-$default_keep}"
+    if [[ "$new_keep" =~ ^[1-9][0-9]*$ ]]; then
+      break
+    fi
+    tgdb_err "請輸入正整數。"
+  done
+
+  _dbbackup_max_keep_set "$new_keep" || {
+    tgdb_fail "更新熱備份保留數量失敗。" 1 || return $?
+  }
+  echo "✅ 已更新熱備份保留數量：$new_keep"
+  echo "ℹ️ 新設定會在之後建立新熱備份時套用。"
+}
+
 _dbbackup_is_noninteractive() {
   if [ "${TGDB_DBBACKUP_NONINTERACTIVE:-0}" = "1" ]; then
     return 0
@@ -128,8 +215,8 @@ _dbbackup_pause_on_error() {
 _dbbackup_prune_old_backups() {
   local dir="$1" max_keep="${2:-$DBBACKUP_MAX_KEEP}" primary_ext="${3:-}"
   [ -d "$dir" ] || return 0
-  [[ "${max_keep:-}" =~ ^[0-9]+$ ]] || max_keep="$DBBACKUP_MAX_KEEP"
-  [ "$max_keep" -gt 0 ] 2>/dev/null || max_keep="$DBBACKUP_MAX_KEEP"
+  [[ "${max_keep:-}" =~ ^[0-9]+$ ]] || max_keep="$(_dbbackup_max_keep_get)"
+  [ "$max_keep" -gt 0 ] 2>/dev/null || max_keep="$(_dbbackup_max_keep_get)"
   primary_ext="$(_dbbackup_trim_ws "${primary_ext:-}")"
 
   # 以「主要備份檔」判斷保留數量，避免把同一份備份（dump/globals/meta）拆開刪。
@@ -207,7 +294,7 @@ _dbbackup_unit_label_get_value() {
 }
 
 _dbbackup_unit_has_tgdb_db_label() {
-  local file="$1" db_type="$2" # postgres|redis|mysql
+  local file="$1" db_type="$2" # postgres|redis|mysql|mongo
   [ -f "$file" ] || return 1
   [ -n "${db_type:-}" ] || return 1
   awk -v want="tgdb_db=$db_type" '
@@ -245,7 +332,7 @@ _dbbackup_unit_volume_host_for_container_path() {
 }
 
 _dbbackup_find_db_endpoints() {
-  local db_type="$1" # postgres|redis|mysql
+  local db_type="$1" # postgres|redis|mysql|mongo
   [ -n "$db_type" ] || return 1
 
   load_system_config >/dev/null 2>&1 || true
@@ -269,6 +356,7 @@ _dbbackup_find_db_endpoints() {
       postgres) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/postgresql/data" 2>/dev/null || true)" ;;
       redis) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/data" 2>/dev/null || true)" ;;
       mysql) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/mysql" 2>/dev/null || true)" ;;
+      mongo) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/data/db" 2>/dev/null || true)" ;;
       *) return 1 ;;
     esac
 
@@ -317,15 +405,17 @@ _dbbackup_pick_db_type() {
     echo "1. PostgreSQL"
     echo "2. Redis"
     echo "3. MySQL"
+    echo "4. MongoDB"
     echo "----------------------------------"
     echo "0. 取消"
     echo "=================================="
     local choice
-    read -r -e -p "請輸入選擇 [0-3]: " choice
+    read -r -e -p "請輸入選擇 [0-4]: " choice
     case "$choice" in
       1) printf -v "$__outvar" '%s' "postgres"; return 0 ;;
       2) printf -v "$__outvar" '%s' "redis"; return 0 ;;
       3) printf -v "$__outvar" '%s' "mysql"; return 0 ;;
+      4) printf -v "$__outvar" '%s' "mongo"; return 0 ;;
       0) return 2 ;;
       *) echo "無效選項，請重新輸入。"; sleep 1 ;;
     esac
@@ -344,7 +434,7 @@ _dbbackup_pick_db_endpoint() {
   done < <(_dbbackup_find_db_endpoints "$db_type")
 
   if [ ${#endpoints[@]} -eq 0 ]; then
-    tgdb_fail "找不到可用的目標（$db_type）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=${db_type}，且其資料卷掛載存在（Postgres: /var/lib/postgresql/data；Redis: /data；MySQL: /var/lib/mysql），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
+    tgdb_fail "找不到可用的目標（$db_type）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=${db_type}，且其資料卷掛載存在（Postgres: /var/lib/postgresql/data；Redis: /data；MySQL: /var/lib/mysql；MongoDB: /data/db），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
     ui_pause "按任意鍵返回..."
     return 1
   fi

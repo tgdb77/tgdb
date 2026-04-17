@@ -99,7 +99,7 @@ _kopia_scan_container_units() {
 }
 
 _kopia_collect_db_data_dirs() {
-  # 輸出：每行一個「host 絕對路徑」的 DB data dir（Postgres: pgdata / Redis: rdata / MySQL: mysql）
+  # 輸出：每行一個「host 絕對路徑」的 DB data dir（Postgres / Redis / MySQL / MongoDB）
   local file
   while IFS= read -r file; do
     [ -f "$file" ] || continue
@@ -112,6 +112,9 @@ _kopia_collect_db_data_dirs() {
     fi
     if _kopia_unit_has_label "$file" "tgdb_db=mysql"; then
       _kopia_unit_volume_host_for_container_path "$file" "/var/lib/mysql" 2>/dev/null || true
+    fi
+    if _kopia_unit_has_label "$file" "tgdb_db=mongo"; then
+      _kopia_unit_volume_host_for_container_path "$file" "/data/db" 2>/dev/null || true
     fi
   done < <(_kopia_scan_container_units)
 }

@@ -82,7 +82,7 @@ _dbbackup_redis_export() {
   } >"$out_meta" 2>/dev/null || true
   chmod 600 "$out_meta" 2>/dev/null || true
 
-  _dbbackup_prune_old_backups "$out_dir" "$DBBACKUP_MAX_KEEP" "rdb" || true
+  _dbbackup_prune_old_backups "$out_dir" "$(_dbbackup_max_keep_get)" "rdb" || true
 
   echo "✅ 匯出完成：$out_rdb"
   echo " - meta：$out_meta"
@@ -204,4 +204,3 @@ _dbbackup_redis_import_overwrite() {
   _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
   return 0
 }
-

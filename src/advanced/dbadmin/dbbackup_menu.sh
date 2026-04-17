@@ -39,6 +39,9 @@ dbbackup_p_export_menu() {
     mysql)
       _dbbackup_mysql_export "$container_name" "$env_file" "$instance_dir"
       ;;
+    mongo)
+      _dbbackup_mongo_export "$container_name" "$env_file" "$instance_dir"
+      ;;
   esac
 }
 
@@ -72,6 +75,9 @@ dbbackup_p_import_menu() {
       ;;
     mysql)
       _dbbackup_mysql_import_overwrite "$container_name" "$env_file" "$instance_dir"
+      ;;
+    mongo)
+      _dbbackup_mongo_import_overwrite "$container_name" "$env_file" "$instance_dir"
       ;;
   esac
 }
