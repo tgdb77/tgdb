@@ -1,0 +1,15 @@
+[Unit]
+Description=Sub2API Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:${host_port}:8080/tcp
+PodName=${container_name}
+#Network=tgdb.network
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
