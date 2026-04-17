@@ -43,21 +43,9 @@ rm_user_systemd_dir() {
   printf '%s\n' "$(rm_xdg_config_home)/systemd/user"
 }
 
-rm_user_systemd_unit_path() {
-  local filename="$1"
-  _rm_require_safe_segment "$filename" "單元檔名" || return 1
-  printf '%s\n' "$(rm_user_systemd_dir)/$filename"
-}
-
 # Quadlet rootless 單元目錄（*.container / *.network / *.volume ...）
 rm_user_units_dir() {
   printf '%s\n' "$(rm_xdg_config_home)/containers/systemd"
-}
-
-rm_user_unit_path() {
-  local filename="$1"
-  _rm_require_safe_segment "$filename" "單元檔名" || return 1
-  printf '%s\n' "$(rm_user_units_dir)/$filename"
 }
 
 rm_rootful_root_dir() {
@@ -69,21 +57,9 @@ rm_system_systemd_dir() {
   printf '%s\n' "/etc/systemd/system"
 }
 
-rm_system_systemd_unit_path() {
-  local filename="$1"
-  _rm_require_safe_segment "$filename" "單元檔名" || return 1
-  printf '%s\n' "$(rm_system_systemd_dir)/$filename"
-}
-
 # Quadlet rootful 單元目錄（*.container / *.network / *.volume ...）
 rm_system_units_dir() {
   printf '%s\n' "/etc/containers/systemd"
-}
-
-rm_system_unit_path() {
-  local filename="$1"
-  _rm_require_safe_segment "$filename" "單元檔名" || return 1
-  printf '%s\n' "$(rm_system_units_dir)/$filename"
 }
 
 rm_quadlet_root_dir_by_mode() {
@@ -433,11 +409,6 @@ rm_persist_timer_dir() {
   printf '%s\n' "$(rm_persist_config_dir)/timer"
 }
 
-rm_persist_timer_dir_by_mode() {
-  local mode="${1:-rootless}"
-  printf '%s\n' "$(rm_persist_config_dir_by_mode "$mode")/timer"
-}
-
 rm_service_dir() {
   local service="$1"
   _rm_require_safe_segment "$service" "服務名稱" || return 1
@@ -490,11 +461,4 @@ rm_persist_quadlet_subdir_dir() {
   local sub="$1"
   _rm_require_safe_segment "$sub" "子目錄" || return 1
   printf '%s\n' "$(rm_persist_quadlet_dir)/$sub"
-}
-
-rm_persist_quadlet_dir_by_ext() {
-  local ext="$1"
-  local sub
-  sub="$(rm_quadlet_subdir_by_ext "$ext")" || return 1
-  rm_persist_quadlet_subdir_dir "$sub"
 }

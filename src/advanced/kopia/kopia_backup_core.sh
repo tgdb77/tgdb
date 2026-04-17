@@ -8,7 +8,9 @@ if [ -n "${_TGDB_KOPIA_BACKUP_CORE_LOADED:-}" ] && [ "${TGDB_FORCE_RELOAD_LIBS:-
 fi
 _TGDB_KOPIA_BACKUP_CORE_LOADED=1
 
+# shellcheck disable=SC2034 # 供其他 Kopia 子模組共用
 KOPIA_BACKUP_SERVICE="tgdb-kopia-backup.service"
+# shellcheck disable=SC2034 # 供其他 Kopia 子模組共用
 KOPIA_BACKUP_TIMER="tgdb-kopia-backup.timer"
 KOPIA_ACTIVE_CONTAINERS=()
 KOPIA_ACTIVE_PODS=()
@@ -19,18 +21,6 @@ _kopia_backup_status_file() {
 
 _write_user_unit() {
   tgdb_timer_write_user_unit "$1" "$2"
-}
-
-_service_file() {
-  tgdb_timer_unit_path "$KOPIA_BACKUP_SERVICE"
-}
-
-_timer_file() {
-  tgdb_timer_unit_path "$KOPIA_BACKUP_TIMER"
-}
-
-_timer_oncalendar_get() {
-  tgdb_timer_schedule_get "$KOPIA_BACKUP_TIMER" "OnCalendar"
 }
 
 _kopia_ignore_file() {

@@ -16,12 +16,6 @@ _backup_runtime_quadlet_archive_root() {
   printf '%s\n' "$BACKUP_QUADLET_RUNTIME_DIR/tgdb"
 }
 
-_backup_runtime_quadlet_archive_service_dir() {
-  local service="$1"
-  [ -n "${service:-}" ] || return 1
-  printf '%s\n' "$(_backup_runtime_quadlet_archive_root)/$service"
-}
-
 _backup_iter_runtime_quadlet_records() {
   rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null || true
 }
@@ -31,14 +25,6 @@ _backup_iter_runtime_quadlet_paths() {
   while IFS=$'\t' read -r _scope _service _base path _managed; do
     [ -n "${path:-}" ] || continue
     printf '%s\n' "$path"
-  done < <(_backup_iter_runtime_quadlet_records)
-}
-
-_backup_iter_runtime_quadlet_basenames() {
-  local base
-  while IFS=$'\t' read -r _scope _service base _path _managed; do
-    [ -n "${base:-}" ] || continue
-    printf '%s\n' "$base"
   done < <(_backup_iter_runtime_quadlet_records)
 }
 

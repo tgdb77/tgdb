@@ -86,17 +86,6 @@ load_rclone_mount_args() {
   fi
 }
 
-_rclone_mount_flag_supported() {
-  local flag="$1"
-  [ -z "$flag" ] && return 1
-
-  if [ -z "${__RCLONE_MOUNT_HELP_CACHE:-}" ]; then
-    __RCLONE_MOUNT_HELP_CACHE="$("$__RCLONE_BIN" mount --help 2>/dev/null || true)"
-  fi
-
-  printf '%s' "$__RCLONE_MOUNT_HELP_CACHE" | grep -Fq -- "$flag"
-}
-
 ensure_paths() {
     mkdir -p "$RCLONE_CUSTOM_DIR"
     mkdir -p "$RCLONE_MOUNTS_DIR"
@@ -372,13 +361,6 @@ edit_rclone_conf() {
 list_remotes() {
     ensure_rclone_config_env
     "$__RCLONE_BIN" listremotes --config "$RCLONE_CONFIG" 2>/dev/null | sed 's/:$//' | sed '/^$/d'
-}
-
-_detect_remote_type() {
-    local name="$1"
-    ensure_rclone_config_env
-    "$__RCLONE_BIN" config show "$name" --config "$RCLONE_CONFIG" 2>/dev/null |
-        awk -F'=' '/^\s*type\s*=/ { gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }'
 }
 
 mount_remote_storage() {
@@ -903,30 +885,6 @@ rclone_show_mounts_cli() {
     else
         echo "無 rclone 掛載"
     fi
-}
-
-rclone_custom_add_and_run_cli() {
-    local name="$1"; shift
-    local cmd="$*"
-
-    ensure_rclone_config_env
-
-    if ! _rclone_custom_name_valid "$name"; then
-        tgdb_fail "$(_rclone_custom_name_msg)：$name" 2 || true
-        return 2
-    fi
-    if [ -z "$cmd" ]; then
-        tgdb_fail "命令內容不能為空" 2 || true
-        return 2
-    fi
-
-    echo "即將執行已命名指令 [$name]: $cmd"
-    if ! bash -lc "$cmd"; then
-        tgdb_warn "指令執行回傳非 0 狀態碼"
-    fi
-
-    _rclone_custom_save_named_command "$name" "$cmd"
-    echo "✅ 已儲存指令名稱：$name"
 }
 
 rclone_custom_list_cli() {

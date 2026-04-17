@@ -953,17 +953,6 @@ _nginx_filter_exists() {
     [ -f "$F2B_FILTER_D_DIR/${jail_name}.conf" ]
 }
 
-_nginx_first_existing_filter() {
-    local name
-    for name in "$@"; do
-        if _nginx_filter_exists "$name"; then
-            echo "$name"
-            return 0
-        fi
-    done
-    return 1
-}
-
 _nginx_filter_uses_error_log() {
     local name="$1"
     local file="$F2B_FILTER_D_DIR/${name}.conf"
