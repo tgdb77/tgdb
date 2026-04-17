@@ -16,7 +16,7 @@ var=encryption_key|source=random_hex|len=64|env=ENCRYPTION_KEY
 
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
 
-success_warn= 盡速訪問 /setup 路徑進行註冊、初始化。
+success_warn= 盡速訪問 ${http_url}/setup 路徑進行註冊、初始化。
 success_warn= Pocket ID 涉及 Passkey / WebAuthn 與 OIDC，正式使用請讓 https://${fqdn} 能由瀏覽器正常存取，並保持 ${instance_dir}/.env 的 APP_URL 與實際公開網址一致。
 success_warn= 若未來要讓同機容器以內網方式存取 issuer，可再按官方文件補上 INTERNAL_APP_URL。
 

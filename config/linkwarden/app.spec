@@ -2,7 +2,7 @@ spec_version=1
 display_name=Linkwarden
 image=ghcr.io/linkwarden/linkwarden:latest
 doc_url=https://github.com/linkwarden/linkwarden
-menu_order=17
+menu_order=161
 
 base_port=3344
 instance_subdirs=data pgdata meili_data

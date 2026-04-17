@@ -1,0 +1,26 @@
+[Unit]
+Description=Ackee MongoDB
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/mongo:7
+#AutoUpdate=registry
+ContainerName=${container_name}-mongo
+Label=app=ackee
+Label=tgdb_db=mongo
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/mongo:/data/db
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

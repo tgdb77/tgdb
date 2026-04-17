@@ -23,18 +23,19 @@ dbadmin_p_menu() {
     echo "2. 部署 RedisInsight（Redis Web 管理）"
     echo "3. 部署 CloudBeaver（通用 DB Web 管理）"
     echo "----------------------------------"
-    echo "4. 匯出（熱備份）：PostgreSQL / Redis / MySQL"
-    echo "5. 匯入（覆蓋還原）：PostgreSQL / Redis / MySQL"
+    echo "4. 匯出（熱備份）：PostgreSQL / Redis / MySQL / MongoDB"
+    echo "5. 匯入（覆蓋還原）：PostgreSQL / Redis / MySQL / MongoDB"
     echo "6. 批次匯出：自動偵測全部 DB"
     echo "7. 批次匯入：自動偵測全部 DB（最新備份覆蓋）"
     echo "8. 定時備份：日/週/月（批次匯出）"
-    echo "9. 更新 Web 管理工具（拉新映像並重啟）"
+    echo "9. 熱備份保留數量設定"
+    echo "10. 更新 Web 管理工具（拉新映像並重啟）"
     echo "----------------------------------"
-    echo "10. 完全移除"
+    echo "11. 完全移除"
     echo "----------------------------------"
     echo "0. 返回"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-10]: " choice
+    read -r -e -p "請輸入選擇 [0-11]: " choice
 
     case "$choice" in
       1)
@@ -62,9 +63,13 @@ dbadmin_p_menu() {
         _dbadmin_dbbackup_timers_menu || true
         ;;
       9)
-        _dbadmin_update_pick_and_run || true
+        dbbackup_retention_config_interactive || true
+        ui_pause "按任意鍵返回..."
         ;;
       10)
+        _dbadmin_update_pick_and_run || true
+        ;;
+      11)
         local picked="" rc=0
         _dbadmin_full_remove_pick picked || rc=$?
         if [ "$rc" -ne 0 ]; then

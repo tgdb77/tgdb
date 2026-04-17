@@ -2,7 +2,7 @@ spec_version=1
 display_name=Beszel-agent
 image=docker.io/henrygd/beszel-agent:latest
 doc_url=https://github.com/henrygd/beszel
-menu_order=6
+menu_order=164
 
 base_port=45786
 require_podman_socket=1

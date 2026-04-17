@@ -18,6 +18,7 @@ dbbackup_all_timer_set_schedule() {
 
 dbbackup_all_timer_status_extra() {
   _dbbackup_all_status_extra
+  echo "熱備份保留數量：$(_dbbackup_max_keep_get)"
 }
 
 dbbackup_all_timer_special_menu() {

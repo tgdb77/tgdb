@@ -23,7 +23,7 @@ dbbackup_p_export_all_run() {
     *) include_globals="N" ;;
   esac
 
-  local -a pg_eps=() r_eps=() m_eps=()
+  local -a pg_eps=() r_eps=() m_eps=() mg_eps=()
   local line
   while IFS= read -r line; do
     [ -n "$line" ] && pg_eps+=("$line")
@@ -34,9 +34,12 @@ dbbackup_p_export_all_run() {
   while IFS= read -r line; do
     [ -n "$line" ] && m_eps+=("$line")
   done < <(_dbbackup_find_db_endpoints mysql)
+  while IFS= read -r line; do
+    [ -n "$line" ] && mg_eps+=("$line")
+  done < <(_dbbackup_find_db_endpoints mongo)
 
-  if [ ${#pg_eps[@]} -eq 0 ] && [ ${#r_eps[@]} -eq 0 ] && [ ${#m_eps[@]} -eq 0 ]; then
-    tgdb_fail "找不到任何可用的 DB 目標（請確認 Label=tgdb_db=postgres/redis/mysql 與掛載/環境檔）。" 1 || true
+  if [ ${#pg_eps[@]} -eq 0 ] && [ ${#r_eps[@]} -eq 0 ] && [ ${#m_eps[@]} -eq 0 ] && [ ${#mg_eps[@]} -eq 0 ]; then
+    tgdb_fail "找不到任何可用的 DB 目標（請確認 Label=tgdb_db=postgres/redis/mysql/mongo 與掛載/環境檔）。" 1 || true
     _dbbackup_ui_pause_if 1 "按任意鍵返回..."
     return 1
   fi
@@ -84,6 +87,20 @@ dbbackup_p_export_all_run() {
     done
   fi
 
+  if [ ${#mg_eps[@]} -gt 0 ]; then
+    echo "=== MongoDB：共 ${#mg_eps[@]} 個目標 ==="
+    local display4 container_name4 env_file4 instance_dir4
+    for line in "${mg_eps[@]}"; do
+      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ <<< "$line"
+      echo "▶ 匯出：$display4"
+      if _dbbackup_mongo_export "$container_name4" "$env_file4" "$instance_dir4" "$want_pause_each"; then
+        ok=$((ok + 1))
+      else
+        fail=$((fail + 1))
+      fi
+    done
+  fi
+
   echo "----------------------------------"
   echo "批次匯出完成：成功=$ok / 失敗=$fail"
   [ "$fail" -eq 0 ] && return 0
@@ -93,7 +110,7 @@ dbbackup_p_export_all_run() {
 dbbackup_p_import_all_latest_run() {
   local want_pause_each="${1:-0}"
 
-  local -a pg_eps=() r_eps=() m_eps=()
+  local -a pg_eps=() r_eps=() m_eps=() mg_eps=()
   local line
   while IFS= read -r line; do
     [ -n "$line" ] && pg_eps+=("$line")
@@ -104,8 +121,11 @@ dbbackup_p_import_all_latest_run() {
   while IFS= read -r line; do
     [ -n "$line" ] && m_eps+=("$line")
   done < <(_dbbackup_find_db_endpoints mysql)
+  while IFS= read -r line; do
+    [ -n "$line" ] && mg_eps+=("$line")
+  done < <(_dbbackup_find_db_endpoints mongo)
 
-  if [ ${#pg_eps[@]} -eq 0 ] && [ ${#r_eps[@]} -eq 0 ] && [ ${#m_eps[@]} -eq 0 ]; then
+  if [ ${#pg_eps[@]} -eq 0 ] && [ ${#r_eps[@]} -eq 0 ] && [ ${#m_eps[@]} -eq 0 ] && [ ${#mg_eps[@]} -eq 0 ]; then
     echo "ℹ️ 未偵測到可匯入的 DB 目標（略過）。"
     return 0
   fi
@@ -174,6 +194,27 @@ dbbackup_p_import_all_latest_run() {
     done
   fi
 
+  if [ ${#mg_eps[@]} -gt 0 ]; then
+    echo "=== MongoDB：開始批次匯入（latest） ==="
+    local display4 container_name4 env_file4 instance_dir4 archive_dir archive_path
+    for line in "${mg_eps[@]}"; do
+      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ <<< "$line"
+      archive_dir="$(_dbbackup_project_backup_dir "$instance_dir4" "mongo")"
+      archive_path="$(_dbbackup_latest_backup_file "$archive_dir" "archive.gz" 2>/dev/null || true)"
+      if [ -z "${archive_path:-}" ]; then
+        echo "⏭ 略過：$display4（尚無備份檔）"
+        skip=$((skip + 1))
+        continue
+      fi
+      echo "▶ 匯入：$display4（$(basename "$archive_path")）"
+      if _dbbackup_mongo_import_overwrite "$container_name4" "$env_file4" "$instance_dir4" "$want_pause_each" "$archive_path" "1"; then
+        ok=$((ok + 1))
+      else
+        fail=$((fail + 1))
+      fi
+    done
+  fi
+
   echo "----------------------------------"
   echo "批次匯入完成：成功=$ok / 失敗=$fail / 略過=$skip"
   [ "$fail" -eq 0 ] && return 0
@@ -219,7 +260,7 @@ dbbackup_p_import_all_latest_menu() {
     return 1
   fi
 
-  local -a pg_eps=() r_eps=() m_eps=()
+  local -a pg_eps=() r_eps=() m_eps=() mg_eps=()
   local line
   while IFS= read -r line; do
     [ -n "$line" ] && pg_eps+=("$line")
@@ -230,9 +271,12 @@ dbbackup_p_import_all_latest_menu() {
   while IFS= read -r line; do
     [ -n "$line" ] && m_eps+=("$line")
   done < <(_dbbackup_find_db_endpoints mysql)
+  while IFS= read -r line; do
+    [ -n "$line" ] && mg_eps+=("$line")
+  done < <(_dbbackup_find_db_endpoints mongo)
 
-  if [ ${#pg_eps[@]} -eq 0 ] && [ ${#r_eps[@]} -eq 0 ] && [ ${#m_eps[@]} -eq 0 ]; then
-    tgdb_fail "找不到任何可用的 DB 目標（請確認 Label=tgdb_db=postgres/redis/mysql 與掛載/環境檔）。" 1 || true
+  if [ ${#pg_eps[@]} -eq 0 ] && [ ${#r_eps[@]} -eq 0 ] && [ ${#m_eps[@]} -eq 0 ] && [ ${#mg_eps[@]} -eq 0 ]; then
+    tgdb_fail "找不到任何可用的 DB 目標（請確認 Label=tgdb_db=postgres/redis/mysql/mongo 與掛載/環境檔）。" 1 || true
     ui_pause "按任意鍵返回..."
     return 1
   fi
@@ -244,7 +288,7 @@ dbbackup_p_import_all_latest_menu() {
   echo " - 每個實例使用『最新』備份檔覆蓋還原"
   echo "強烈建議：先停止所有上游服務。"
   echo "----------------------------------"
-  echo "偵測到：PostgreSQL=${#pg_eps[@]} / Redis=${#r_eps[@]} / MySQL=${#m_eps[@]}"
+  echo "偵測到：PostgreSQL=${#pg_eps[@]} / Redis=${#r_eps[@]} / MySQL=${#m_eps[@]} / MongoDB=${#mg_eps[@]}"
   echo "----------------------------------"
   echo "請輸入 YES 確認繼續（輸入 0 取消）："
   local confirm
@@ -317,6 +361,27 @@ dbbackup_p_import_all_latest_menu() {
       fi
       echo "▶ 匯入：$display3（$(basename "$sql_path")）"
       if _dbbackup_mysql_import_overwrite "$container_name3" "$env_file3" "$instance_dir3" "0" "$sql_path" "1"; then
+        ok=$((ok + 1))
+      else
+        fail=$((fail + 1))
+      fi
+    done
+  fi
+
+  if [ ${#mg_eps[@]} -gt 0 ]; then
+    echo "=== MongoDB：開始批次匯入 ==="
+    local display4 container_name4 env_file4 instance_dir4 archive_dir archive_path
+    for line in "${mg_eps[@]}"; do
+      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ <<< "$line"
+      archive_dir="$(_dbbackup_project_backup_dir "$instance_dir4" "mongo")"
+      archive_path="$(_dbbackup_latest_backup_file "$archive_dir" "archive.gz" 2>/dev/null || true)"
+      if [ -z "${archive_path:-}" ]; then
+        echo "⏭ 略過：$display4（尚無備份檔）"
+        skip=$((skip + 1))
+        continue
+      fi
+      echo "▶ 匯入：$display4（$(basename "$archive_path")）"
+      if _dbbackup_mongo_import_overwrite "$container_name4" "$env_file4" "$instance_dir4" "0" "$archive_path" "1"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))

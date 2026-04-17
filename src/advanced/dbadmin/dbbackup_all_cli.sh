@@ -184,8 +184,8 @@ dbbackup_all_usage() {
   cat <<USAGE
 用法: dbbackup-cli.sh <export-all|import-all-latest|status|setup-timer|set-oncalendar|enable-timer|disable-timer|remove-timer>
 
-  export-all             自動偵測所有 DB 實例並匯出（非互動模式）
-  import-all-latest      自動偵測所有 DB 實例並匯入最新備份（非互動模式）
+  export-all             自動偵測所有 DB 實例並匯出（PostgreSQL / Redis / MySQL / MongoDB）
+  import-all-latest      自動偵測所有 DB 實例並匯入最新備份（PostgreSQL / Redis / MySQL / MongoDB）
   status                 顯示 timer 狀態
   setup-timer <freq>     設定定期備份：daily|weekly|monthly
   set-oncalendar <expr>  更新 timer 的 OnCalendar（允許含空白）
