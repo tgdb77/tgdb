@@ -347,7 +347,13 @@ _dbbackup_find_db_endpoints() {
 
     local container_name env_file instance_dir host_data_dir app_label display
 
-    _dbbackup_unit_has_tgdb_db_label "$file" "$db_type" || continue
+    if [ "$db_type" = "mysql" ]; then
+      if ! _dbbackup_unit_has_tgdb_db_label "$file" "mysql" && ! _dbbackup_unit_has_tgdb_db_label "$file" "mariadb"; then
+        continue
+      fi
+    else
+      _dbbackup_unit_has_tgdb_db_label "$file" "$db_type" || continue
+    fi
 
     container_name="$(_dbbackup_unit_get_first_value "$file" "ContainerName" 2>/dev/null || true)"
     [ -n "${container_name:-}" ] || continue
@@ -404,7 +410,7 @@ _dbbackup_pick_db_type() {
     echo "----------------------------------"
     echo "1. PostgreSQL"
     echo "2. Redis"
-    echo "3. MySQL"
+    echo "3. MySQL / MariaDB"
     echo "4. MongoDB"
     echo "----------------------------------"
     echo "0. 取消"
@@ -434,7 +440,11 @@ _dbbackup_pick_db_endpoint() {
   done < <(_dbbackup_find_db_endpoints "$db_type")
 
   if [ ${#endpoints[@]} -eq 0 ]; then
-    tgdb_fail "找不到可用的目標（$db_type）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=${db_type}，且其資料卷掛載存在（Postgres: /var/lib/postgresql/data；Redis: /data；MySQL: /var/lib/mysql；MongoDB: /data/db），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
+    if [ "$db_type" = "mysql" ]; then
+      tgdb_fail "找不到可用的目標（MySQL / MariaDB）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=mysql 或 tgdb_db=mariadb，且其資料卷掛載存在（/var/lib/mysql），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
+    else
+      tgdb_fail "找不到可用的目標（$db_type）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=${db_type}，且其資料卷掛載存在（Postgres: /var/lib/postgresql/data；Redis: /data；MongoDB: /data/db），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
+    fi
     ui_pause "按任意鍵返回..."
     return 1
   fi
@@ -588,7 +598,20 @@ _dbbackup_wait_mysql_ready() {
   local waited=0 rc=0 last_out=""
   while [ "$waited" -lt "$timeout" ]; do
     last_out="$(podman exec -e TGDB_USER="$user" -e TGDB_PASS="$password" \
-      "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; mysql -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "SELECT 1;" >/dev/null' 2>&1)" || rc=$?
+      "$container_name" sh -c '
+        set -eu
+        export MYSQL_PWD="$TGDB_PASS"
+        if command -v mysql >/dev/null 2>&1; then
+          mysql -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "SELECT 1;" >/dev/null
+          exit 0
+        fi
+        if command -v mariadb >/dev/null 2>&1; then
+          mariadb -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "SELECT 1;" >/dev/null
+          exit 0
+        fi
+        echo "找不到 mysql / mariadb 指令" >&2
+        exit 1
+      ' 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ]; then
       return 0
     fi
@@ -598,6 +621,6 @@ _dbbackup_wait_mysql_ready() {
   done
 
   last_out="$(printf '%s' "$last_out" | head -n 1)"
-  tgdb_fail "等待 MySQL 就緒逾時（${timeout} 秒，容器：$container_name）：$last_out" 1 || true
+  tgdb_fail "等待 MySQL / MariaDB 就緒逾時（${timeout} 秒，容器：$container_name）：$last_out" 1 || true
   return 1
 }
