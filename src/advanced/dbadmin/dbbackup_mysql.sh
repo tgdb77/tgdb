@@ -8,6 +8,58 @@ if [ -n "${_TGDB_DBADMIN_DBBACKUP_MYSQL_LOADED:-}" ] && [ "${TGDB_FORCE_RELOAD_L
 fi
 _TGDB_DBADMIN_DBBACKUP_MYSQL_LOADED=1
 
+_dbbackup_mysql_env_get_pair() {
+  local env_file="$1" mysql_key="$2" mariadb_key="$3"
+  local value=""
+  value="$(_dbbackup_env_get_kv "$env_file" "$mysql_key" 2>/dev/null || true)"
+  [ -n "${value:-}" ] || value="$(_dbbackup_env_get_kv "$env_file" "$mariadb_key" 2>/dev/null || true)"
+  printf '%s\n' "$value"
+}
+
+_dbbackup_mysql_dump_cmd_in_container() {
+  local container_name="$1"
+  [ -n "$container_name" ] || return 1
+  podman exec "$container_name" sh -c '
+    if command -v mysqldump >/dev/null 2>&1; then
+      printf "%s\n" "mysqldump"
+      exit 0
+    fi
+    if command -v mariadb-dump >/dev/null 2>&1; then
+      printf "%s\n" "mariadb-dump"
+      exit 0
+    fi
+    exit 1
+  ' 2>/dev/null
+}
+
+_dbbackup_mysql_client_cmd_in_container() {
+  local container_name="$1"
+  [ -n "$container_name" ] || return 1
+  podman exec "$container_name" sh -c '
+    if command -v mysql >/dev/null 2>&1; then
+      printf "%s\n" "mysql"
+      exit 0
+    fi
+    if command -v mariadb >/dev/null 2>&1; then
+      printf "%s\n" "mariadb"
+      exit 0
+    fi
+    exit 1
+  ' 2>/dev/null
+}
+
+_dbbackup_mysql_dump_gtid_arg() {
+  local dump_cmd="$1"
+  case "$dump_cmd" in
+    mysqldump)
+      printf '%s\n' "--set-gtid-purged=OFF"
+      ;;
+    *)
+      printf '%s\n' ""
+      ;;
+  esac
+}
+
 _dbbackup_mysql_export() {
   local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}"
   [ -n "$container_name" ] || return 1
@@ -20,30 +72,32 @@ _dbbackup_mysql_export() {
     return "$rc"
   }
 
-  if ! podman exec "$container_name" sh -c 'command -v mysqldump >/dev/null 2>&1' 2>/dev/null; then
-    tgdb_fail "容器內找不到 mysqldump：$container_name（此功能暫不支援該映像）。" 1 || true
+  local dump_cmd
+  dump_cmd="$(_dbbackup_mysql_dump_cmd_in_container "$container_name" 2>/dev/null || true)"
+  if [ -z "${dump_cmd:-}" ]; then
+    tgdb_fail "容器內找不到 mysqldump / mariadb-dump：$container_name（此功能暫不支援該映像）。" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
   fi
 
   local db user user_password root_password dump_user dump_password auth_source
-  db="$(_dbbackup_env_get_kv "$env_file" "MYSQL_DATABASE" 2>/dev/null || true)"
-  user="$(_dbbackup_env_get_kv "$env_file" "MYSQL_USER" 2>/dev/null || true)"
-  user_password="$(_dbbackup_env_get_kv "$env_file" "MYSQL_PASSWORD" 2>/dev/null || true)"
-  root_password="$(_dbbackup_env_get_kv "$env_file" "MYSQL_ROOT_PASSWORD" 2>/dev/null || true)"
+  db="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_DATABASE" "MARIADB_DATABASE")"
+  user="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_USER" "MARIADB_USER")"
+  user_password="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_PASSWORD" "MARIADB_PASSWORD")"
+  root_password="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_ROOT_PASSWORD" "MARIADB_ROOT_PASSWORD")"
   [ -z "${db:-}" ] && db="mysql"
 
   dump_user="$user"
   dump_password="$user_password"
-  auth_source="MYSQL_USER/MYSQL_PASSWORD"
+  auth_source="MYSQL_USER/MYSQL_PASSWORD 或 MARIADB_USER/MARIADB_PASSWORD"
   if [ -z "${dump_user:-}" ] || [ -z "${dump_password:-}" ]; then
     if [ -n "${root_password:-}" ]; then
       dump_user="root"
       dump_password="$root_password"
-      auth_source="MYSQL_ROOT_PASSWORD"
-      tgdb_warn "找不到完整的 MYSQL_USER/MYSQL_PASSWORD，改用 root 帳號匯出。"
+      auth_source="MYSQL_ROOT_PASSWORD 或 MARIADB_ROOT_PASSWORD"
+      tgdb_warn "找不到完整的 MySQL / MariaDB 使用者帳密，改用 root 帳號匯出。"
     else
-      tgdb_fail "找不到可用的 MySQL 帳密：$env_file（需要 MYSQL_USER+MYSQL_PASSWORD 或 MYSQL_ROOT_PASSWORD）。" 1 || true
+      tgdb_fail "找不到可用的 MySQL / MariaDB 帳密：$env_file（需要 MYSQL_USER+MYSQL_PASSWORD、MARIADB_USER+MARIADB_PASSWORD、MYSQL_ROOT_PASSWORD 或 MARIADB_ROOT_PASSWORD）。" 1 || true
       _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
       return 1
     fi
@@ -61,10 +115,20 @@ _dbbackup_mysql_export() {
   out_sql="$out_dir/${ts}.sql"
   out_meta="$out_dir/${ts}.meta.conf"
 
-  local tmp_sql="/tmp/tgdb_${ts}.sql"
+  local tmp_sql="/tmp/tgdb_${ts}.sql" dump_gtid_arg
+  dump_gtid_arg="$(_dbbackup_mysql_dump_gtid_arg "$dump_cmd")"
   local dump_out="" dump_rc=0
-  dump_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$dump_user" -e TGDB_PASS="$dump_password" -e TGDB_OUT="$tmp_sql" \
-    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; mysqldump -h 127.0.0.1 -P 3306 -u"$TGDB_USER" --single-transaction --quick --routines --events --triggers --no-tablespaces --set-gtid-purged=OFF --databases "$TGDB_DB" >"$TGDB_OUT"' 2>&1)" || dump_rc=$?
+  dump_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$dump_user" -e TGDB_PASS="$dump_password" -e TGDB_OUT="$tmp_sql" -e TGDB_DUMP_CMD="$dump_cmd" -e TGDB_DUMP_GTID_ARG="$dump_gtid_arg" \
+    "$container_name" sh -c '
+      set -eu
+      export MYSQL_PWD="$TGDB_PASS"
+      set -- "$TGDB_DUMP_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" --single-transaction --quick --routines --events --triggers --no-tablespaces
+      if [ -n "${TGDB_DUMP_GTID_ARG:-}" ]; then
+        set -- "$@" "$TGDB_DUMP_GTID_ARG"
+      fi
+      set -- "$@" --databases "$TGDB_DB"
+      "$@" >"$TGDB_OUT"
+    ' 2>&1)" || dump_rc=$?
   if [ "$dump_rc" -ne 0 ]; then
     tgdb_fail "匯出失敗：$container_name（$dump_out）" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
@@ -121,8 +185,10 @@ _dbbackup_mysql_import_overwrite() {
     return "$rc"
   }
 
-  if ! podman exec "$container_name" sh -c 'command -v mysql >/dev/null 2>&1' 2>/dev/null; then
-    tgdb_fail "容器內缺少 mysql 指令：$container_name（此功能暫不支援該映像）。" 1 || true
+  local client_cmd
+  client_cmd="$(_dbbackup_mysql_client_cmd_in_container "$container_name" 2>/dev/null || true)"
+  if [ -z "${client_cmd:-}" ]; then
+    tgdb_fail "容器內缺少 mysql / mariadb 指令：$container_name（此功能暫不支援該映像）。" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
   fi
@@ -142,10 +208,10 @@ _dbbackup_mysql_import_overwrite() {
   fi
 
   local db user user_password root_password restore_user restore_password auth_source
-  db="$(_dbbackup_env_get_kv "$env_file" "MYSQL_DATABASE" 2>/dev/null || true)"
-  user="$(_dbbackup_env_get_kv "$env_file" "MYSQL_USER" 2>/dev/null || true)"
-  user_password="$(_dbbackup_env_get_kv "$env_file" "MYSQL_PASSWORD" 2>/dev/null || true)"
-  root_password="$(_dbbackup_env_get_kv "$env_file" "MYSQL_ROOT_PASSWORD" 2>/dev/null || true)"
+  db="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_DATABASE" "MARIADB_DATABASE")"
+  user="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_USER" "MARIADB_USER")"
+  user_password="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_PASSWORD" "MARIADB_PASSWORD")"
+  root_password="$(_dbbackup_mysql_env_get_pair "$env_file" "MYSQL_ROOT_PASSWORD" "MARIADB_ROOT_PASSWORD")"
   [ -z "${db:-}" ] && db="mysql"
 
   restore_user=""
@@ -154,13 +220,13 @@ _dbbackup_mysql_import_overwrite() {
   if [ -n "${root_password:-}" ]; then
     restore_user="root"
     restore_password="$root_password"
-    auth_source="MYSQL_ROOT_PASSWORD"
+    auth_source="MYSQL_ROOT_PASSWORD 或 MARIADB_ROOT_PASSWORD"
   elif [ -n "${user:-}" ] && [ -n "${user_password:-}" ]; then
     restore_user="$user"
     restore_password="$user_password"
-    auth_source="MYSQL_USER/MYSQL_PASSWORD"
+    auth_source="MYSQL_USER/MYSQL_PASSWORD 或 MARIADB_USER/MARIADB_PASSWORD"
   else
-    tgdb_fail "找不到可用的 MySQL 還原帳密：$env_file（需要 MYSQL_ROOT_PASSWORD，或至少 MYSQL_USER+MYSQL_PASSWORD）。" 1 || true
+    tgdb_fail "找不到可用的 MySQL / MariaDB 還原帳密：$env_file（需要 MYSQL_ROOT_PASSWORD、MARIADB_ROOT_PASSWORD，或至少 MYSQL_USER+MYSQL_PASSWORD / MARIADB_USER+MARIADB_PASSWORD）。" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
   fi
@@ -204,8 +270,8 @@ _dbbackup_mysql_import_overwrite() {
   fi
 
   local rebuild_out="" rebuild_rc=0
-  rebuild_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" \
-    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; mysql -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "DROP DATABASE IF EXISTS \`$TGDB_DB\`; CREATE DATABASE \`$TGDB_DB\`;"' 2>&1)" || rebuild_rc=$?
+  rebuild_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_CLIENT_CMD="$client_cmd" \
+    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "DROP DATABASE IF EXISTS \`$TGDB_DB\`; CREATE DATABASE \`$TGDB_DB\`;"' 2>&1)" || rebuild_rc=$?
   if [ "$rebuild_rc" -ne 0 ]; then
     podman exec "$container_name" rm -f "$tmp_sql" >/dev/null 2>&1 || true
     tgdb_fail "重建資料庫失敗：$db（$rebuild_out）" 1 || true
@@ -214,8 +280,8 @@ _dbbackup_mysql_import_overwrite() {
   fi
 
   local restore_out="" restore_rc=0
-  restore_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_FILE="$tmp_sql" \
-    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; mysql -h 127.0.0.1 -P 3306 -u"$TGDB_USER" "$TGDB_DB" <"$TGDB_FILE"' 2>&1)" || restore_rc=$?
+  restore_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_FILE="$tmp_sql" -e TGDB_CLIENT_CMD="$client_cmd" \
+    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" "$TGDB_DB" <"$TGDB_FILE"' 2>&1)" || restore_rc=$?
   if [ "$restore_rc" -ne 0 ]; then
     podman exec "$container_name" rm -f "$tmp_sql" >/dev/null 2>&1 || true
     tgdb_fail "匯入失敗：$container_name（$restore_out）" 1 || true

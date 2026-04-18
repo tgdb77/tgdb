@@ -1,0 +1,32 @@
+[Unit]
+Description=PhotoPrism
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mariadb.service container-${container_name}-mariadb.service
+Wants=${container_name}-mariadb.service container-${container_name}-mariadb.service
+
+[Container]
+Image=docker.io/photoprism/photoprism:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=photoprism
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/storage:/photoprism/storage
+Volume=${volume_dir}/originals:/photoprism/originals
+Volume=${volume_dir}/import:/photoprism/import
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
