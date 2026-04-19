@@ -1,0 +1,29 @@
+[Unit]
+Description=Hermes Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/nousresearch/hermes-agent:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-gateway
+Label=app=hermes-agent
+
+Pod=${container_name}.pod
+
+WorkingDir=/workspace
+Volume=${instance_dir}/workspace:/opt/data/workspace
+Volume=${instance_dir}/hermes-home:/opt/data
+
+Exec=gateway run
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

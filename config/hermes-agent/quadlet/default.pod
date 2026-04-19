@@ -1,0 +1,16 @@
+[Unit]
+Description=Hermes Agent Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:${host_port}:9119
+PublishPort=127.0.0.1:${api_port}:8642
+PodName=${container_name}
+#Network=tgdb.network
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
