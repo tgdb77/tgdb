@@ -781,7 +781,7 @@ _edit_existing_unit_and_reload_restart() {
 
             tgdb_warn "偵測到部分檔案無法直接寫入，可能是 rootless UID 映射造成，將嘗試用 podman unshare 開啟編輯器："
             printf ' - %s\n' "${need_unshare[@]}" >&2
-            if ! podman unshare "$EDITOR" "${edit_files[@]}"; then
+            if ! _podman_open_editor_with_unshare "${edit_files[@]}"; then
                 tgdb_warn "podman unshare 開啟編輯器失敗，將直接開啟編輯器（可能仍無法儲存）。"
                 "$EDITOR" "${edit_files[@]}"
             fi
@@ -800,6 +800,29 @@ _edit_existing_unit_and_reload_restart() {
             tgdb_warn "已保存並重整，但重啟/啟動失敗，請檢查單元或日誌。"
         fi
     fi
+}
+
+_podman_open_editor_with_unshare() {
+    local tmp_home
+    tmp_home="$(mktemp -d "${TMPDIR:-/tmp}/tgdb-unshare-editor.XXXXXX")" || return 1
+
+    mkdir -p \
+        "$tmp_home/.config" \
+        "$tmp_home/.cache" \
+        "$tmp_home/.local/share"
+
+    local rc=0
+    if ! env \
+        HOME="$tmp_home" \
+        XDG_CONFIG_HOME="$tmp_home/.config" \
+        XDG_CACHE_HOME="$tmp_home/.cache" \
+        XDG_DATA_HOME="$tmp_home/.local/share" \
+        podman unshare "$EDITOR" "$@"; then
+        rc=$?
+    fi
+
+    rm -rf "$tmp_home"
+    return "$rc"
 }
 
 _remove_quadlet_unit() {
