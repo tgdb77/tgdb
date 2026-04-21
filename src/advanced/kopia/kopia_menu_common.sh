@@ -80,19 +80,6 @@ _kopia_podman_container_status_label() {
   return 0
 }
 
-_kopia_detect_host_port() {
-  local unit_path
-  unit_path="$(_kopia_resolved_unit_path)"
-  [ -f "$unit_path" ] || return 1
-
-  local content port
-  content="$(cat "$unit_path" 2>/dev/null || true)"
-  port="$(_app_extract_primary_host_port_from_unit_content "$content" 2>/dev/null || true)"
-  [ -n "${port:-}" ] || return 1
-  printf '%s\n' "$port"
-  return 0
-}
-
 _kopia_print_status() {
   echo "Kopia 容器：$(_kopia_podman_container_status_label "kopia")"
 

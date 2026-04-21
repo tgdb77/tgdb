@@ -15,10 +15,6 @@ _dbbackup_all_service_file() {
   tgdb_timer_unit_path "$DBBACKUP_ALL_SERVICE"
 }
 
-_dbbackup_all_timer_file() {
-  tgdb_timer_unit_path "$DBBACKUP_ALL_TIMER"
-}
-
 _dbbackup_all_write_user_unit() {
   tgdb_timer_write_user_unit "$1" "$2"
 }

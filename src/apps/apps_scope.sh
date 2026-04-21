@@ -113,12 +113,6 @@ _apps_unit_dir_for_mode() {
   _apps_runtime_quadlet_root_for_mode "$mode"
 }
 
-_apps_scope_label_for_mode() {
-  local scope
-  scope="$(_apps_scope_for_mode "${1:-rootless}")" || return 1
-  tgdb_scope_label "$scope"
-}
-
 _apps_mode_is_rootful() {
   [ "$(_apps_normalize_deploy_mode "${1:-rootless}")" = "rootful" ]
 }

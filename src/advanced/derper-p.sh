@@ -20,10 +20,6 @@ _derper_resolved_unit_path() {
   _quadlet_runtime_or_legacy_unit_path "${DERPER_CONTAINER_NAME}.container" "derper"
 }
 
-_derper_repo_tpl_env() {
-  printf '%s\n' "$CONFIG_DIR/derper/configs/derper.env.example"
-}
-
 _derper_repo_tpl_quadlet() {
   printf '%s\n' "$CONFIG_DIR/derper/quadlet/default.container"
 }
