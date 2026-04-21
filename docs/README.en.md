@@ -21,7 +21,8 @@
 
 <p align="center">
   <a href="../README.md">繁體中文</a> •
-  <strong>English</strong>
+  <strong>English</strong> •
+  <a href="https://tgdb77.pages.dev/">Web</a>
 </p>
 
 <p align="center">
