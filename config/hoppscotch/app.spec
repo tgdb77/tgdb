@@ -4,7 +4,7 @@ image=docker.io/hoppscotch/hoppscotch:latest
 doc_url=https://docs.hoppscotch.io/documentation/self-host/community-edition/install-and-build
 menu_order=137
 
-base_port=3920
+base_port=3925
 
 instance_subdirs=pgdata
 record_subdirs=pgdata

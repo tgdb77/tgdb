@@ -84,6 +84,7 @@ require_podman_socket=0
 # - required=1：必填（空值會取消）
 # - allow_cancel=1：允許輸入 0 取消
 # - type=password：輸入時隱藏
+# - min_len=8：最少字元數
 # - no_space=1：禁止空白（適合 EnvironmentFile 的值）
 # - default=...：預設值
 # - default_source=...：由系統產生預設值（例如 random_hex / next_available_port；可搭配 len= / start=）
@@ -93,7 +94,7 @@ require_podman_socket=0
 # 若想支援 CLI 快速部署：在 cli_quick_args 宣告要收哪些 input key（順序即參數順序）。
 #cli_quick_args=user_name pass_word
 #input=user_name|prompt=請輸入帳號（不得為空，輸入 0 取消）: |required=1|no_space=1|allow_cancel=1
-#input=pass_word|prompt=請輸入密碼（不得為空，輸入 0 取消）: |required=1|type=password|no_space=1|allow_cancel=1
+#input=pass_word|prompt=請輸入密碼（至少 8 位，輸入 0 取消）: |required=1|type=password|min_len=8|no_space=1|allow_cancel=1
 
 # ---- 自動產生變數 var=（可重複）----
 # random_hex：產生隨機 hex（len 為字元數）
