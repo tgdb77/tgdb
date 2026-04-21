@@ -1,0 +1,34 @@
+[Unit]
+Description=Planka
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=ghcr.io/plankanban/planka:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=planka
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/user-avatars:/app/public/user-avatars
+Volume=${instance_dir}/project-background-images:/app/public/project-background-images
+Volume=${instance_dir}/attachments:/app/private/attachments
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

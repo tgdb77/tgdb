@@ -1,0 +1,26 @@
+# copyparty 設定檔（TGDB 產生）
+#
+# 參考：
+# - GitHub：https://github.com/9001/copyparty
+# - example.conf：https://github.com/9001/copyparty/blob/hovudstraum/docs/example.conf
+# - helptext：https://copyparty.eu/helptext.txt
+#
+# 注意：
+# - 這不是 YAML，而是 copyparty 自己的設定格式
+# - [global] 區段變更通常需要重啟
+# - 帳號 / 權限 / volumes 可透過 [reload cfg] 熱重載
+
+[global]
+ p: 3923
+ hist: /cfg/hist
+ e2d
+
+[accounts]
+ ${admin_user}: ${admin_pass}
+
+[/]
+ /w
+ accs:
+  rwmda: ${admin_user}
+ flags:
+  e2d
