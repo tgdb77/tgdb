@@ -21,7 +21,8 @@
 
 <p align="center">
   <strong>繁體中文</strong> •
-  <a href="./docs/README.en.md">English</a>
+  <a href="./docs/README.en.md">English</a> •
+  <a href="https://tgdb77.pages.dev/">網站</a>
 </p>
 
 <p align="center">
