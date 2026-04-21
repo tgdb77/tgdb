@@ -67,20 +67,6 @@ _backup_get_latest_backup() {
     return 0
 }
 
-_backup_get_latest_archive_by_prefix() {
-    local prefix="$1"
-    [ -n "${prefix:-}" ] || return 1
-
-    local latest
-    latest=$(_backup_list_archives_by_prefix_newest_first "$prefix" | head -n1 || true)
-    if [ -z "$latest" ]; then
-        return 1
-    fi
-    # shellcheck disable=SC2034 # 供其他互動流程讀取最新備份路徑
-    LATEST_BACKUP="$latest"
-    return 0
-}
-
 _backup_cleanup_old_by_prefix() {
     local prefix="$1"
     local max_count="$2"

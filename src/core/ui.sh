@@ -73,36 +73,6 @@ print_header() {
   print_hr
 }
 
-wait_keypress_if_interactive() {
-  local msg="${1:-}"
-  ui_is_interactive || return 0
-  if [ -n "$msg" ]; then
-    echo "$msg"
-  fi
-  read -r -n 1
-  echo
-}
-
-_prompt_required() {
-  local out_var="$1"
-  local prompt="$2"
-  local empty_message="$3"
-  local value
-
-  if ! ui_is_interactive; then
-    tgdb_fail "非互動模式下不可使用互動輸入：$prompt" 2 || return $?
-  fi
-
-  while true; do
-    read -r -e -p "$prompt" value
-    if [ -n "$value" ]; then
-      printf -v "$out_var" '%s' "$value"
-      return 0
-    fi
-    echo "$empty_message"
-  done
-}
-
 ui_confirm_yn() {
   local prompt="$1"
   local default="${2:-Y}"

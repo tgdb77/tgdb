@@ -50,11 +50,6 @@ _backup_select_targets_set() {
   fi
 }
 
-_backup_select_targets_disable() {
-  _backup_ensure_module_config
-  sed -i '/^selected_backup_instances=/d' "$BACKUP_MODULE_CONFIG_FILE" 2>/dev/null || true
-}
-
 _backup_full_max_count_get() {
   _backup_ensure_module_config
   local v
@@ -205,4 +200,3 @@ _backup_rclone_restore_selected_to_local() {
 
   return 1
 }
-
