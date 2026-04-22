@@ -1,0 +1,34 @@
+[Unit]
+Description=Lychee
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mariadb.service container-${container_name}-mariadb.service
+Wants=${container_name}-mariadb.service container-${container_name}-mariadb.service
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=ghcr.io/lycheeorg/lychee:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=lychee
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${volume_dir}/uploads:/uploads
+Volume=${instance_dir}/logs:/logs
+Volume=${instance_dir}/tmp:/tmp
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

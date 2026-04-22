@@ -1,0 +1,26 @@
+[Unit]
+Description=Lychee（Redis）
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/redis:alpine
+#AutoUpdate=registry
+ContainerName=${container_name}-redis
+Label=app=lychee
+Label=tgdb_db=redis
+
+Pod=${container_name}.pod
+
+Exec=redis-server --appendonly yes
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
