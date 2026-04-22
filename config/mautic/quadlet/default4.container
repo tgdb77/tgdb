@@ -1,0 +1,37 @@
+[Unit]
+Description=Mautic（Worker）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mysql.service container-${container_name}-mysql.service
+Wants=${container_name}-mysql.service container-${container_name}-mysql.service
+
+After=${container_name}.service container-${container_name}.service
+Wants=${container_name}.service container-${container_name}.service
+
+[Container]
+Image=docker.io/mautic/mautic:latest
+#AutoUpdate=registry
+ContainerName=${container_name}-worker
+Label=app=mautic
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+Environment=DOCKER_MAUTIC_ROLE=mautic_worker
+
+Volume=${instance_dir}/config:/var/www/html/config
+Volume=${instance_dir}/logs:/var/www/html/var/logs
+Volume=${volume_dir}/files:/var/www/html/docroot/media/files
+Volume=${volume_dir}/images:/var/www/html/docroot/media/images
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

@@ -1,0 +1,34 @@
+[Unit]
+Description=Mautic（Web）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mysql.service container-${container_name}-mysql.service
+Wants=${container_name}-mysql.service container-${container_name}-mysql.service
+
+[Container]
+Image=docker.io/mautic/mautic:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=mautic
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/config:/var/www/html/config
+Volume=${instance_dir}/logs:/var/www/html/var/logs
+Volume=${volume_dir}/files:/var/www/html/docroot/media/files
+Volume=${volume_dir}/images:/var/www/html/docroot/media/images
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 120 ]; do /usr/bin/podman exec ${container_name}-mysql mysqladmin ping -h 127.0.0.1 -uroot -p${mysql_root_password} >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "MySQL 尚未就緒，取消啟動 Mautic Web" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
