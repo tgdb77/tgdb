@@ -1,0 +1,42 @@
+[Unit]
+Description=Tdarr Node
+After=${container_name}.service container-${container_name}.service
+Wants=${container_name}.service container-${container_name}.service
+
+[Container]
+Image=ghcr.io/haveagitgat/tdarr_node:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=tdarr
+
+Pod=${container_name}.pod
+UserNS=keep-id
+
+EnvironmentFile=${instance_dir}/.env
+Environment=nodeID=MainNode
+Environment=nodeIP=0.0.0.0
+Environment=nodePort=8267
+Environment=serverIP=127.0.0.1
+Environment=serverPort=8266
+
+Volume=${instance_dir}/configs:/app/configs
+Volume=${instance_dir}/logs:/app/logs
+Volume=${volume_dir}:/data
+Volume=${volume_dir}/tdarr_cache:/temp
+
+# 若要啟用硬體轉碼，可按需取消註解：
+#Device=/dev/dri/renderD128
+#Device=/dev/dri/card0
+#GroupAdd=video
+#GroupAdd=render
+
+[Service]
+Restart=unless-stopped
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

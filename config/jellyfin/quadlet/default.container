@@ -13,9 +13,8 @@ Label=app=jellyfin
 PublishPort=127.0.0.1:${host_port}:8096/tcp
 
 Volume=${instance_dir}/config:/config
-Volume=${instance_dir}/cache:/cache
-Volume=${volume_dir}:/media
-Volume=${instance_dir}/data:/data
+Volume=${volume_dir}:/data
+Volume=${instance_dir}/data:/data_state
 Volume=${instance_dir}/logs:/log
 
 # 硬體加速用（按需開啟，視環境調整）

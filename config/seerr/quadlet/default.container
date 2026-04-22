@@ -1,27 +1,25 @@
 [Unit]
-Description=qbittorrent
+Description=Seerr
 After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=lscr.io/linuxserver/qbittorrent:latest
+Image=ghcr.io/seerr-team/seerr:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=qbittorrent
+Label=app=seerr
 #Network=tgdb.network
+
+PublishPort=127.0.0.1:${host_port}:5055/tcp
 UserNS=keep-id
 
-PublishPort=127.0.0.1:${host_port}:${host_port}
-PublishPort=6881:6881
-PublishPort=6881:6881/udp
-
-Volume=${instance_dir}/config:/config
-Volume=${volume_dir}:/data
-
+Volume=${instance_dir}/config:/app/config
 EnvironmentFile=${instance_dir}/.env
 
+NoNewPrivileges=true
+
 [Service]
-Restart=on-failure
+Restart=always
 RestartSec=15s
 StartLimitBurst=3
 
