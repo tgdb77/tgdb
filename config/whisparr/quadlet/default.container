@@ -1,27 +1,23 @@
 [Unit]
-Description=qbittorrent
+Description=Whisparr
 After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=lscr.io/linuxserver/qbittorrent:latest
+Image=ghcr.io/hotio/whisparr:v3
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=qbittorrent
+Label=app=whisparr
 #Network=tgdb.network
-UserNS=keep-id
 
-PublishPort=127.0.0.1:${host_port}:${host_port}
-PublishPort=6881:6881
-PublishPort=6881:6881/udp
+PublishPort=127.0.0.1:${host_port}:6969/tcp
 
 Volume=${instance_dir}/config:/config
 Volume=${volume_dir}:/data
-
 EnvironmentFile=${instance_dir}/.env
 
 [Service]
-Restart=on-failure
+Restart=unless-stopped
 RestartSec=15s
 StartLimitBurst=3
 
