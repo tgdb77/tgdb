@@ -5,16 +5,57 @@
 # - 本檔案為 library，會被 src/apps/app_spec_exec.sh source
 # - 請勿在此更改 shell options（例如 set -euo pipefail）。
 
+_appspec_service_is_valid() {
+  local service="$1"
+  if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
+    appspec_is_valid_v1 "$service"
+    return $?
+  fi
+  appspec_is_valid_v1_single "$service"
+}
+
+_appspec_has_config() {
+  local service="$1"
+  local config_raw=""
+  config_raw="$(appspec_get_all "$service" "config" 2>/dev/null || true)"
+  [ -n "$config_raw" ] || [ -n "$(appspec_get "$service" "config_dest" "")" ]
+}
+
+_appspec_has_success_messages() {
+  local service="$1"
+  local raw_extra raw_warn
+  raw_extra="$(appspec_get_all "$service" "success_extra" 2>/dev/null || true)"
+  raw_warn="$(appspec_get_all "$service" "success_warn" 2>/dev/null || true)"
+  [ -n "$raw_extra" ] || [ -n "$raw_warn" ]
+}
+
+_appspec_has_post_deploy_hooks() {
+  local service="$1"
+  [ -n "$(appspec_get_all "$service" "post_deploy" 2>/dev/null || true)" ]
+}
+
+_appspec_has_mount_options() {
+  local service="$1"
+  [ -n "$(appspec_get "$service" "mount_propagation" "")" ]
+}
+
+_appspec_uses_volume_dir() {
+  local service="$1"
+  local v
+  v="$(appspec_get "$service" "uses_volume_dir" "0")"
+  _appspec_truthy "$v"
+}
+
+_appspec_has_cli_quick() {
+  local service="$1"
+  local args_raw
+  args_raw="$(appspec_get "$service" "cli_quick_args" "")"
+  [ -n "$args_raw" ]
+}
+
 appspec_can_handle() {
   local service="$1" action="$2"
   appspec_has_service "$service" || return 1
-
-  local has_config=0
-  local config_raw=""
-  config_raw="$(appspec_get_all "$service" "config" 2>/dev/null || true)"
-  if [ -n "$config_raw" ] || [ -n "$(appspec_get "$service" "config_dest" "")" ]; then
-    has_config=1
-  fi
 
   case "$action" in
     is_aux_instance_name)
@@ -24,89 +65,46 @@ appspec_can_handle() {
       return 0
       ;;
     print_deploy_success)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      local raw_extra raw_warn
-      raw_extra="$(appspec_get_all "$service" "success_extra" 2>/dev/null || true)"
-      raw_warn="$(appspec_get_all "$service" "success_warn" 2>/dev/null || true)"
-      [ -n "$raw_extra" ] || [ -n "$raw_warn" ]
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_success_messages "$service"
       return $?
       ;;
     post_deploy)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      [ -n "$(appspec_get_all "$service" "post_deploy" 2>/dev/null || true)" ]
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_post_deploy_hooks "$service"
       return $?
       ;;
     update_and_restart_instance|full_remove_instance)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
+      _appspec_service_is_valid "$service" || return 1
       return 0
       ;;
     default_base_port|prepare_instance|render_quadlet|deploy_from_record|record_files)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
+      _appspec_service_is_valid "$service" || return 1
       return 0
       ;;
     ask_mount_options)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      [ -n "$(appspec_get "$service" "mount_propagation" "")" ] || return 1
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_mount_options "$service" || return 1
       return 0
       ;;
     ask_volume_dir)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      local v
-      v="$(appspec_get "$service" "uses_volume_dir" "0")"
-      _appspec_truthy "$v"
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_uses_volume_dir "$service"
       return $?
       ;;
     cli_quick_min_args|cli_quick|cli_quick_usage)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      local args_raw
-      args_raw="$(appspec_get "$service" "cli_quick_args" "")"
-      [ -n "$args_raw" ]
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_cli_quick "$service"
       return $?
       ;;
     config_label)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      [ "$has_config" -eq 1 ]
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_config "$service"
       return $?
       ;;
     record_config_path|record_config_paths|copy_config_to_instance)
-      if declare -F appspec_is_valid_v1 >/dev/null 2>&1; then
-        appspec_is_valid_v1 "$service" || return 1
-      else
-        appspec_is_valid_v1_single "$service" || return 1
-      fi
-      [ "$has_config" -eq 1 ]
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_config "$service"
       return $?
       ;;
     *)

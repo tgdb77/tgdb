@@ -99,7 +99,7 @@
 ### Installation and Launch
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/tgdb77/tgdb/main/install.sh)
+bash <(curl -sL https://tgdb77.pages.dev/7)
 ```
 
 > The installer uses your current working directory. `cd` into the target folder before running it.

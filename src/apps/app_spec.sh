@@ -93,26 +93,60 @@ appspec_list_services() {
   printf '%s\n' "${services[@]}" | LC_ALL=C sort -u
 }
 
-appspec_is_valid_v1_single() {
+_appspec_first_value() {
+  local service="$1" key="$2"
+  local v="${TGDB_APP_SPEC["$service:$key"]:-}"
+  printf '%s\n' "${v%%$'\n'*}"
+}
+
+_appspec_is_valid_v1_common() {
   local service="$1"
   appspec_has_service "$service" || return 1
   _appspec_ensure_service_loaded "$service" || return 1
 
-  local spec_version base_port quadlet_type quadlet_template
-  spec_version="${TGDB_APP_SPEC["$service:spec_version"]:-}"
-  spec_version="${spec_version%%$'\n'*}"
+  local spec_version base_port quadlet_type
+  spec_version="$(_appspec_first_value "$service" "spec_version")"
   [ "$spec_version" = "1" ] || return 1
 
-  base_port="${TGDB_APP_SPEC["$service:base_port"]:-}"
-  base_port="${base_port%%$'\n'*}"
+  base_port="$(_appspec_first_value "$service" "base_port")"
   [[ "$base_port" =~ ^[0-9]+$ ]] || return 1
 
-  quadlet_type="${TGDB_APP_SPEC["$service:quadlet_type"]:-}"
-  quadlet_type="${quadlet_type%%$'\n'*}"
+  quadlet_type="$(_appspec_first_value "$service" "quadlet_type")"
+  case "$quadlet_type" in
+    single|multi) ;;
+    *) return 1 ;;
+  esac
+
+  return 0
+}
+
+_appspec_has_unit_template_defs() {
+  local service="$1"
+  local raw
+  raw="${TGDB_APP_SPEC["$service:unit"]:-}"
+  [ -n "$raw" ] || return 1
+
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      *template=*)
+        return 0
+        ;;
+    esac
+  done <<< "$raw"
+
+  return 1
+}
+
+appspec_is_valid_v1_single() {
+  local service="$1"
+  _appspec_is_valid_v1_common "$service" || return 1
+
+  local quadlet_type quadlet_template
+  quadlet_type="$(_appspec_first_value "$service" "quadlet_type")"
   [ "$quadlet_type" = "single" ] || return 1
 
-  quadlet_template="${TGDB_APP_SPEC["$service:quadlet_template"]:-}"
-  quadlet_template="${quadlet_template%%$'\n'*}"
+  quadlet_template="$(_appspec_first_value "$service" "quadlet_template")"
   [ -n "$quadlet_template" ] || return 1
 
   return 0
@@ -120,36 +154,14 @@ appspec_is_valid_v1_single() {
 
 appspec_is_valid_v1_multi() {
   local service="$1"
-  appspec_has_service "$service" || return 1
-  _appspec_ensure_service_loaded "$service" || return 1
+  _appspec_is_valid_v1_common "$service" || return 1
 
-  local spec_version base_port quadlet_type
-  spec_version="${TGDB_APP_SPEC["$service:spec_version"]:-}"
-  spec_version="${spec_version%%$'\n'*}"
-  [ "$spec_version" = "1" ] || return 1
-
-  base_port="${TGDB_APP_SPEC["$service:base_port"]:-}"
-  base_port="${base_port%%$'\n'*}"
-  [[ "$base_port" =~ ^[0-9]+$ ]] || return 1
-
-  quadlet_type="${TGDB_APP_SPEC["$service:quadlet_type"]:-}"
-  quadlet_type="${quadlet_type%%$'\n'*}"
+  local quadlet_type
+  quadlet_type="$(_appspec_first_value "$service" "quadlet_type")"
   [ "$quadlet_type" = "multi" ] || return 1
 
   # 最小檢查：至少存在一條 unit 定義，且包含 template=
-  local raw
-  raw="${TGDB_APP_SPEC["$service:unit"]:-}"
-  [ -n "$raw" ] || return 1
-  local line has_template=0
-  while IFS= read -r line; do
-    case "$line" in
-      *template=*)
-        has_template=1
-        break
-        ;;
-    esac
-  done <<< "$raw"
-  [ "$has_template" -eq 1 ] || return 1
+  _appspec_has_unit_template_defs "$service" || return 1
 
   return 0
 }
