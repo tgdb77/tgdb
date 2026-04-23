@@ -228,11 +228,7 @@ _appspec_unit_defs() {
       case "$k" in
         template|suffix) continue ;;
       esac
-      if declare -F _env_key_is_valid >/dev/null 2>&1; then
-        _env_key_is_valid "$k" || continue
-      else
-        [[ "$k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-      fi
+      _appspec_env_key_is_valid "$k" || continue
       kvs+="${k}=${opts[$k]}"$'\n'
     done
     out_kv_ref+=("$kvs")
@@ -240,6 +236,93 @@ _appspec_unit_defs() {
 
   [ ${#out_suffix_ref[@]} -gt 0 ] || return 1
   return 0
+}
+
+_appspec_resolve_render_unit_defs() {
+  local service="$1" quadlet_type="$2"
+  # shellcheck disable=SC2178 # out_* 透過 nameref 回傳（shellcheck 誤判）
+  local -n out_suffix_ref="$3"
+  # shellcheck disable=SC2178 # out_* 透過 nameref 回傳（shellcheck 誤判）
+  local -n out_tpl_ref="$4"
+  # shellcheck disable=SC2178 # out_* 透過 nameref 回傳（shellcheck 誤判）
+  local -n out_kv_ref="$5"
+
+  out_suffix_ref=()
+  out_tpl_ref=()
+  out_kv_ref=()
+
+  case "$quadlet_type" in
+    multi)
+      local -a resolved_suffixes=() resolved_tpls=() resolved_kvs=()
+      _appspec_unit_defs "$service" resolved_suffixes resolved_tpls resolved_kvs || {
+        tgdb_fail "AppSpec multi 缺少 unit 定義（$service）。" 1 || true
+        return 1
+      }
+      out_suffix_ref=("${resolved_suffixes[@]}")
+      out_tpl_ref=("${resolved_tpls[@]}")
+      out_kv_ref=("${resolved_kvs[@]}")
+      ;;
+    single)
+      local quadlet_template
+      quadlet_template="$(appspec_get "$service" "quadlet_template" "")"
+      if [ -z "$quadlet_template" ]; then
+        tgdb_fail "AppSpec 缺少 quadlet_template：$service" 1 || true
+        return 1
+      fi
+      out_suffix_ref+=(".container")
+      out_tpl_ref+=("$quadlet_template")
+      out_kv_ref+=("")
+      ;;
+    *)
+      tgdb_fail "AppSpec 暫不支援 quadlet_type：$service（quadlet_type=$quadlet_type）" 1 || true
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+
+_appspec_apply_render_runtime_options() {
+  local service="$1" name="$2" content="$3" selinux_flag="$4" propagation="$5" volume_dir="${6:-}"
+
+  local selinux_pat=""
+  local selinux_volume_dir
+  selinux_volume_dir="$(appspec_get "$service" "selinux_volume_dir" "skip")"
+  if [ -n "${volume_dir:-}" ] && [ "${volume_dir:-}" != "0" ] && [ "$selinux_volume_dir" != "apply" ]; then
+    local esc
+    esc="$(_appspec_awk_regex_escape "$volume_dir")"
+    # 同時略過 volume_dir 根目錄與其子目錄掛載（${volume_dir}/...）
+    selinux_pat="!^Volume=${esc}(/|:)"
+  fi
+  content=$(_quadlet_apply_selinux_to_volumes "$content" "$selinux_flag" "$selinux_pat")
+
+  if [ -n "$propagation" ] && [ "$propagation" != "none" ]; then
+    local mount_pat
+    mount_pat="$(appspec_get "$service" "mount_propagation_match_pattern" "")"
+    content=$(_quadlet_apply_rshared_to_volumes "$content" "$propagation" "$mount_pat")
+  fi
+
+  local vol_prop=""
+  vol_prop="$(_appspec_ctx_get "$service" "$name" "volume_dir_propagation" "")"
+  if [ -z "$vol_prop" ]; then
+    local mode def
+    mode="$(appspec_get "$service" "volume_dir_propagation" "")"
+    def="$(appspec_get "$service" "volume_dir_propagation_default" "none")"
+    case "$mode" in
+      ask) vol_prop="$def" ;;
+      rprivate|private|rshared|shared|rslave|slave|none) vol_prop="$mode" ;;
+    esac
+  fi
+
+  if [ -n "$vol_prop" ] && [ -n "${volume_dir:-}" ]; then
+    local esc pat
+    esc="$(_appspec_awk_regex_escape "$volume_dir")"
+    # 允許對 ${volume_dir} 與 ${volume_dir}/子路徑 一併套用 propagation
+    pat="^Volume=${esc}(/|:)"
+    content=$(_quadlet_apply_rshared_to_volumes "$content" "$vol_prop" "$pat")
+  fi
+
+  printf '%s\n' "$content"
 }
 
 appspec_prepare_instance() {
@@ -332,111 +415,15 @@ appspec_render_quadlet() {
     _appspec_ctx_set "$service" "$name" "volume_dir" "$volume_dir"
   fi
 
-  local quadlet_template quadlet_type
+  local quadlet_type
   quadlet_type="$(appspec_get "$service" "quadlet_type" "")"
-  case "$quadlet_type" in
-    single) ;;
-    multi)
-      if [ -z "${_units_dir:-}" ] || [ ! -d "${_units_dir:-}" ]; then
-        tgdb_fail "AppSpec multi 需要提供輸出目錄（$service）。" 1 || true
-        return 1
-      fi
-
-      local -a unit_suffixes=() unit_tpls=() unit_kvs=()
-      _appspec_unit_defs "$service" unit_suffixes unit_tpls unit_kvs || {
-        tgdb_fail "AppSpec multi 缺少 unit 定義（$service）。" 1 || true
-        return 1
-      }
-
-      local user_name pass_word
-      user_name="$(_appspec_ctx_get "$service" "$name" "user_name" "")"
-      pass_word="$(_appspec_ctx_get "$service" "$name" "pass_word" "")"
-      local -a kv_args=()
-      _appspec_build_render_kv_args kv_args "$service" "$name"
-
-      local i
-      for ((i = 0; i < ${#unit_suffixes[@]}; i++)); do
-        local suffix tpl_rel tpl out_fn out_path content
-        suffix="${unit_suffixes[$i]}"
-        tpl_rel="${unit_tpls[$i]}"
-        tpl="$(_appspec_join_service_path "$service" "$tpl_rel")" || return 1
-        if [ ! -f "$tpl" ]; then
-          tgdb_fail "找不到 ${service} Quadlet 範本：$tpl" 1 || true
-          return 1
-        fi
-
-        out_fn="${name}${suffix}"
-        if ! _appspec_unit_filename_is_safe "$out_fn"; then
-          tgdb_fail "AppSpec unit 產生的檔名不合法（$service）：$out_fn" 1 || true
-          return 1
-        fi
-        out_path="${_units_dir}/${out_fn}"
-
-        local -a unit_kv_args=("${kv_args[@]}")
-        local unit_kvs_raw="${unit_kvs[$i]}"
-        local line
-        while IFS= read -r line; do
-          [ -n "$line" ] && unit_kv_args+=("$line")
-        done <<< "$unit_kvs_raw"
-
-        content=$(_render_quadlet_template "$tpl" "$name" "$host_port" "$instance_dir" "$volume_dir" "$user_name" "$pass_word" "${unit_kv_args[@]}")
-
-        local selinux_pat=""
-        local selinux_volume_dir
-        selinux_volume_dir="$(appspec_get "$service" "selinux_volume_dir" "skip")"
-        if [ -n "${volume_dir:-}" ] && [ "${volume_dir:-}" != "0" ] && [ "$selinux_volume_dir" != "apply" ]; then
-          local esc
-          esc="$(_appspec_awk_regex_escape "$volume_dir")"
-          # 同時略過 volume_dir 根目錄與其子目錄掛載（${volume_dir}/...）
-          selinux_pat="!^Volume=${esc}(/|:)"
-        fi
-        content=$(_quadlet_apply_selinux_to_volumes "$content" "$selinux_flag" "$selinux_pat")
-
-        if [ -n "$propagation" ] && [ "$propagation" != "none" ]; then
-          local mount_pat
-          mount_pat="$(appspec_get "$service" "mount_propagation_match_pattern" "")"
-          content=$(_quadlet_apply_rshared_to_volumes "$content" "$propagation" "$mount_pat")
-        fi
-
-        local vol_prop=""
-        vol_prop="$(_appspec_ctx_get "$service" "$name" "volume_dir_propagation" "")"
-        if [ -z "$vol_prop" ]; then
-          local mode def
-          mode="$(appspec_get "$service" "volume_dir_propagation" "")"
-          def="$(appspec_get "$service" "volume_dir_propagation_default" "none")"
-          case "$mode" in
-            ask) vol_prop="$def" ;;
-            rprivate|private|rshared|shared|rslave|slave|none) vol_prop="$mode" ;;
-          esac
-        fi
-        if [ -n "$vol_prop" ] && [ -n "${volume_dir:-}" ]; then
-          local esc pat
-          esc="$(_appspec_awk_regex_escape "$volume_dir")"
-          # 允許對 ${volume_dir} 與 ${volume_dir}/子路徑 一併套用 propagation
-          pat="^Volume=${esc}(/|:)"
-          content=$(_quadlet_apply_rshared_to_volumes "$content" "$vol_prop" "$pat")
-        fi
-
-        _appspec_write_staging_unit_file "$out_path" "$content" || return 1
-      done
-
-      printf '%s\n' "$_units_dir"
-      return 0
-      ;;
-    *)
-      tgdb_fail "AppSpec 暫不支援 quadlet_type：$service（quadlet_type=$quadlet_type）" 1 || true
-      return 1
-      ;;
-  esac
-
-  quadlet_template="$(appspec_get "$service" "quadlet_template" "")"
-  if [ -z "$quadlet_template" ]; then
-    tgdb_fail "AppSpec 缺少 quadlet_template：$service" 1 || true
+  if [ "$quadlet_type" = "multi" ] && { [ -z "${_units_dir:-}" ] || [ ! -d "${_units_dir:-}" ]; }; then
+    tgdb_fail "AppSpec multi 需要提供輸出目錄（$service）。" 1 || true
     return 1
   fi
 
-  local tpl
-  tpl="$(_appspec_join_service_path "$service" "$quadlet_template")" || return 1
+  local -a unit_suffixes=() unit_tpls=() unit_kvs=()
+  _appspec_resolve_render_unit_defs "$service" "$quadlet_type" unit_suffixes unit_tpls unit_kvs || return 1
 
   local user_name pass_word
   user_name="$(_appspec_ctx_get "$service" "$name" "user_name" "")"
@@ -444,49 +431,47 @@ appspec_render_quadlet() {
   local -a kv_args=()
   _appspec_build_render_kv_args kv_args "$service" "$name"
 
-  local content
-  content=$(_render_quadlet_template "$tpl" "$name" "$host_port" "$instance_dir" "$volume_dir" "$user_name" "$pass_word" "${kv_args[@]}")
-  # SELinux 標籤預設全套用，但略過：
-  # - podman.sock 掛載（_quadlet_apply_selinux_to_volumes 內部固定略過）
-  # - volume_dir 掛載（預設略過，避免對外部/共享目錄進行 relabel；需要可在 spec 設定 selinux_volume_dir=apply）
-  local selinux_pat=""
-  local selinux_volume_dir
-  selinux_volume_dir="$(appspec_get "$service" "selinux_volume_dir" "skip")"
-  if [ -n "${volume_dir:-}" ] && [ "${volume_dir:-}" != "0" ] && [ "$selinux_volume_dir" != "apply" ]; then
-    local esc
-    esc="$(_appspec_awk_regex_escape "$volume_dir")"
-    # 同時略過 volume_dir 根目錄與其子目錄掛載（${volume_dir}/...）
-    selinux_pat="!^Volume=${esc}(/|:)"
-  fi
-  content=$(_quadlet_apply_selinux_to_volumes "$content" "$selinux_flag" "$selinux_pat")
-  if [ -n "$propagation" ] && [ "$propagation" != "none" ]; then
-    local mount_pat
-    mount_pat="$(appspec_get "$service" "mount_propagation_match_pattern" "")"
-    content=$(_quadlet_apply_rshared_to_volumes "$content" "$propagation" "$mount_pat")
-  fi
+  local rendered_single=""
+  local i
+  for ((i = 0; i < ${#unit_suffixes[@]}; i++)); do
+    local suffix tpl_rel tpl out_fn out_path content
+    suffix="${unit_suffixes[$i]}"
+    tpl_rel="${unit_tpls[$i]}"
+    tpl="$(_appspec_join_service_path "$service" "$tpl_rel")" || return 1
+    if [ "$quadlet_type" = "multi" ] && [ ! -f "$tpl" ]; then
+      tgdb_fail "找不到 ${service} Quadlet 範本：$tpl" 1 || true
+      return 1
+    fi
 
-  # volume_dir 專屬 propagation（用於即時映射掛載點等需求）
-  # - 目標：只對「Volume=${volume_dir}:...」這一條套用（或移除） rshared/shared 等標籤
-  local vol_prop=""
-  vol_prop="$(_appspec_ctx_get "$service" "$name" "volume_dir_propagation" "")"
-  if [ -z "$vol_prop" ]; then
-    local mode def
-    mode="$(appspec_get "$service" "volume_dir_propagation" "")"
-    def="$(appspec_get "$service" "volume_dir_propagation_default" "none")"
-    case "$mode" in
-      ask) vol_prop="$def" ;;
-      rprivate|private|rshared|shared|rslave|slave|none) vol_prop="$mode" ;;
-    esac
-  fi
+    out_fn="${name}${suffix}"
+    if ! _appspec_unit_filename_is_safe "$out_fn"; then
+      tgdb_fail "AppSpec unit 產生的檔名不合法（$service）：$out_fn" 1 || true
+      return 1
+    fi
 
-  if [ -n "$vol_prop" ] && [ -n "${volume_dir:-}" ]; then
-    local esc pat
-    esc="$(_appspec_awk_regex_escape "$volume_dir")"
-    # 允許對 ${volume_dir} 與 ${volume_dir}/子路徑 一併套用 propagation
-    pat="^Volume=${esc}(/|:)"
-    content=$(_quadlet_apply_rshared_to_volumes "$content" "$vol_prop" "$pat")
+    local -a unit_kv_args=("${kv_args[@]}")
+    local unit_kvs_raw="${unit_kvs[$i]}"
+    local line
+    while IFS= read -r line; do
+      [ -n "$line" ] && unit_kv_args+=("$line")
+    done <<< "$unit_kvs_raw"
+
+    content=$(_render_quadlet_template "$tpl" "$name" "$host_port" "$instance_dir" "$volume_dir" "$user_name" "$pass_word" "${unit_kv_args[@]}")
+    content="$(_appspec_apply_render_runtime_options "$service" "$name" "$content" "$selinux_flag" "$propagation" "$volume_dir")"
+
+    if [ "$quadlet_type" = "multi" ]; then
+      out_path="${_units_dir}/${out_fn}"
+      _appspec_write_staging_unit_file "$out_path" "$content" || return 1
+    else
+      rendered_single="$content"
+    fi
+  done
+
+  if [ "$quadlet_type" = "multi" ]; then
+    printf '%s\n' "$_units_dir"
+  else
+    printf '%s\n' "$rendered_single"
   fi
-  printf '%s\n' "$content"
 }
 
 appspec_ask_mount_options() {

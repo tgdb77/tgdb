@@ -7,7 +7,7 @@
 
 declare -Ag TGDB_APPSPEC_CTX=()
 
-_appspec_rel_path_is_safe() {
+_appspec_path_is_safe() {
   local p="$1"
   [ -n "${p:-}" ] || return 1
   case "$p" in
@@ -16,9 +16,13 @@ _appspec_rel_path_is_safe() {
   return 0
 }
 
+_appspec_rel_path_is_safe() {
+  _appspec_path_is_safe "$1"
+}
+
 _appspec_join_service_path() {
   local service="$1" rel="$2"
-  if ! _appspec_rel_path_is_safe "$rel"; then
+  if ! _appspec_path_is_safe "$rel"; then
     tgdb_fail "AppSpec 路徑不合法（$service）：$rel" 1 || true
     return 1
   fi
@@ -26,12 +30,17 @@ _appspec_join_service_path() {
 }
 
 _appspec_instance_rel_path_is_safe() {
-  local p="$1"
-  [ -n "${p:-}" ] || return 1
-  case "$p" in
-    /*|*\\*|*..*) return 1 ;;
-  esac
-  return 0
+  _appspec_path_is_safe "$1"
+}
+
+_appspec_env_key_is_valid() {
+  local env_key="$1"
+  [ -n "${env_key:-}" ] || return 1
+  if declare -F _env_key_is_valid >/dev/null 2>&1; then
+    _env_key_is_valid "$env_key"
+    return $?
+  fi
+  [[ "$env_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
 }
 
 _appspec_truthy() {
@@ -101,11 +110,7 @@ _appspec_ctx_set() {
 _appspec_export_env() {
   local env_key="$1" value="$2"
   [ -n "${env_key:-}" ] || return 0
-  if declare -F _env_key_is_valid >/dev/null 2>&1; then
-    _env_key_is_valid "$env_key" || return 1
-  else
-    [[ "$env_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
-  fi
+  _appspec_env_key_is_valid "$env_key" || return 1
   printf -v "$env_key" '%s' "$value"
   # shellcheck disable=SC2163 # env_key 為動態環境變數名稱
   export "$env_key"
@@ -169,11 +174,7 @@ _appspec_build_render_kv_args() {
             continue
             ;;
         esac
-        if declare -F _env_key_is_valid >/dev/null 2>&1; then
-          _env_key_is_valid "$key" || continue
-        else
-          [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-        fi
+        _appspec_env_key_is_valid "$key" || continue
         out_ref+=("${key}=${value}")
         ;;
     esac
@@ -289,11 +290,7 @@ _appspec_hook_export_env() {
       "${prefix}"*)
         key="${full#"$prefix"}"
         value="${TGDB_APPSPEC_CTX[$full]}"
-        if declare -F _env_key_is_valid >/dev/null 2>&1; then
-          _env_key_is_valid "$key" || continue
-        else
-          [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-        fi
+        _appspec_env_key_is_valid "$key" || continue
         _appspec_export_env "$key" "$value" || true
         ;;
     esac

@@ -340,12 +340,7 @@ _appspec_collect_inputs() {
     local env_key
     env_key="${opts[env]:-}"
     if [ -z "$value" ] && [ -n "$env_key" ]; then
-      if declare -F _env_key_is_valid >/dev/null 2>&1; then
-        if _env_key_is_valid "$env_key"; then
-          value="${!env_key-}"
-          [ -n "$value" ] && from_env=1
-        fi
-      else
+      if _appspec_env_key_is_valid "$env_key"; then
         value="${!env_key-}"
         [ -n "$value" ] && from_env=1
       fi
@@ -487,11 +482,7 @@ _appspec_collect_vars() {
     local env_key
     env_key="${opts[env]:-}"
     if [ -n "$env_key" ]; then
-      if declare -F _env_key_is_valid >/dev/null 2>&1; then
-        _env_key_is_valid "$env_key" || env_key=""
-      elif [[ ! "$env_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-        env_key=""
-      fi
+      _appspec_env_key_is_valid "$env_key" || env_key=""
       if [ -n "$env_key" ] && [ -n "${!env_key-}" ]; then
         value="${!env_key}"
       fi
@@ -691,12 +682,7 @@ appspec_cli_quick() {
         volume_dir="$v"
         ;;
       *)
-        if declare -F _env_key_is_valid >/dev/null 2>&1; then
-          if ! _env_key_is_valid "$a"; then
-            tgdb_fail "用法/參數錯誤（AppSpec）：無效參數鍵：$a" 2 || true
-            return 2
-          fi
-        elif [[ ! "$a" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        if ! _appspec_env_key_is_valid "$a"; then
           tgdb_fail "用法/參數錯誤（AppSpec）：無效參數鍵：$a" 2 || true
           return 2
         fi
