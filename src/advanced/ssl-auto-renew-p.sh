@@ -159,24 +159,52 @@ cmd_status() {
 cmd_cf_realip_update() {
     local conf="$TGDB_DIR/nginx/configs/00-cf-realip.conf"
     local tmp="$conf.tmp"
+    local backup="$conf.bak"
     mkdir -p "$(dirname "$conf")"
 
-    local cf_list
-    cf_list=$( {
-        curl -fsSL https://www.cloudflare.com/ips-v4 &&
-        curl -fsSL https://www.cloudflare.com/ips-v6
-    } 2>/dev/null ) || { tgdb_fail "無法取得 Cloudflare IP 清單" 1 || true; return 1; }
+    local cf_v4 cf_v6
+    cf_v4="$(curl -fsSL https://www.cloudflare.com/ips-v4 2>/dev/null)" || {
+        tgdb_fail "無法取得 Cloudflare IPv4 清單" 1 || true
+        return 1
+    }
+    cf_v6="$(curl -fsSL https://www.cloudflare.com/ips-v6 2>/dev/null)" || {
+        tgdb_fail "無法取得 Cloudflare IPv6 清單" 1 || true
+        return 1
+    }
+
+    if [ -z "${cf_v4:-}" ] || [ -z "${cf_v6:-}" ]; then
+        tgdb_fail "Cloudflare IP 清單為空，已取消更新。" 1 || true
+        return 1
+    fi
 
     {
         echo "# BEGIN CF-REAL-IP (managed by ssl-auto-renew-p.sh)"
-        printf '%s\n' "$cf_list" | awk '{print "set_real_ip_from "$0";"}'
+        printf '%s\n%s\n' "$cf_v4" "$cf_v6" \
+          | awk 'NF {print "set_real_ip_from "$0";"}'
         echo "real_ip_header CF-Connecting-IP;"
         echo "real_ip_recursive on;"
         echo "# END CF-REAL-IP"
     } > "$tmp" || { tgdb_fail "寫入 00-cf-realip.conf 失敗" 1 || true; return 1; }
 
+    if [ -f "$conf" ]; then
+        cp "$conf" "$backup" 2>/dev/null || true
+    fi
+
     mv "$tmp" "$conf" || { tgdb_fail "寫入 00-cf-realip.conf 失敗" 1 || true; return 1; }
-    if _exec_nginx_test_reload; then :; else tgdb_fail "nginx 驗證/重載失敗" 1 || true; return 1; fi
+
+    if _exec_nginx_test_reload; then
+        rm -f "$backup" 2>/dev/null || true
+    else
+        if [ -f "$backup" ]; then
+            mv -f "$backup" "$conf" 2>/dev/null || true
+            _exec_nginx_test_reload || true
+        else
+            rm -f "$conf" 2>/dev/null || true
+        fi
+        tgdb_fail "nginx 驗證/重載失敗，已回滾舊版 Cloudflare Real-IP 設定。" 1 || true
+        return 1
+    fi
+
     echo "✅ 已更新 00-cf-realip.conf 的 Cloudflare 真實 IP 區塊"
 }
 

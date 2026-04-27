@@ -12,6 +12,22 @@ NGINX_TIMERS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=src/advanced/nginx/nginx_common.sh
 source "$NGINX_TIMERS_SCRIPT_DIR/nginx_common.sh"
 
+_nginx_timers_init_tgdb_dir() {
+  if [ -n "${TGDB_DIR:-}" ]; then
+    return 0
+  fi
+
+  if declare -F load_system_config >/dev/null 2>&1; then
+    load_system_config || true
+  fi
+
+  if [ -z "${TGDB_DIR:-}" ]; then
+    TGDB_DIR="${HOME:-/tmp}/.tgdb/app"
+  fi
+}
+
+_nginx_timers_init_tgdb_dir
+
 NGINX_WAF_VERSION_FILE="${NGINX_WAF_VERSION_FILE:-$TGDB_DIR/nginx/modsecurity/crs.version}"
 
 _nginx_timer_timer_unit() {
