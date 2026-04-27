@@ -99,7 +99,7 @@
 ### 安裝與執行
 
 ```bash
-bash <(curl -sL https://tgdb77.pages.dev/7)
+bash <(curl -sL tgdb77.pages.dev/7)
 ```
 
 > 安裝器會使用「目前所在目錄」，建議先進入你要安裝 TGDB 的資料夾再執行。
