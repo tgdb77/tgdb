@@ -6,6 +6,7 @@ REPO_URL="${TGDB_REPO_URL:-https://github.com/tgdb77/tgdb.git}"
 TGDB_PARENT_DIR="$(pwd)"
 TGDB_DIR="$TGDB_PARENT_DIR/tgdb"
 TGDB_BRANCH="${TGDB_BRANCH:-main}"
+TGDB_ARGS=("$@")
 
 log_info() {
   echo "[INFO] $*"
@@ -132,13 +133,18 @@ start_tgdb() {
   chmod +x tgdb.sh
 
   log_info "已完成：安裝 git、同步專案、進入目錄與賦予執行權限。"
+  if [ "${#TGDB_ARGS[@]}" -gt 0 ]; then
+    log_info "正在以 CLI 參數啟動 TGDB：${TGDB_ARGS[*]}"
+    exec ./tgdb.sh "${TGDB_ARGS[@]}"
+  fi
+
   log_info "正在啟動 TGDB..."
 
   if [ -t 0 ] && [ -t 1 ]; then
     exec ./tgdb.sh
   fi
 
-  if command -v tty >/dev/null 2>&1 && tty -s; then
+  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
     exec ./tgdb.sh < /dev/tty > /dev/tty 2>&1
   fi
 

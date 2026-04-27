@@ -1,0 +1,21 @@
+url: ${misskey_url}
+port: 3000
+
+db:
+  host: 127.0.0.1
+  port: 5432
+  db: misskey
+  user: ${db_user}
+  pass: ${db_pass}
+
+dbReplications: false
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+
+id: aidx
+
+proxyBypassHosts:
+  - 127.0.0.1
+  - localhost

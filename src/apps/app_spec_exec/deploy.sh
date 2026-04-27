@@ -169,7 +169,7 @@ _appspec_unit_filename_is_safe() {
     /*|*\\*|*..*|*/*) return 1 ;;
   esac
   case "$p" in
-    *.container|*.pod) ;;
+    *.build|*.container|*.pod) ;;
     *) return 1 ;;
   esac
   return 0
@@ -211,9 +211,9 @@ _appspec_unit_defs() {
       return 1
     fi
     case "$suffix" in
-      *.container|*.pod) ;;
+      *.build|*.container|*.pod) ;;
       *)
-        tgdb_fail "AppSpec unit suffix 必須以 .container 或 .pod 結尾（$service）：$unit_id（suffix=$suffix）" 1 || true
+        tgdb_fail "AppSpec unit suffix 必須以 .build、.container 或 .pod 結尾（$service）：$unit_id（suffix=$suffix）" 1 || true
         return 1
         ;;
     esac

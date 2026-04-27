@@ -155,6 +155,22 @@ quadlet_template=quadlet/default.container
 #
 #pre_deploy=scripts/pre_deploy_init.sh|runner=bash|allow_fail=0
 
+# ---- 建置前/建置後任務（搭配 .build 單元；宣告式，可重複）----
+# 用途：
+# - pre_build：在執行 .build 前準備 build context（例如 clone 原始碼到 /tmp）
+# - post_build：在 .build 成功後清理暫存 source/context
+#
+# 典型情境：
+# - .build 使用 File=/tmp/.../Dockerfile 與 SetWorkingDirectory=/tmp/... 時，
+#   可在 pre_build 準備來源碼，post_build 清理 /tmp。
+#
+# 格式同 pre_deploy/post_deploy：
+#   pre_build=<rel_path>|runner=<bash|source>|allow_fail=<0|1>
+#   post_build=<rel_path>|runner=<bash|source>|allow_fail=<0|1>
+#
+#pre_build=scripts/pre_build_prepare_source.sh|runner=bash|allow_fail=0
+#post_build=scripts/post_build_cleanup_source.sh|runner=bash|allow_fail=1
+
 # ---- 部署後任務（宣告式，可重複）----
 # 用途：部署完成（單元 enable/start 後）執行一次或多次腳本，取代以往需要寫 hook 的情境。
 # 格式：
@@ -201,10 +217,12 @@ quadlet_template=quadlet/default.container
 # unit=...（可重複）
 # - template：相對於 config/<service>/
 # - suffix：輸出檔名為 ${container_name}${suffix}
+#   - .build 代表一次性建置單元（建置成功後，TGDB 會移除 runtime .build 單元，只保留 image 與紀錄）
 #   - .pod 代表 pod unit
 #   - .container 代表 container unit
 #   - 建議 aux container 用「-postgres.container / -redis.container」這種 suffix，系統可自動辨識為 aux instance name
 #
+#unit=build|template=quadlet/default.build|suffix=.build
 #unit=pod|template=quadlet/default.pod|suffix=.pod
 #unit=main|template=quadlet/default.container|suffix=.container
 #unit=postgres|template=quadlet/default2.container|suffix=-postgres.container

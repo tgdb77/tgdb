@@ -1,0 +1,18 @@
+[Unit]
+Description=Misskey Image Build
+Wants=network-online.target
+After=network-online.target
+
+[Build]
+File=/tmp/tgdb-build-misskey-${container_name}/Dockerfile
+ImageTag=localhost/tgdb/misskey:${container_name}
+SetWorkingDirectory=/tmp/tgdb-build-misskey-${container_name}
+
+[Service]
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

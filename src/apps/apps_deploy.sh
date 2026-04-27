@@ -47,7 +47,7 @@ _apps_collect_quadlet_unit_files() {
   shopt -q nullglob && had_nullglob=1
   shopt -s nullglob
   # shellcheck disable=SC2034 # out_ref 透過 nameref 回傳（shellcheck 誤判）
-  out_ref=("$units_dir"/*.container "$units_dir"/*.pod)
+  out_ref=("$units_dir"/*.build "$units_dir"/*.container "$units_dir"/*.pod)
   if [ "$had_nullglob" -eq 0 ]; then
     shopt -u nullglob
   fi

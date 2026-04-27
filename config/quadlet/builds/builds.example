@@ -26,8 +26,8 @@
 ## File=：Containerfile/Dockerfile 路徑
 #File=/path/to/Containerfile
 #
-## Tag=：建置產物的 tag（可重複多行）
-#Tag=localhost/myimage:latest
+## ImageTag=：建置產物的 tag（可重複多行）
+#ImageTag=localhost/myimage:latest
 #
 ## SetWorkingDirectory=：建置 context 的工作目錄（相當於 podman build 的 context）
 ##SetWorkingDirectory=/path/to/build-context
@@ -65,4 +65,3 @@
 #
 #[Install]
 #WantedBy=default.target
-

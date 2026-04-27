@@ -448,6 +448,7 @@ rm_persist_quadlet_dir() {
 rm_quadlet_subdir_by_ext() {
   local ext="$1"
   case "$ext" in
+    build) printf '%s\n' "builds" ;;
     container) printf '%s\n' "containers" ;;
     network) printf '%s\n' "networks" ;;
     volume) printf '%s\n' "volumes" ;;
