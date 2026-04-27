@@ -4,9 +4,10 @@
 # 注意：此檔案可被 source，也可直接執行。
 
 if [ -n "${_TGDB_TIMER_RUNNER_LOADED:-}" ] && [ "${TGDB_FORCE_RELOAD_LIBS:-0}" != "1" ]; then
-  if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
-    return 0
-  fi
+  # 這支檔案可能在「直接執行 runner.sh」的流程中，又被 bootstrap -> utils 再次 source。
+  # 若此時重新進入檔案，會在同一個行程內把 main 再跑一次，造成任務重複執行。
+  # 這裡在重複 source 時直接短路返回即可。
+  return 0 2>/dev/null
 fi
 _TGDB_TIMER_RUNNER_LOADED=1
 
