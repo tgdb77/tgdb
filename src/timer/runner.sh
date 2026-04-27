@@ -10,6 +10,16 @@ if [ -n "${_TGDB_TIMER_RUNNER_LOADED:-}" ] && [ "${TGDB_FORCE_RELOAD_LIBS:-0}" !
 fi
 _TGDB_TIMER_RUNNER_LOADED=1
 
+tgdb_timer_runner_init_context() {
+  if [ -n "${TGDB_DIR:-}" ]; then
+    return 0
+  fi
+
+  if declare -F load_system_config >/dev/null 2>&1; then
+    load_system_config || true
+  fi
+}
+
 tgdb_timer_runner_script_path() {
   if [ -n "${TGDB_REPO_DIR:-}" ]; then
     printf '%s\n' "$TGDB_REPO_DIR/src/timer/runner.sh"
@@ -33,6 +43,7 @@ tgdb_timer_runner_execute() {
   local origin="${2:-timer}"
   local rc=0
 
+  tgdb_timer_runner_init_context
   tgdb_timer_registry_load_task "$task_id" || return 1
 
   if tgdb_timer_healthchecks_should_notify "$task_id" "$origin"; then
