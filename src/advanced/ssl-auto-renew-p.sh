@@ -66,17 +66,43 @@ _stop_nginx_user() {
     podman stop "$NGINX_CONTAINER" 2>/dev/null || true
 }
 
+_nginx_container_running() {
+    podman ps --format '{{.Names}}' 2>/dev/null | grep -qx "$NGINX_CONTAINER"
+}
+
+_wait_for_nginx_container() {
+    local timeout="${1:-15}"
+    local i
+
+    for ((i=0; i<timeout; i++)); do
+        if _nginx_container_running; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
 _start_nginx_user() {
-    _systemctl_user_try start --no-block -- nginx.container nginx.service container-nginx.service || \
     _systemctl_user_try start -- nginx.container nginx.service container-nginx.service || \
+    _systemctl_user_try start --no-block -- nginx.container nginx.service container-nginx.service || \
     podman start "$NGINX_CONTAINER" 2>/dev/null || true
+
+    _wait_for_nginx_container 20
 }
 
 _exec_nginx_test_reload() {
+    if ! _nginx_container_running; then
+        tgdb_fail "找不到執行中的 Nginx 容器：$NGINX_CONTAINER" 1 || true
+        return 1
+    fi
+
     if podman exec "$NGINX_CONTAINER" nginx -t; then
         podman exec "$NGINX_CONTAINER" nginx -s reload || true
         return 0
     fi
+
+    tgdb_fail "nginx 驗證/重載失敗" 1 || true
     return 1
 }
 
@@ -109,10 +135,14 @@ cmd_issue() {
     echo "停止 nginx 以釋放 80..."; _stop_nginx_user || true
     podman run --rm -p 80:80 -v "$LETSENCRYPT_DIR:/etc/letsencrypt" "$CERTBOT_IMAGE" \
         certonly --standalone -d "$CERT_DOMAIN" --agree-tos --register-unsafely-without-email \
-        --key-type ecdsa --elliptic-curve secp256r1
+        --key-type ecdsa --elliptic-curve secp256r1 || {
+            tgdb_fail "Certbot issue 失敗：$CERT_DOMAIN" 1 || true
+            _start_nginx_user || true
+            return 1
+        }
     copy_latest_certs_one "$CERT_DOMAIN"
-    _start_nginx_user || true
-    _exec_nginx_test_reload || true
+    _start_nginx_user || { tgdb_fail "Nginx 啟動失敗" 1 || true; return 1; }
+    _exec_nginx_test_reload || return 1
     echo "✅ issue 完成: $CERT_DOMAIN"
 }
 
@@ -127,10 +157,14 @@ cmd_renew() {
         echo "進行續簽..."
         _stop_nginx_user || true
         podman run --rm -p 80:80 -v "$LETSENCRYPT_DIR:/etc/letsencrypt" "$CERTBOT_IMAGE" \
-            renew --standalone --key-type ecdsa --elliptic-curve secp256r1
+            renew --standalone --key-type ecdsa --elliptic-curve secp256r1 || {
+                tgdb_fail "Certbot 續簽失敗：$CERT_DOMAIN" 1 || true
+                _start_nginx_user || true
+                return 1
+            }
         copy_latest_certs_one "$CERT_DOMAIN"
-        _start_nginx_user || true
-        _exec_nginx_test_reload || true
+        _start_nginx_user || { tgdb_fail "Nginx 啟動失敗" 1 || true; return 1; }
+        _exec_nginx_test_reload || return 1
         echo "✅ 續簽完成"
     else
         echo "尚無需續簽（閾值: ${threshold} 天）"
@@ -142,10 +176,14 @@ cmd_renew_all() {
     echo "進行續簽（全部）..."
     _stop_nginx_user || true
     podman run --rm -p 80:80 -v "$LETSENCRYPT_DIR:/etc/letsencrypt" "$CERTBOT_IMAGE" \
-        renew --standalone --key-type ecdsa --elliptic-curve secp256r1 || true
+        renew --standalone --key-type ecdsa --elliptic-curve secp256r1 || {
+            tgdb_fail "Certbot 全部續簽失敗" 1 || true
+            _start_nginx_user || true
+            return 1
+        }
     copy_latest_certs_multi || true
-    _start_nginx_user || true
-    _exec_nginx_test_reload || true
+    _start_nginx_user || { tgdb_fail "Nginx 啟動失敗" 1 || true; return 1; }
+    _exec_nginx_test_reload || return 1
     echo "✅ 續簽流程（全部）完成"
 }
 
