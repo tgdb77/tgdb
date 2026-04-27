@@ -192,10 +192,10 @@ cmd_setup_timers() {
     local cf_tim="tgdb-cf-realip-update.timer"
     local script_abs="$SCRIPT_DIR/ssl-auto-renew-p.sh"
 
-    _write_user_unit "$renew_svc" "[Unit]\nDescription=TGDB SSL Renew All (Podman)\n\n[Service]\nType=oneshot\nExecStart=/bin/bash -lc '$script_abs renew-all'\n"
+    _write_user_unit "$renew_svc" "[Unit]\nDescription=TGDB SSL Renew All (Podman)\n\n[Service]\nType=oneshot\nExecStart=/bin/bash \"$script_abs\" renew-all\n"
     _write_user_unit "$renew_tim" "[Unit]\nDescription=Daily SSL Renew All at 03:00\n\n[Timer]\nOnCalendar=*-*-* 03:00:00\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 
-    _write_user_unit "$cf_svc" "[Unit]\nDescription=TGDB Cloudflare Real-IP Update\n\n[Service]\nType=oneshot\nExecStart=/bin/bash -lc '$script_abs cf-realip-update'\n"
+    _write_user_unit "$cf_svc" "[Unit]\nDescription=TGDB Cloudflare Real-IP Update\n\n[Service]\nType=oneshot\nExecStart=/bin/bash \"$script_abs\" cf-realip-update\n"
     _write_user_unit "$cf_tim" "[Unit]\nDescription=Monthly CF Real-IP Update at 03:00\n\n[Timer]\nOnCalendar=monthly\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 
     _systemctl_user_try daemon-reload || true

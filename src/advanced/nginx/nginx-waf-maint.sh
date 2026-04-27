@@ -155,7 +155,7 @@ cmd_setup_timer() {
   local tim="tgdb-nginx-waf-crs-update.timer"
   local script_abs="$SCRIPT_DIR/nginx-waf-maint.sh"
 
-  _write_user_unit "$svc" "[Unit]\nDescription=TGDB Nginx WAF CRS Rule Update\n\n[Service]\nType=oneshot\nExecStart=/bin/bash -lc '$script_abs sync-crs'\n"
+  _write_user_unit "$svc" "[Unit]\nDescription=TGDB Nginx WAF CRS Rule Update\n\n[Service]\nType=oneshot\nExecStart=/bin/bash \"$script_abs\" sync-crs\n"
   _write_user_unit "$tim" "[Unit]\nDescription=Every 14 days update OWASP CRS rules\n\n[Timer]\nOnBootSec=10m\nOnUnitActiveSec=14d\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 
   _systemctl_user_try daemon-reload || true

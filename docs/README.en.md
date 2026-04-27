@@ -99,7 +99,7 @@
 ### Installation and Launch
 
 ```bash
-bash <(curl -sL https://tgdb77.pages.dev/7)
+bash <(curl -sL tgdb77.pages.dev/7)
 ```
 
 > The installer uses your current working directory. `cd` into the target folder before running it.

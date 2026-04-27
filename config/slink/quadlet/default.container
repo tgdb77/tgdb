@@ -1,22 +1,25 @@
 [Unit]
-Description=Recyclarr
+Description=Slink
 After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=ghcr.io/recyclarr/recyclarr:latest
+Image=docker.io/anirdev/slink:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
-Label=app=recyclarr
+Label=app=slink
 #Network=tgdb.network
-UserNS=keep-id
 
-Volume=${instance_dir}/config:/config
+PublishPort=127.0.0.1:${host_port}:3000/tcp
+
 EnvironmentFile=${instance_dir}/.env
 
+Volume=${instance_dir}/data:/app/var/data
+Volume=${volume_dir}:/app/slink/images
+
 [Service]
-Restart=unless-stopped
-RestartSec=30s
+Restart=on-failure
+RestartSec=15s
 StartLimitBurst=3
 
 [Install]
