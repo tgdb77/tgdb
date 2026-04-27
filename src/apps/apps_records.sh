@@ -491,6 +491,7 @@ _quadlet_unit_subdir_for_type() {
     return $?
   fi
   case "$t" in
+    build) echo "builds" ;;
     container) echo "containers" ;;
     network) echo "networks" ;;
     volume) echo "volumes" ;;
@@ -522,21 +523,23 @@ _select_quadlet_unit_type() {
     echo "=================================="
     echo "❖ 選擇 Quadlet 單元種類 ❖"
     echo "=================================="
-    echo "1) container"
-    echo "2) network"
-    echo "3) volume"
-    echo "4) pod"
-    echo "5) device"
+    echo "1) build"
+    echo "2) container"
+    echo "3) network"
+    echo "4) volume"
+    echo "5) pod"
+    echo "6) device"
     echo "----------------------------------"
     echo "0. 返回"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-5]: " c
+    read -r -e -p "請輸入選擇 [0-6]: " c
     case "$c" in
-      1) SELECTED_QUADLET_TYPE="container"; return 0 ;;
-      2) SELECTED_QUADLET_TYPE="network"; return 0 ;;
-      3) SELECTED_QUADLET_TYPE="volume"; return 0 ;;
-      4) SELECTED_QUADLET_TYPE="pod"; return 0 ;;
-      5) SELECTED_QUADLET_TYPE="device"; return 0 ;;
+      1) SELECTED_QUADLET_TYPE="build"; return 0 ;;
+      2) SELECTED_QUADLET_TYPE="container"; return 0 ;;
+      3) SELECTED_QUADLET_TYPE="network"; return 0 ;;
+      4) SELECTED_QUADLET_TYPE="volume"; return 0 ;;
+      5) SELECTED_QUADLET_TYPE="pod"; return 0 ;;
+      6) SELECTED_QUADLET_TYPE="device"; return 0 ;;
       0) return 1 ;;
       *) echo "無效選項"; sleep 1 ;;
     esac
@@ -596,6 +599,13 @@ _deploy_from_config_quadlet_unit() {
   fi
 
   case "$type" in
+    build)
+      if ! _install_quadlet_units_from_files "$quad"; then
+        tgdb_err "從 config/quadlet 部署失敗：$name.$type"
+        ui_pause
+        return 1
+      fi
+      ;;
     container)
       _install_unit_and_enable "$name" "$(cat "$quad")"
       ;;

@@ -251,6 +251,81 @@ _quadlet_extract_images() {
   ' | awk '!seen[$0]++'
 }
 
+_quadlet_extract_build_tags() {
+  local unit_content="$1"
+  printf '%s\n' "$unit_content" | awk '
+    /^[[:space:]]*ImageTag[[:space:]]*=/ {
+      line=$0
+      sub(/^[[:space:]]*ImageTag[[:space:]]*=/, "", line)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      gsub(/^"|"$/, "", line)
+      if (line != "") print line
+    }
+  ' | awk '!seen[$0]++'
+}
+
+_quadlet_image_exists_locally() {
+  local image_ref="$1"
+  [ -n "${image_ref:-}" ] || return 1
+
+  if ! command -v podman >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if tgdb_podman image exists --help >/dev/null 2>&1; then
+    tgdb_podman image exists "$image_ref" >/dev/null 2>&1
+    return $?
+  fi
+
+  tgdb_podman image inspect "$image_ref" >/dev/null 2>&1
+}
+
+_quadlet_build_file_can_skip() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  [ "${TGDB_QUADLET_BUILD_FORCE:-0}" = "1" ] && return 1
+
+  local unit_content
+  unit_content="$(cat "$file" 2>/dev/null || true)"
+
+  local has_tag=0 tag
+  while IFS= read -r tag; do
+    [ -n "$tag" ] || continue
+    has_tag=1
+    if ! _quadlet_image_exists_locally "$tag"; then
+      return 1
+    fi
+  done < <(_quadlet_extract_build_tags "$unit_content")
+
+  [ "$has_tag" -eq 1 ]
+}
+
+_quadlet_follow_unit_logs_bg() {
+  local unit_name="$1"
+  [ -n "${unit_name:-}" ] || return 1
+  command -v journalctl >/dev/null 2>&1 || return 1
+
+  local scope
+  scope="$(tgdb_active_scope)"
+
+  if [ "$scope" = "system" ]; then
+    if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
+      journalctl -f -n 0 -u "$unit_name" -o cat &
+      echo $!
+      return 0
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+      sudo journalctl -f -n 0 -u "$unit_name" -o cat &
+      echo $!
+      return 0
+    fi
+    return 1
+  fi
+
+  journalctl --user -f -n 0 -u "$unit_name" -o cat &
+  echo $!
+}
+
 _quadlet_podman_pull_policy() {
   local policy="${TGDB_PODMAN_PULL_POLICY:-missing}"
   case "$policy" in
@@ -429,6 +504,25 @@ _quadlet_enable_now_by_filename() {
       tgdb_err "無法啟用/啟動 Pod 單元：$unit_filename"
       return 1
       ;;
+    build)
+      local follow_pid=""
+      if [ "${TGDB_BUILD_SHOW_PROGRESS:-1}" = "1" ]; then
+        follow_pid="$(_quadlet_follow_unit_logs_bg "$base-build.service" 2>/dev/null || true)"
+      fi
+      if _systemctl_user_try start --wait -- "$unit_filename" "$base-build.service"; then
+        if [ -n "$follow_pid" ]; then
+          kill "$follow_pid" 2>/dev/null || true
+          wait "$follow_pid" 2>/dev/null || true
+        fi
+        return 0
+      fi
+      if [ -n "$follow_pid" ]; then
+        kill "$follow_pid" 2>/dev/null || true
+        wait "$follow_pid" 2>/dev/null || true
+      fi
+      tgdb_err "無法完成建置單元：$unit_filename"
+      return 1
+      ;;
     *)
       if _systemctl_user_try enable --now -- "$unit_filename"; then
         return 0
@@ -461,6 +555,31 @@ _quadlet_enable_now_bulk_by_filenames() {
   [ "$failed" -eq 0 ]
 }
 
+_quadlet_remove_runtime_units_by_filenames() {
+  local service=""
+  if [ "$#" -gt 0 ] && [[ ! "$1" == *.* ]]; then
+    service="$1"
+    shift || true
+  fi
+
+  if [ "$#" -le 0 ]; then
+    return 0
+  fi
+
+  local unit path
+  for unit in "$@"; do
+    [ -n "$unit" ] || continue
+    path="$(_quadlet_runtime_unit_path "$unit" "$service")"
+    if [ -n "$path" ] && [ -e "$path" ]; then
+      if [ "$(tgdb_active_scope)" = "system" ]; then
+        _tgdb_run_privileged rm -f "$path" 2>/dev/null || true
+      else
+        rm -f "$path" 2>/dev/null || true
+      fi
+    fi
+  done
+}
+
 _install_quadlet_units_from_files() {
   local service=""
   local instance=""
@@ -485,25 +604,75 @@ _install_quadlet_units_from_files() {
     fi
   done
 
-  local images=() img unit_content
+  local -a build_units=()
+  local -a pod_units=()
+  local -a container_units=()
+  local -a other_units=()
+  local f unit_filename
+  for f in "${files[@]}"; do
+    unit_filename="$(basename "$f")"
+    case "${unit_filename##*.}" in
+      build) build_units+=("$unit_filename") ;;
+      pod) pod_units+=("$unit_filename") ;;
+      container) container_units+=("$unit_filename") ;;
+      *) other_units+=("$unit_filename") ;;
+    esac
+  done
+
+  local images=() build_tags=() img unit_content
   for f in "${files[@]}"; do
     unit_content=$(cat "$f")
+    while IFS= read -r img; do
+      [ -n "$img" ] && build_tags+=("$img")
+    done < <(_quadlet_extract_build_tags "$unit_content")
     while IFS= read -r img; do
       [ -n "$img" ] && images+=("$img")
     done < <(_quadlet_extract_images "$unit_content")
   done
 
   if [ ${#images[@]} -gt 0 ]; then
+    local -A built_tags_seen=()
+    for img in "${build_tags[@]}"; do
+      [ -n "$img" ] && built_tags_seen["$img"]=1
+    done
+
     local -A seen_images=()
     local -a uniq_images=()
     for img in "${images[@]}"; do
       [ -z "$img" ] && continue
+      if [ -n "${built_tags_seen["$img"]+x}" ]; then
+        continue
+      fi
       if [ -z "${seen_images["$img"]+x}" ]; then
         seen_images["$img"]=1
         uniq_images+=("$img")
       fi
     done
-    _quadlet_pull_images "${uniq_images[@]}" || return $?
+    if [ ${#uniq_images[@]} -gt 0 ]; then
+      _quadlet_pull_images "${uniq_images[@]}" || return $?
+    fi
+  fi
+
+  local -a pending_build_units=()
+  if [ ${#build_units[@]} -gt 0 ]; then
+    for f in "${files[@]}"; do
+      unit_filename="$(basename "$f")"
+      case "${unit_filename##*.}" in
+        build)
+          if _quadlet_build_file_can_skip "$f"; then
+            echo "ℹ️ 偵測到本機已存在映像，略過建置：$unit_filename"
+          else
+            pending_build_units+=("$unit_filename")
+          fi
+          ;;
+      esac
+    done
+  fi
+
+  if [ ${#pending_build_units[@]} -gt 0 ] && [ -n "$service" ] && declare -F _app_fn_exists >/dev/null 2>&1; then
+    if _app_fn_exists "$service" pre_build; then
+      _app_invoke "$service" pre_build "$instance" || return $?
+    fi
   fi
 
   echo "⏳ 正在套用佈署並啟動服務，請稍等..."
@@ -531,17 +700,30 @@ _install_quadlet_units_from_files() {
     return 1
   fi
 
-  local -a pod_units=()
-  local -a container_units=()
-  for f in "${files[@]}"; do
-    local unit_filename
-    unit_filename="$(basename "$f")"
-    case "${unit_filename##*.}" in
-      pod) pod_units+=("$unit_filename") ;;
-      container) container_units+=("$unit_filename") ;;
-    esac
-  done
+  if [ ${#pending_build_units[@]} -gt 0 ]; then
+    echo "⏳ 正在建置映像，請稍等..."
+    _quadlet_enable_now_bulk_by_filenames "${pending_build_units[@]}" || {
+      tgdb_fail "Quadlet 建置單元執行失敗。" 1 || return $?
+      return 1
+    }
+    if [ -n "$service" ] && declare -F _app_fn_exists >/dev/null 2>&1; then
+      if _app_fn_exists "$service" post_build; then
+        _app_invoke "$service" post_build "$instance" || return $?
+      fi
+    fi
+  fi
 
+  if [ ${#build_units[@]} -gt 0 ]; then
+    _quadlet_remove_runtime_units_by_filenames "$service" "${build_units[@]}"
+    if ! _systemctl_user_try daemon-reload; then
+      tgdb_warn "建置完成，但無法在移除 .build 單元後執行 $(tgdb_scope_label "$(tgdb_active_scope)") daemon-reload。"
+    fi
+  fi
+
+  _quadlet_enable_now_bulk_by_filenames "${other_units[@]}" || {
+    tgdb_fail "Quadlet 其他單元啟用失敗。" 1 || return $?
+    return 1
+  }
   _quadlet_enable_now_bulk_by_filenames "${pod_units[@]}" || {
     tgdb_fail "Quadlet Pod 單元啟用失敗。" 1 || return $?
     return 1

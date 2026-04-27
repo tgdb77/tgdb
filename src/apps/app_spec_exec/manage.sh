@@ -19,12 +19,13 @@ _appspec_units_for_instance() {
   local -a unit_suffixes=() unit_tpls=() unit_kvs=()
   _appspec_unit_defs "$service" unit_suffixes unit_tpls unit_kvs || return 1
 
-  local -a containers=() pods=() others=()
+  local -a builds=() containers=() pods=() others=()
   local i suffix unit
   for ((i = 0; i < ${#unit_suffixes[@]}; i++)); do
     suffix="${unit_suffixes[$i]}"
     unit="${name}${suffix}"
     case "$suffix" in
+      *.build) builds+=("$unit") ;;
       *.container) containers+=("$unit") ;;
       *.pod) pods+=("$unit") ;;
       *) others+=("$unit") ;;
@@ -32,6 +33,7 @@ _appspec_units_for_instance() {
   done
 
   local u
+  for u in "${builds[@]}"; do printf '%s\n' "$u"; done
   for u in "${containers[@]}"; do printf '%s\n' "$u"; done
   for u in "${pods[@]}"; do printf '%s\n' "$u"; done
   for u in "${others[@]}"; do printf '%s\n' "$u"; done
@@ -152,32 +154,83 @@ appspec_post_deploy() {
   _appspec_run_hook_scripts "$service" "$name" "$instance_dir" "$host_port" "post_deploy"
 }
 
+appspec_pre_build() {
+  local service="$1" name="$2"
+
+  local instance_dir
+  instance_dir="${TGDB_DIR:?}/$name"
+
+  local host_port
+  host_port="$(_appspec_ctx_get "$service" "$name" "host_port" "")"
+  _appspec_run_hook_scripts "$service" "$name" "$instance_dir" "$host_port" "pre_build"
+}
+
+appspec_post_build() {
+  local service="$1" name="$2"
+
+  local instance_dir
+  instance_dir="${TGDB_DIR:?}/$name"
+
+  local host_port
+  host_port="$(_appspec_ctx_get "$service" "$name" "host_port" "")"
+  _appspec_run_hook_scripts "$service" "$name" "$instance_dir" "$host_port" "post_build"
+}
+
 appspec_update_and_restart_instance() {
   local service="$1" name="$2" main_image="${3:-}"
 
   _appspec_maybe_enable_podman_socket "$service" || true
 
-  if [ -n "${main_image:-}" ] && command -v podman >/dev/null 2>&1; then
-    tgdb_podman pull "$main_image" || true
-
-    local raw img
-    raw="$(appspec_get_all "$service" "update_pull_images" 2>/dev/null || true)"
-    if [ -n "$raw" ]; then
-      while IFS= read -r img; do
-        [ -n "$img" ] || continue
-        tgdb_podman pull "$img" || true
-      done <<< "$raw"
-    fi
-  fi
-
-  local -a units=()
+  local -a units=() build_units=() runtime_units=()
   local u
   while IFS= read -r u; do
     [ -n "$u" ] && units+=("$u")
   done < <(_appspec_units_for_instance "$service" "$name" 2>/dev/null || true)
 
-  if [ ${#units[@]} -gt 0 ] && declare -F _app_restart_units_by_filenames >/dev/null 2>&1; then
-    _app_restart_units_by_filenames "${units[@]}"
+  for u in "${units[@]}"; do
+    case "$u" in
+      *.build) build_units+=("$u") ;;
+      *) runtime_units+=("$u") ;;
+    esac
+  done
+
+  if [ -n "${main_image:-}" ] && command -v podman >/dev/null 2>&1 && [ ${#build_units[@]} -eq 0 ]; then
+    tgdb_podman pull "$main_image" || true
+  fi
+
+  local raw img
+  raw="$(appspec_get_all "$service" "update_pull_images" 2>/dev/null || true)"
+  if [ -n "$raw" ]; then
+    while IFS= read -r img; do
+      [ -n "$img" ] || continue
+      tgdb_podman pull "$img" || true
+    done <<< "$raw"
+  fi
+
+  if [ ${#build_units[@]} -gt 0 ]; then
+    local deploy_mode qdir
+    deploy_mode="$(_apps_current_deploy_mode 2>/dev/null || printf '%s\n' "rootless")"
+    qdir="$(rm_service_quadlet_dir_by_mode "$service" "$deploy_mode" 2>/dev/null || printf '%s\n' "")"
+
+    local -a build_files=()
+    for u in "${build_units[@]}"; do
+      local f="$qdir/$u"
+      if _apps_path_exists "$deploy_mode" "$f"; then
+        build_files+=("$f")
+      else
+        tgdb_fail "找不到 .build 紀錄檔，無法更新重建：$f" 1 || return $?
+        return 1
+      fi
+    done
+
+    if [ ${#build_files[@]} -gt 0 ]; then
+      echo "⏳ 偵測到 .build 單元，正在重新建置映像，請稍等..."
+      TGDB_QUADLET_BUILD_FORCE=1 _install_service_quadlet_units_from_files "$service" "$name" "${build_files[@]}" || return $?
+    fi
+  fi
+
+  if [ ${#runtime_units[@]} -gt 0 ] && declare -F _app_restart_units_by_filenames >/dev/null 2>&1; then
+    _app_restart_units_by_filenames "${runtime_units[@]}"
   else
     tgdb_systemctl_try "$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")" restart -- "${name}.container" "${name}.service" "container-${name}.service" || true
   fi

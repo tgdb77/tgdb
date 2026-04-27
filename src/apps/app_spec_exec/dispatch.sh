@@ -29,9 +29,22 @@ _appspec_has_success_messages() {
   [ -n "$raw_extra" ] || [ -n "$raw_warn" ]
 }
 
+_appspec_has_hook_scripts() {
+  local service="$1" hook_key="$2"
+  [ -n "$(appspec_get_all "$service" "$hook_key" 2>/dev/null || true)" ]
+}
+
+_appspec_has_pre_build_hooks() {
+  _appspec_has_hook_scripts "$1" "pre_build"
+}
+
+_appspec_has_post_build_hooks() {
+  _appspec_has_hook_scripts "$1" "post_build"
+}
+
 _appspec_has_post_deploy_hooks() {
   local service="$1"
-  [ -n "$(appspec_get_all "$service" "post_deploy" 2>/dev/null || true)" ]
+  _appspec_has_hook_scripts "$service" "post_deploy"
 }
 
 _appspec_has_mount_options() {
@@ -72,6 +85,16 @@ appspec_can_handle() {
     post_deploy)
       _appspec_service_is_valid "$service" || return 1
       _appspec_has_post_deploy_hooks "$service"
+      return $?
+      ;;
+    pre_build)
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_pre_build_hooks "$service"
+      return $?
+      ;;
+    post_build)
+      _appspec_service_is_valid "$service" || return 1
+      _appspec_has_post_build_hooks "$service"
       return $?
       ;;
     update_and_restart_instance|full_remove_instance)
@@ -120,6 +143,8 @@ appspec_invoke() {
   case "$action" in
     is_aux_instance_name) appspec_is_aux_instance_name "$service" "$@" ;;
     print_deploy_success) appspec_print_deploy_success "$service" "$@" ;;
+    pre_build) appspec_pre_build "$service" "$@" ;;
+    post_build) appspec_post_build "$service" "$@" ;;
     post_deploy) appspec_post_deploy "$service" "$@" ;;
     update_and_restart_instance) appspec_update_and_restart_instance "$service" "$@" ;;
     full_remove_instance) appspec_full_remove_instance "$service" "$@" ;;
