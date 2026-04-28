@@ -212,7 +212,7 @@ t
 
 ## 📱 支援的應用
 
-TGDB 使用 **Podman + Quadlet** 實現 **rootless / rootful** 容器化部署（預設 rootless），目前內建 **150+ 個 App Spec**：
+TGDB 使用 **Podman + Quadlet** 實現 **rootless / rootful** 容器化部署（預設 rootless），目前內建 **200+ 個 App Spec**：
 
 <table>
   <tr>
