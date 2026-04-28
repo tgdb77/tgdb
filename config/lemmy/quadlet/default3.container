@@ -1,0 +1,33 @@
+[Unit]
+Description=Lemmy（UI）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-lemmy.service container-${container_name}-lemmy.service
+Wants=${container_name}-lemmy.service container-${container_name}-lemmy.service
+
+[Container]
+Image=docker.io/dessalines/lemmy-ui:0.19.18
+#AutoUpdate=registry
+ContainerName=${container_name}-ui
+Label=app=lemmy
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/extra_themes:/app/extra_themes
+
+UserNS=keep-id
+User=0
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

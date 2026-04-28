@@ -1,0 +1,16 @@
+[Unit]
+Description=PeerTube Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:${host_port}:9000
+PodName=${container_name}
+# 若未來要啟用直播，可另行加入：
+# PublishPort=127.0.0.1:1935:1935
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

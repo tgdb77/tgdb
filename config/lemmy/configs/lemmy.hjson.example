@@ -1,0 +1,34 @@
+{
+  # Lemmy 主設定
+  # 詳細欄位請參考：https://join-lemmy.org/docs/administration/configuration.html
+
+  database: {
+    host: "127.0.0.1"
+    port: 5432
+    user: "${db_user}"
+    password: "${db_pass}"
+    dbname: "lemmy"
+  }
+
+  # 這裡請填最終對外網域，不要包含 https://
+  hostname: "${app_domain}"
+
+  # TGDB 版為避免與內建 Nginx Pod 內衝突，Lemmy 後端改在 8537 對 Pod 內提供服務。
+  bind: "0.0.0.0"
+  port: 8537
+  tls_enabled: true
+
+  pictrs: {
+    url: "http://127.0.0.1:8080/"
+    api_key: "${pictrs_api_key}"
+  }
+
+  # 若你需要寄送通知 / 密碼重設郵件，可參考官方文件補上：
+  # email: {
+  #   smtp_server: "smtp.example.com:587"
+  #   smtp_from_address: "noreply@${app_domain}"
+  #   tls_type: "starttls"
+  #   smtp_login: "your-smtp-user"
+  #   smtp_password: "your-smtp-password"
+  # }
+}

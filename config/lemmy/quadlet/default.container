@@ -1,0 +1,35 @@
+[Unit]
+Description=Lemmy（Nginx Proxy）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-lemmy.service container-${container_name}-lemmy.service
+Wants=${container_name}-lemmy.service container-${container_name}-lemmy.service
+
+After=${container_name}-ui.service container-${container_name}-ui.service
+Wants=${container_name}-ui.service container-${container_name}-ui.service
+
+After=${container_name}-pictrs.service container-${container_name}-pictrs.service
+Wants=${container_name}-pictrs.service container-${container_name}-pictrs.service
+
+[Container]
+Image=docker.io/nginx:1-alpine
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=lemmy
+
+Pod=${container_name}.pod
+
+Volume=${instance_dir}/nginx_internal.conf:/etc/nginx/nginx.conf:ro
+Volume=${instance_dir}/proxy_params:/etc/nginx/proxy_params:ro
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

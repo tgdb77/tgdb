@@ -1,0 +1,14 @@
+[Unit]
+Description=Lemmy Pod
+Wants=network-online.target
+After=network-online.target
+
+[Pod]
+PublishPort=127.0.0.1:${host_port}:8536
+PodName=${container_name}
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

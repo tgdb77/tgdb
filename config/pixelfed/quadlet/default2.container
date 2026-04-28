@@ -1,0 +1,41 @@
+[Unit]
+Description=Pixelfed（Worker / Horizon）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-db.service container-${container_name}-db.service
+Wants=${container_name}-db.service container-${container_name}-db.service
+
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=ghcr.io/jippi/docker-pixelfed:v0.12-apache-8.4-bookworm
+#AutoUpdate=registry
+ContainerName=${container_name}-worker
+Label=app=pixelfed
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+Environment=DOCKER_SERVICE_NAME=worker
+
+Volume=${instance_dir}/.env:/var/www/.env
+Volume=${volume_dir}/storage:/var/www/storage
+Volume=${volume_dir}/cache:/var/www/bootstrap/cache
+
+Exec=gosu www-data php artisan horizon
+
+User=0:0
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 180 ]; do /usr/bin/podman exec ${container_name}-db mariadb-admin ping -h 127.0.0.1 -uroot -p"$MARIADB_ROOT_PASSWORD" --silent >/dev/null 2>&1 && /usr/bin/podman exec ${container_name}-redis redis-cli -a "$REDIS_PASSWORD" ping >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "MariaDB/Redis 尚未就緒，取消啟動 Pixelfed Worker" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
