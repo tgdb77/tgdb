@@ -1,0 +1,34 @@
+[Unit]
+Description=Lemmy（Backend）
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+After=${container_name}-pictrs.service container-${container_name}-pictrs.service
+Wants=${container_name}-pictrs.service container-${container_name}-pictrs.service
+
+[Container]
+Image=docker.io/dessalines/lemmy:0.19.18
+#AutoUpdate=registry
+ContainerName=${container_name}-lemmy
+Label=app=lemmy
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/lemmy.hjson:/config/config.hjson:ro
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 180 ]; do /usr/bin/podman exec ${container_name}-postgres sh -lc "pg_isready -h 127.0.0.1 -p 5432 -U \"\$POSTGRES_USER\" >/dev/null 2>&1" && exit 0; i=$((i+1)); sleep 1; done; echo "PostgreSQL 尚未就緒，取消啟動 Lemmy backend" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

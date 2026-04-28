@@ -1,0 +1,35 @@
+[Unit]
+Description=PeerTube
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-postgres.service container-${container_name}-postgres.service
+Wants=${container_name}-postgres.service container-${container_name}-postgres.service
+
+After=${container_name}-redis.service container-${container_name}-redis.service
+Wants=${container_name}-redis.service container-${container_name}-redis.service
+
+[Container]
+Image=docker.io/chocobozzz/peertube:production
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=peertube
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${volume_dir}:/data
+Volume=${instance_dir}/config:/config
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 180 ]; do /usr/bin/podman exec ${container_name}-postgres pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" >/dev/null 2>&1 && /usr/bin/podman exec ${container_name}-redis redis-cli -a "$REDIS_PASSWORD" ping >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "PostgreSQL/Redis 尚未就緒，取消啟動 PeerTube" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

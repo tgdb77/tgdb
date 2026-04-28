@@ -302,28 +302,38 @@ _quadlet_build_file_can_skip() {
 
 _quadlet_follow_unit_logs_bg() {
   local unit_name="$1"
+  local out_pid_var="${2:-}"
   [ -n "${unit_name:-}" ] || return 1
+  [ -n "${out_pid_var:-}" ] || return 1
   command -v journalctl >/dev/null 2>&1 || return 1
+
+  # shellcheck disable=SC2178 # nameref 回傳 PID（shellcheck 誤判）
+  local -n out_pid_ref="$out_pid_var"
+  out_pid_ref=""
 
   local scope
   scope="$(tgdb_active_scope)"
 
   if [ "$scope" = "system" ]; then
     if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
-      journalctl -f -n 0 -u "$unit_name" -o cat &
-      echo $!
+      journalctl -f -n 20 -u "$unit_name" -o cat &
+      # shellcheck disable=SC2034 # nameref 用於回傳 PID（shellcheck 誤判）
+      out_pid_ref="$!"
       return 0
     fi
     if command -v sudo >/dev/null 2>&1; then
-      sudo journalctl -f -n 0 -u "$unit_name" -o cat &
-      echo $!
+      sudo journalctl -f -n 20 -u "$unit_name" -o cat &
+      # shellcheck disable=SC2034 # nameref 用於回傳 PID（shellcheck 誤判）
+      out_pid_ref="$!"
       return 0
     fi
     return 1
   fi
 
-  journalctl --user -f -n 0 -u "$unit_name" -o cat &
-  echo $!
+  journalctl --user -f -n 20 -u "$unit_name" -o cat &
+  # shellcheck disable=SC2034 # nameref 用於回傳 PID（shellcheck 誤判）
+  out_pid_ref="$!"
+  return 0
 }
 
 _quadlet_podman_pull_policy() {
@@ -507,7 +517,7 @@ _quadlet_enable_now_by_filename() {
     build)
       local follow_pid=""
       if [ "${TGDB_BUILD_SHOW_PROGRESS:-1}" = "1" ]; then
-        follow_pid="$(_quadlet_follow_unit_logs_bg "$base-build.service" 2>/dev/null || true)"
+        _quadlet_follow_unit_logs_bg "$base-build.service" follow_pid 2>/dev/null || true
       fi
       if _systemctl_user_try start --wait -- "$unit_filename" "$base-build.service"; then
         if [ -n "$follow_pid" ]; then
@@ -538,13 +548,22 @@ _quadlet_enable_now_bulk_by_filenames() {
     return 0
   fi
 
-  if command -v systemctl >/dev/null 2>&1; then
+  local has_build=0 unit
+  for unit in "$@"; do
+    case "$unit" in
+      *.build)
+        has_build=1
+        break
+        ;;
+    esac
+  done
+
+  if [ "$has_build" -eq 0 ] && command -v systemctl >/dev/null 2>&1; then
     if tgdb_systemctl_try "$(tgdb_active_scope)" enable --now -- "$@" >/dev/null 2>&1; then
       return 0
     fi
   fi
 
-  local unit
   local failed=0
   for unit in "$@"; do
     if ! _quadlet_enable_now_by_filename "$unit"; then
