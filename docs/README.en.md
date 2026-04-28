@@ -211,7 +211,7 @@ Use TGDB directly from the terminal for scripting and automation:
 
 ## 📱 Supported Applications
 
-TGDB uses **Podman + Quadlet** for **rootless / rootful** container deployment (rootless by default) and currently includes **150+ app specs**:
+TGDB uses **Podman + Quadlet** for **rootless / rootful** container deployment (rootless by default) and currently includes **200+ app specs**:
 
 <table>
   <tr>
