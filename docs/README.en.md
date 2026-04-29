@@ -66,7 +66,7 @@
 
 | Feature Area | Details |
 |:------------:|:--------|
-| **Containerized Apps** | Built-in support for 100+ app specs across media, AI, knowledge management, monitoring, databases, and network services (rootless by default; some apps support rootful) |
+| **Containerized Apps** | Built-in support for 200+ app specs across media, AI, knowledge management, monitoring, databases, and network services (rootless by default; some apps support rootful) |
 | **Security Stack** | nftables firewall + Fail2ban intrusion protection |
 | **Automated Backups** | Full backup/restore, selected-instance backup/restore, Kopia hot backup, Rclone sync + pullback, systemd timers, and archive management |
 | **Cloud Storage** | Rclone integration for mounting and syncing cloud storage |
