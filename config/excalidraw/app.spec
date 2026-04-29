@@ -13,3 +13,4 @@ config_label=.env（環境變數）
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
+update_pull_images=docker.io/excalidraw/excalidraw:latest

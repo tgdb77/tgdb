@@ -4,11 +4,13 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=docker.io/adguard/adguardhome
+Image=docker.io/adguard/adguardhome:v0.107.74
 #AutoUpdate=registry
 ContainerName=${container_name}
 Label=app=adguardhome
-#Network=tgdb.network
+
+#Network=host
+
 PublishPort=${host_port}:3000/tcp
 PublishPort=53:53/udp
 #PublishPort=67:67/udp
@@ -19,8 +21,6 @@ PublishPort=853:853/udp
 PublishPort=5443:5443/udp
 PublishPort=8853:8853/udp
 PublishPort=53:53/tcp
-PublishPort=80:80/tcp
-PublishPort=443:443/tcp
 PublishPort=853:853/tcp
 PublishPort=5443:5443/tcp
 
