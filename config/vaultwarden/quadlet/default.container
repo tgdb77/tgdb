@@ -12,6 +12,8 @@ Label=app=vaultwarden
 
 PublishPort=127.0.0.1:${host_port}:80
 
+EnvironmentFile=${instance_dir}/.env
+
 Volume=${instance_dir}/vw-data:/data
 
 [Service]

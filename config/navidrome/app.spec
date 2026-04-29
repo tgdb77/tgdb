@@ -10,14 +10,16 @@ record_subdirs=data
 
 uses_volume_dir=1
 cli_quick_args=volume_dir
-volume_dir_prompt=Volume 目錄（音樂來源）
+volume_dir_prompt=Volume 目錄
 
 volume_dir_propagation=rshared
 
 config_template=configs/.env.example
 config_dest=.env
 config_mode=600
-config_label=.env（環境變數）
+config_label=.env
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
+
+update_pull_images=docker.io/deluan/navidrome:latest
