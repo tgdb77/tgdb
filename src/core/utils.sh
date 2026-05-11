@@ -933,7 +933,7 @@ _pkg_command_words() {
     case "$(detect_pkg_manager):$1" in
         apt:update) set -- env DEBIAN_FRONTEND=noninteractive apt-get update ;;
         apt:install) set -- env DEBIAN_FRONTEND=noninteractive apt-get install -y ;;
-        apt:upgrade) set -- env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y ;;
+        apt:upgrade) set -- env DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y ;;
         apt:clean) set -- apt-get clean ;;
         apt:purge) set -- env DEBIAN_FRONTEND=noninteractive apt-get purge -y ;;
         apt:autoremove) set -- env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y ;;

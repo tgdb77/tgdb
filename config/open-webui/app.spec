@@ -8,6 +8,8 @@ base_port=3366
 instance_subdirs=open-webui
 record_subdirs=open-webui
 
+success_warn= 初始化需要下載一些設定，需等待5-10分鐘具體依照網速決定。
+
 quadlet_type=single
 quadlet_template=quadlet/default.container
 
