@@ -61,6 +61,38 @@ days_left() {
     echo $(( (end_ts - now_ts) / 86400 ))
 }
 
+days_left_for_domain() {
+    local domain="${1:-}"
+    [ -n "$domain" ] || { echo 0; return 0; }
+
+    local old_cert_domain="${CERT_DOMAIN:-}"
+    CERT_DOMAIN="$domain"
+    days_left
+    CERT_DOMAIN="$old_cert_domain"
+}
+
+renew_all_due_domains() {
+    local threshold="${1:-7}"
+    local live="$LETSENCRYPT_DIR/live"
+    RENEW_ALL_DUE_DOMAINS=()
+    [ -d "$live" ] || return 0
+
+    local d name remain
+    for d in "$live"/*; do
+        [ -d "$d" ] || continue
+        name=$(basename "$d")
+        if [ ! -f "$d/fullchain.pem" ] || [ ! -f "$d/privkey.pem" ]; then
+            continue
+        fi
+
+        remain="$(days_left_for_domain "$name")"
+        echo "憑證 ${name} 剩餘天數: ${remain}"
+        if [ "$remain" -le "$threshold" ]; then
+            RENEW_ALL_DUE_DOMAINS+=("$name")
+        fi
+    done
+}
+
 _stop_nginx_user() {
     _systemctl_user_try stop -- container-nginx.service nginx.service nginx.container || \
     podman stop "$NGINX_CONTAINER" 2>/dev/null || true
@@ -173,7 +205,20 @@ cmd_renew() {
 
 cmd_renew_all() {
     _ensure_letsencrypt_dir
+    local threshold="${RENEW_THRESHOLD_DAYS:-7}"
+    local domain
+
     echo "進行續簽（全部）..."
+    renew_all_due_domains "$threshold"
+    if [ "${#RENEW_ALL_DUE_DOMAINS[@]}" -eq 0 ]; then
+        echo "尚無任何憑證需要續簽（閾值: ${threshold} 天）"
+        return 0
+    fi
+
+    echo "以下憑證將進入續簽流程："
+    for domain in "${RENEW_ALL_DUE_DOMAINS[@]}"; do
+        echo " - $domain"
+    done
     _stop_nginx_user || true
     podman run --rm -p 80:80 -v "$LETSENCRYPT_DIR:/etc/letsencrypt" "$CERTBOT_IMAGE" \
         renew --standalone --key-type ecdsa --elliptic-curve secp256r1 || {

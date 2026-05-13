@@ -128,6 +128,7 @@ TGDB_MAIN_MENU_ROUTES=(
   "9|快捷鍵管理|none|manage_shortcuts"
   "10|全系統備份管理|backup|backup_menu"
   "11|定時任務管理|timer|tgdb_timer_menu"
+  "12|服務觀測|systemd-observe|systemd_observe_menu"
   "_sep_|----------------------------------||"
   "777|快速環境設定|none|env_setup_menu"
   "00|更新系統|none|update_tgdb"

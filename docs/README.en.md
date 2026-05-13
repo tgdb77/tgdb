@@ -141,6 +141,7 @@ t
  9. Shortcut Management   → Manage command shortcuts
 10. Full Backup Manager   → Full backup / selected-instance backup / restore / auto backup / archive management / Kopia
 11. Timer Management      → Backup / DB / Nginx / custom timer / Healthchecks
+12. Service Observability → View TGDB-related systemd status and journal logs
 ══════════════════════════════════════════
 777. Quick Environment Setup → Bootstrap a fresh environment
 00. Update System            → Git pull update for TGDB
@@ -341,6 +342,17 @@ Main menu `11. Timer Management` centralizes TGDB-managed `systemd --user` tasks
 ./tgdb.sh
 # Choose 11 → choose a task → adjust schedule / run now / Healthchecks
 ```
+
+### 🔎 Service Observability
+
+- Main Menu 12 a unified observability entry for TGDB-related **systemd / Quadlet / timer** units
+- Current capabilities:
+  - view service status details
+  - view service logs
+  - follow logs in real time
+  - restart a service and show the last 50 log lines
+- It focuses on **TGDB-managed units**, not a full system service browser
+- It is currently designed primarily for the **interactive menu**
 
 ---
 
