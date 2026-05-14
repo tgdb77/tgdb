@@ -4,15 +4,32 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=docker.io/henrygd/beszel-agent:latest
+Image=docker.io/henrygd/beszel-agent:alpine
 #AutoUpdate=registry
 ContainerName=${container_name}
 Label=app=beszel-agent
 Network=host
-Volume=/run/user/${user_id}/podman/podman.sock:/var/run/docker.sock
+Volume=${instance_dir}/data:/var/lib/beszel-agent
+Volume=${podman_sock_host_path}:/var/run/docker.sock:ro
+
+# Systemd services：讓 agent 可透過 system D-Bus 讀取服務狀態與資源使用量。
+Volume=/var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
+Volume=/var/run/systemd/private:/var/run/systemd/private:ro
+
+# S.M.A.R.T. / GPU / 感測器：rootful 下盡量暴露 host 裝置。
+# 為了盡可能取得完整資料，預設啟用 privileged；若要降低權限，可改成只掛載指定 Device 與 capability。
+Volume=/dev:/dev
+PodmanArgs=--privileged
+
+# 若 systemd 或硬體指標因 AppArmor 被拒，可改為啟用下一行。
+#PodmanArgs=--security-opt=apparmor=unconfined
+
+# 額外磁碟：依實際掛載點新增類似下列 Volume（路徑需存在）。
+#Volume=/mnt/disk1/.beszel:/extra-filesystems/disk1:ro
+#Volume=/mnt/media/.beszel:/extra-filesystems/sdc1__Media:ro
 
 EnvironmentFile=${instance_dir}/.env
-User=${user_id}:${user_id}
+User=0:0
 
 [Service]
 Restart=on-failure
