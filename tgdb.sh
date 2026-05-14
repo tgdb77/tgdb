@@ -189,15 +189,57 @@ update_tgdb() {
             fi
         fi
 
-        echo "正在從 Git 倉庫更新 main（僅允許 fast-forward）..."
-        if git -C "$repo_dir" pull --ff-only origin main; then
-            echo "✅ TGDB 系統已更新"
-            echo "重新載入模組..."
-            load_modules --force
-        else
+        local local_head remote_head merge_base
+        echo "正在從 Git 倉庫抓取 main..."
+        if ! git -C "$repo_dir" fetch origin main; then
             tgdb_fail "更新失敗" 1 || true
-            echo "可能原因：本機版本與遠端分歧（需要合併）、或遠端不可用。"
-            echo "建議先執行：git status / git remote -v / git fetch"
+            echo "可能原因：遠端不可用、DNS/網路異常、或目前目錄不是有效的 Git 倉庫。"
+            echo "建議先執行：git remote -v / git fetch origin main"
+            ui_pause "按任意鍵返回..." "main"
+            return 1
+        fi
+
+        local_head=$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null || echo "")
+        remote_head=$(git -C "$repo_dir" rev-parse FETCH_HEAD 2>/dev/null || echo "")
+        merge_base=$(git -C "$repo_dir" merge-base HEAD FETCH_HEAD 2>/dev/null || echo "")
+
+        if [ -z "$remote_head" ]; then
+            tgdb_fail "更新失敗" 1 || true
+            echo "無法解析遠端 main 的最新版本。"
+            echo "建議先執行：git fetch origin main"
+        elif [ "$local_head" = "$remote_head" ]; then
+            echo "✅ 已是最新版本"
+        elif [ "$merge_base" = "$local_head" ]; then
+            echo "正在套用遠端更新（fast-forward）..."
+            if git -C "$repo_dir" merge --ff-only FETCH_HEAD; then
+                echo "✅ TGDB 系統已更新"
+                echo "重新載入模組..."
+                load_modules --force
+            else
+                tgdb_fail "更新失敗" 1 || true
+                echo "無法以 fast-forward 套用遠端更新。"
+                echo "建議先執行：git status / git log --oneline --decorate --graph --max-count=20 --all"
+            fi
+        else
+            tgdb_warn "偵測到本機 main 與遠端 main 歷史分歧。"
+            echo "這通常表示遠端 main 曾被 force-push，或本機存在額外提交。"
+            echo "若此機器沒有要保留的本機 commit，可直接對齊遠端版本。"
+            echo "即將執行：git reset --hard FETCH_HEAD"
+            if ! ui_confirm_yn "是否直接對齊遠端 main 並覆蓋本機提交歷史？(y/N，預設 N，輸入 0 取消): " "N"; then
+                echo "已取消更新。若需保留本機提交，請改用 git rebase origin/main 或手動處理。"
+                ui_pause "按任意鍵返回..." "main"
+                return 1
+            fi
+
+            if git -C "$repo_dir" reset --hard FETCH_HEAD; then
+                echo "✅ 已重新對齊遠端 main"
+                echo "重新載入模組..."
+                load_modules --force
+            else
+                tgdb_fail "更新失敗" 1 || true
+                echo "無法重設到遠端 main。"
+                echo "建議先執行：git status / git reflog --max-count=10"
+            fi
         fi
     else
         echo "此安裝目錄不是從 Git 倉庫安裝的，無法自動更新：$repo_dir"

@@ -209,6 +209,50 @@ tgdb_observe_emit_named_unit_if_exists() {
   fi
 }
 
+tgdb_observe_local_systemd_unit_path() {
+  local scope="$1" unit_name="$2"
+  scope="$(tgdb_normalize_scope "$scope" 2>/dev/null || printf '%s\n' user)"
+  case "$scope" in
+    system)
+      if declare -F rm_system_systemd_dir >/dev/null 2>&1; then
+        printf '%s/%s\n' "$(rm_system_systemd_dir)" "$unit_name"
+      else
+        printf '/etc/systemd/system/%s\n' "$unit_name"
+      fi
+      ;;
+    *)
+      printf '%s/%s\n' "$(rm_user_systemd_dir 2>/dev/null || printf '%s\n' "$HOME/.config/systemd/user")" "$unit_name"
+      ;;
+  esac
+}
+
+tgdb_observe_emit_podman_auto_update_unit_if_relevant() {
+  local scope="$1" unit_name="$2" kind="$3"
+  local local_path active_state unit_file_state
+
+  local_path="$(tgdb_observe_local_systemd_unit_path "$scope" "$unit_name")"
+  if [ -e "$local_path" ] || [ -L "$local_path" ]; then
+    tgdb_observe_emit_unit_record "$scope" "$kind" "podman-auto-update" "$unit_name" "$local_path"
+    return 0
+  fi
+
+  active_state="$(tgdb_observe_systemctl_read "$scope" show --property=ActiveState --value -- "$unit_name" 2>/dev/null || true)"
+  unit_file_state="$(tgdb_observe_systemctl_read "$scope" show --property=UnitFileState --value -- "$unit_name" 2>/dev/null || true)"
+
+  case "$active_state" in
+    active|activating|deactivating|failed)
+      tgdb_observe_emit_unit_record "$scope" "$kind" "podman-auto-update" "$unit_name" ""
+      return 0
+      ;;
+  esac
+  case "$unit_file_state" in
+    enabled|enabled-runtime|linked|linked-runtime|masked|bad|generated)
+      tgdb_observe_emit_unit_record "$scope" "$kind" "podman-auto-update" "$unit_name" ""
+      return 0
+      ;;
+  esac
+}
+
 tgdb_observe_service_key_from_name() {
   local name="$1"
   name="${name##*/}"
@@ -313,8 +357,15 @@ tgdb_observe_collect_user_systemd_units() {
 
 tgdb_observe_collect_extra_named_units() {
   # 額外納入：
+  # - podman-auto-update：僅在已啟用、正在執行、失敗或 TGDB 建立了本機單元檔時納入；
+  #   避免停用並移除本機單元後，仍因 Podman 套件內建單元而出現在清單。
   # - tailscale：屬於進階應用 / Headscale 相關依賴，常為 system scope 的 tailscaled.service
   # - tmux：若系統上真的有 tmux.service / tmux.socket，也一併列入觀測
+  tgdb_observe_emit_podman_auto_update_unit_if_relevant user "podman-auto-update.timer" "timer"
+  tgdb_observe_emit_podman_auto_update_unit_if_relevant user "podman-auto-update.service" "service"
+  tgdb_observe_emit_podman_auto_update_unit_if_relevant system "podman-auto-update.timer" "timer"
+  tgdb_observe_emit_podman_auto_update_unit_if_relevant system "podman-auto-update.service" "service"
+
   tgdb_observe_emit_named_unit_if_exists system "tailscaled.service" "service" "tailscale"
   tgdb_observe_emit_named_unit_if_exists system "tailscaled.socket" "socket" "tailscale"
 
@@ -630,8 +681,41 @@ tgdb_observe_follow_logs() {
   print_header "即時追蹤：$unit"
   echo "按 Ctrl+C 可停止追蹤並返回。"
   echo "----------------------------------"
-  tgdb_observe_journalctl "$scope" -u "$unit" -f -n 50 || tgdb_warn "無法追蹤 $unit 的 journal。"
-  ui_pause "按任意鍵返回..."
+
+  local pid="" rc=0
+  local old_trap_int old_trap_term
+  old_trap_int="$(trap -p INT 2>/dev/null || true)"
+  old_trap_term="$(trap -p TERM 2>/dev/null || true)"
+
+  tgdb_observe_journalctl "$scope" -u "$unit" -f -n 50 &
+  pid=$!
+
+  # 讓 Ctrl+C 只停止 journalctl -f，避免中斷整個 TGDB 主程式。
+  trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' INT TERM
+  wait "$pid" || rc=$?
+
+  if [ -n "$old_trap_int" ]; then
+    eval "$old_trap_int"
+  else
+    trap - INT
+  fi
+  if [ -n "$old_trap_term" ]; then
+    eval "$old_trap_term"
+  else
+    trap - TERM
+  fi
+
+  echo
+  case "$rc" in
+    0|130|143)
+      return 0
+      ;;
+    *)
+      tgdb_warn "無法追蹤 $unit 的 journal。"
+      ui_pause "按任意鍵返回..."
+      return 1
+      ;;
+  esac
 }
 
 tgdb_observe_restart_and_tail() {

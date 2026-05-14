@@ -16,7 +16,6 @@ Volume=${TGDB_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 Volume=${TGDB_DIR}/nginx/configs:/etc/nginx/conf.d:ro
 Volume=${TGDB_DIR}/nginx/html:/usr/share/nginx/html:ro
 Volume=${TGDB_DIR}/nginx/logs:/var/log/nginx
-Volume=${TGDB_DIR}/nginx/cache:/var/cache/nginx
 Volume=${TGDB_DIR}/nginx/certs:/etc/nginx/certs
 Volume=${TGDB_DIR}/nginx/modsecurity:/etc/nginx/modsecurity:ro
 

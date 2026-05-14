@@ -632,7 +632,7 @@ podman_auto_update_menu() {
         echo "----------------------------------"
         echo "1. 立即執行一次 podman auto-update（建議先看警語）"
         echo "2. 啟用 podman-auto-update.timer（定期更新）"
-        echo "3. 停用 podman-auto-update.timer"
+        echo "3. 停用並移除 podman-auto-update.timer / service"
         echo "----------------------------------"
         echo "0. 返回"
         echo "=================================="
@@ -663,7 +663,7 @@ podman_auto_update_menu() {
                 ui_pause
                 ;;
             3)
-                if ui_confirm_yn "確定要停用 podman-auto-update.timer？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+                if ui_confirm_yn "確定要停用並移除 podman-auto-update.timer / service？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
                     _podman_auto_update_timer_disable "$scope" || true
                 else
                     echo "已取消"
