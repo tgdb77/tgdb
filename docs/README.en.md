@@ -107,8 +107,9 @@ bash <(curl -sL tgdb77.pages.dev/7)
 
 > 💡 **Notes**
 >
-> - On the first interactive launch, TGDB may try to create the default shortcut `t` at `/usr/local/bin/t`. You can manage it later from `9. Shortcut Management`.
-> - The first run may ask for your `sudo` password when installing packages, creating shortcuts, changing system settings, or updating firewall rules.
+> - On the first interactive launch, TGDB may try to create the default shortcut `t` at `~/.local/bin/t`. You can manage it later from `9. Shortcut Management`.
+> - When creating shortcuts, TGDB will try to add `~/.local/bin` to your shell `PATH`; if your current shell has not reloaded its config yet, open a new terminal, sign in again, or run `source ~/.bashrc` to make it available immediately.
+> - The first run may ask for your `sudo` password when installing packages, changing system settings, or updating firewall rules.
 
 ---
 

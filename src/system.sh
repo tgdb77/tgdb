@@ -254,8 +254,116 @@ system_maintenance() {
     ui_pause "按任意鍵返回主選單..." "main"
 }
 
+_tgdb_shortcut_home() {
+  local home_dir="${TGDB_INVOKING_HOME:-${HOME:-}}"
+  if [ -z "$home_dir" ]; then
+    home_dir="/tmp"
+  fi
+  printf '%s\n' "$home_dir"
+  return 0
+}
+
+_tgdb_shortcut_bin_dir() {
+  printf '%s/.local/bin\n' "$(_tgdb_shortcut_home)"
+  return 0
+}
+
+_tgdb_shortcut_target_path() {
+  local shortcut_name="${1:-}"
+  printf '%s/%s\n' "$(_tgdb_shortcut_bin_dir)" "$shortcut_name"
+  return 0
+}
+
+_tgdb_shortcut_bin_in_path() {
+  local shortcut_bin_dir
+  shortcut_bin_dir="$(_tgdb_shortcut_bin_dir)"
+  case ":${PATH:-}:" in
+    *":$shortcut_bin_dir:"*) return 0 ;;
+  esac
+  return 1
+}
+
+_tgdb_shortcut_add_to_current_path() {
+  local shortcut_bin_dir
+  shortcut_bin_dir="$(_tgdb_shortcut_bin_dir)"
+  if ! _tgdb_shortcut_bin_in_path; then
+    export PATH="$shortcut_bin_dir:${PATH:-}"
+  fi
+  return 0
+}
+
+_tgdb_shortcut_write_path_block() {
+  local rc_file="$1"
+
+  if [ -f "$rc_file" ] && ! [ -w "$rc_file" ]; then
+    return 1
+  fi
+
+  if [ ! -f "$rc_file" ]; then
+    local rc_dir
+    rc_dir="$(dirname "$rc_file")"
+    mkdir -p "$rc_dir" 2>/dev/null || return 1
+    : >"$rc_file" 2>/dev/null || return 1
+  fi
+
+  if grep -Fq '# >>> TGDB local bin >>>' "$rc_file" 2>/dev/null; then
+    return 0
+  fi
+
+  if grep -Fq "\$HOME/.local/bin" "$rc_file" 2>/dev/null; then
+    return 0
+  fi
+
+  {
+    printf '\n'
+    printf '%s\n' '# >>> TGDB local bin >>>'
+    printf '%s\n' "case \":\$PATH:\" in"
+    printf '%s\n' "  *\":\$HOME/.local/bin:\"*) ;;"
+    printf '%s\n' "  *) export PATH=\"\$HOME/.local/bin:\$PATH\" ;;"
+    printf '%s\n' 'esac'
+    printf '%s\n' '# <<< TGDB local bin <<<'
+  } >>"$rc_file" 2>/dev/null || return 1
+
+  return 0
+}
+
+_tgdb_shortcut_ensure_path_config() {
+  local home_dir shell_name shortcut_bin_dir
+  local -a target_files=()
+  local -a updated_files=()
+  local rc_file
+
+  shortcut_bin_dir="$(_tgdb_shortcut_bin_dir)"
+  home_dir="$(_tgdb_shortcut_home)"
+  shell_name="$(basename "${SHELL:-}")"
+
+  [ -n "$home_dir" ] || return 1
+  mkdir -p "$shortcut_bin_dir" 2>/dev/null || return 1
+
+  target_files+=("$home_dir/.profile" "$home_dir/.bashrc")
+  if [ "$shell_name" = "zsh" ] || [ -f "$home_dir/.zshrc" ]; then
+    target_files+=("$home_dir/.zshrc")
+  fi
+
+  for rc_file in "${target_files[@]}"; do
+    if _tgdb_shortcut_write_path_block "$rc_file"; then
+      updated_files+=("$rc_file")
+    fi
+  done
+
+  _tgdb_shortcut_add_to_current_path
+
+  if [ ${#updated_files[@]} -gt 0 ]; then
+    echo "✅ 已嘗試將 ~/.local/bin 加入 PATH 設定"
+    printf '   已更新：%s\n' "${updated_files[*]}"
+    echo "   新開 shell、重新登入，或執行 source ~/.bashrc 後即可生效。"
+  fi
+
+  return 0
+}
+
 ensure_default_shortcut_t() {
-  local script_path target target_resolved
+  local script_path target target_resolved shortcut_bin_dir
   local marker_file=""
   local existing_shortcut=0 link link_resolved
 
@@ -273,10 +381,18 @@ ensure_default_shortcut_t() {
     fi
   fi
 
-  target="/usr/local/bin/t"
-  [ -d "/usr/local/bin" ] || return 0
+  shortcut_bin_dir="$(_tgdb_shortcut_bin_dir)"
+  [ -n "$shortcut_bin_dir" ] || return 0
 
-  for link in /usr/local/bin/*; do
+  if ! mkdir -p "$shortcut_bin_dir" 2>/dev/null; then
+    return 0
+  fi
+
+  _tgdb_shortcut_ensure_path_config || true
+
+  target="$(_tgdb_shortcut_target_path "t")"
+
+  for link in "$shortcut_bin_dir"/*; do
     [ -e "$link" ] || continue
     [ -L "$link" ] || continue
     link_resolved="$(readlink -f "$link" 2>/dev/null || true)"
@@ -318,13 +434,13 @@ ensure_default_shortcut_t() {
     return 0
   fi
 
-  if ! require_root; then
-    return 0
-  fi
-
   chmod +x "$script_path" 2>/dev/null || true
-  if _tgdb_run_privileged ln -s "$script_path" "$target"; then
+  if ln -s "$script_path" "$target" 2>/dev/null; then
     echo "✅ 已自動建立預設快捷鍵：t"
+    echo "   路徑：$target"
+    if ! _tgdb_shortcut_bin_in_path; then
+      tgdb_warn "目前 PATH 尚未包含 $shortcut_bin_dir，若 shell 找不到 t，請先將其加入 PATH。"
+    fi
     if [ -n "${marker_file:-}" ]; then
       mkdir -p "$(dirname "$marker_file")" 2>/dev/null || true
       printf '%s\n' "created" >"$marker_file" 2>/dev/null || true
@@ -347,13 +463,20 @@ manage_shortcuts() {
       script_path="$(readlink -f "${BASH_SOURCE[1]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[1]:-$0}")"
     fi
     script_path="$(readlink -f "$script_path" 2>/dev/null || echo "$script_path")"
+    local shortcut_bin_dir
+    shortcut_bin_dir="$(_tgdb_shortcut_bin_dir)"
+
     echo "腳本位置: $script_path"
+    echo "快捷鍵目錄: $shortcut_bin_dir"
+    if ! _tgdb_shortcut_bin_in_path; then
+      tgdb_warn "目前 PATH 尚未包含 $shortcut_bin_dir，設定後可能需要先調整 PATH 才能直接使用。"
+    fi
     echo ""
 
     echo "當前快捷鍵："
     local found_shortcuts=()
-    if [ -d "/usr/local/bin" ]; then
-      for link in /usr/local/bin/*; do
+    if [ -d "$shortcut_bin_dir" ]; then
+      for link in "$shortcut_bin_dir"/*; do
         if [ -L "$link" ] && [ "$(readlink -f "$link" 2>/dev/null || true)" = "$script_path" ]; then
           found_shortcuts+=("$(basename "$link")")
         fi
@@ -398,10 +521,13 @@ manage_shortcuts() {
           continue
         fi
 
-        if ! require_root; then
+        if ! mkdir -p "$shortcut_bin_dir" 2>/dev/null; then
+          tgdb_err "無法建立快捷鍵目錄：$shortcut_bin_dir"
           ui_pause "按任意鍵返回..." "main"
           continue
         fi
+
+        _tgdb_shortcut_ensure_path_config || true
 
         echo "正在設定快捷鍵 '$new_shortcut'..."
 
@@ -410,7 +536,7 @@ manage_shortcuts() {
         if [ ${#found_shortcuts[@]} -gt 0 ]; then
           local old_shortcut
           for old_shortcut in "${found_shortcuts[@]}"; do
-            if _tgdb_run_privileged rm -f "/usr/local/bin/$old_shortcut"; then
+            if rm -f "$shortcut_bin_dir/$old_shortcut" 2>/dev/null; then
               echo "移除舊快捷鍵: $old_shortcut"
             else
               tgdb_err "移除舊快捷鍵失敗: $old_shortcut"
@@ -418,17 +544,21 @@ manage_shortcuts() {
           done
         fi
 
-        if [ -L "/usr/local/bin/$new_shortcut" ] || [ -f "/usr/local/bin/$new_shortcut" ]; then
-          if _tgdb_run_privileged rm -f "/usr/local/bin/$new_shortcut"; then
+        if [ -L "$shortcut_bin_dir/$new_shortcut" ] || [ -f "$shortcut_bin_dir/$new_shortcut" ]; then
+          if rm -f "$shortcut_bin_dir/$new_shortcut" 2>/dev/null; then
             echo "移除現有的 '$new_shortcut'"
           else
             tgdb_err "移除現有的 '$new_shortcut' 失敗"
           fi
         fi
 
-        if _tgdb_run_privileged ln -s "$script_path" "/usr/local/bin/$new_shortcut"; then
+        if ln -s "$script_path" "$shortcut_bin_dir/$new_shortcut" 2>/dev/null; then
           echo "✅ 快捷鍵 '$new_shortcut' 設定成功！"
           echo "   現在您可以使用 '$new_shortcut' 來執行此腳本"
+          echo "   路徑：$shortcut_bin_dir/$new_shortcut"
+          if ! _tgdb_shortcut_bin_in_path; then
+            tgdb_warn "目前 PATH 尚未包含 $shortcut_bin_dir，請先加入 PATH 後再直接使用快捷鍵。"
+          fi
         else
           tgdb_err "設定快捷鍵失敗，請檢查權限"
         fi
@@ -438,11 +568,6 @@ manage_shortcuts() {
         if [ ${#found_shortcuts[@]} -eq 0 ]; then
           echo ""
           tgdb_warn "沒有可移除的快捷鍵"
-          ui_pause "按任意鍵返回..." "main"
-          continue
-        fi
-
-        if ! require_root; then
           ui_pause "按任意鍵返回..." "main"
           continue
         fi
@@ -458,7 +583,7 @@ manage_shortcuts() {
 
         local removed_any=0
         for target in "${remove_targets[@]}"; do
-          if _tgdb_run_privileged rm -f "/usr/local/bin/$target"; then
+          if rm -f "$shortcut_bin_dir/$target" 2>/dev/null; then
             echo "✅ 已移除: $target"
             removed_any=1
           else

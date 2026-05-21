@@ -73,7 +73,7 @@ third_party_reinstall_print_menu() {
   echo "----------------------------------"
   echo "1. Debian 13"
   echo "2. Ubuntu 26.04 LTS"
-  echo "3. Fedora Linux 43"
+  echo "3. Fedora Linux 44"
   echo "4. Arch Linux"
   echo "5. Rocky Linux 10"
   echo "6. AlmaLinux 10"
@@ -235,7 +235,7 @@ third_party_reinstall_menu() {
     case "$choice" in
       1) os_id="debian"; os_version="13"; os_label="Debian 13" ;;
       2) os_id="ubuntu"; os_version="26.04"; os_label="Ubuntu 26.04 LTS" ;;
-      3) os_id="fedora"; os_version="43"; os_label="Fedora Linux 43" ;;
+      3) os_id="fedora"; os_version="44"; os_label="Fedora Linux 44" ;;
       4) os_id="arch"; os_version=""; os_label="Arch Linux" ;;
       5) os_id="rocky"; os_version="10"; os_label="Rocky Linux 10" ;;
       6) os_id="almalinux"; os_version="10"; os_label="AlmaLinux 10" ;;
