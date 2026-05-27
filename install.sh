@@ -114,7 +114,13 @@ ensure_sudo_available_for_user() {
     exit 1
   fi
 
-  if ! sudo -v; then
+  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    # shellcheck disable=SC2024
+    if ! sudo -v < /dev/tty; then
+      log_error "目前用戶無法取得 sudo 權限，請改用具 sudo 權限的普通用戶執行。"
+      exit 1
+    fi
+  elif ! sudo -n true >/dev/null 2>&1; then
     log_error "目前用戶無法取得 sudo 權限，請改用具 sudo 權限的普通用戶執行。"
     exit 1
   fi
@@ -223,7 +229,7 @@ reexec_as_user() {
   log_info "即將切換至普通管理員用戶 '$target_user' 繼續安裝..."
   exec sudo -H -u "$target_user" \
     env TGDB_INSTALL_SWITCHED=1 TGDB_PARENT_DIR="$target_home" TGDB_REPO_URL="$REPO_URL" TGDB_BRANCH="$TGDB_BRANCH" \
-    bash "$temp_script" "${TGDB_ARGS[@]}"
+    bash "$temp_script" "${TGDB_ARGS[@]}" < /dev/tty > /dev/tty 2>&1
 }
 
 ensure_normal_admin_runner() {
