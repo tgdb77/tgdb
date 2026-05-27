@@ -13,6 +13,7 @@ Label=app=bytebase
 PublishPort=127.0.0.1:${host_port}:8080/tcp
 
 Volume=${instance_dir}/data:/var/opt/bytebase
+EnvironmentFile=${instance_dir}/.env
 
 [Service]
 Restart=always

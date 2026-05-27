@@ -9,8 +9,10 @@ Image=docker.io/louislam/uptime-kuma:2
 ContainerName=${container_name}
 Label=app=uptimekuma
 #Network=tgdb.network
+
 PublishPort=127.0.0.1:${host_port}:3001
 Volume=${instance_dir}:/app/data
+EnvironmentFile=${instance_dir}/.env
 
 [Service]
 Restart=on-failure

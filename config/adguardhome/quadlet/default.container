@@ -4,14 +4,14 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=docker.io/adguard/adguardhome:v0.107.74
+Image=docker.io/adguard/adguardhome:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
 Label=app=adguardhome
 
 #Network=host
 
-PublishPort=${host_port}:3000/tcp
+PublishPort=127.0.0.1:${host_port}:3000/tcp
 PublishPort=53:53/udp
 #PublishPort=67:67/udp
 #PublishPort=68:68/udp
@@ -26,6 +26,7 @@ PublishPort=5443:5443/tcp
 
 Volume=${instance_dir}/data:/opt/adguardhome/work
 Volume=${instance_dir}/conf:/opt/adguardhome/conf
+EnvironmentFile=${instance_dir}/.env
 
 [Service]
 Restart=on-failure

@@ -15,7 +15,7 @@ PublishPort=127.0.0.1:${host_port}:8080
 Volume=/run/user/${user_id}/podman/podman.sock:/var/run/docker.sock
 Volume=${instance_dir}/data:/data
 
-Environment=DOZZLE_NO_ANALYTICS=true
+EnvironmentFile=${instance_dir}/.env
 
 [Service]
 Restart=on-failure

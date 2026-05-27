@@ -12,6 +12,7 @@ Label=app=open-webui
 PublishPort=127.0.0.1:${host_port}:8080
 
 Volume=${instance_dir}/open-webui:/app/backend/data
+EnvironmentFile=${instance_dir}/.env
 
 [Service]
 Restart=always

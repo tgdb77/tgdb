@@ -8,9 +8,12 @@ Image=docker.io/henrygd/beszel
 #AutoUpdate=registry
 ContainerName=${container_name}
 Label=app=beszel
+
 #Network=tgdb.network
+
 PublishPort=127.0.0.1:${host_port}:8090
 Volume=${instance_dir}:/beszel_data
+EnvironmentFile=${instance_dir}/.env
 
 [Service]
 Restart=on-failure

@@ -12,5 +12,7 @@ record_subdirs=data
 
 require_podman_socket=1
 
+config=.env|template=configs/.env.example|mode=600|label=.env
+
 quadlet_type=single
 quadlet_template=quadlet/default.container
