@@ -26,21 +26,21 @@ dbbackup_p_export_menu() {
   [ "$picked_rc" -eq 2 ] && return 0
   [ "$picked_rc" -ne 0 ] && return 1
 
-  local _ container_name env_file instance_dir unit_path
-  IFS='|' read -r _ container_name env_file instance_dir unit_path <<< "$picked"
+  local _ container_name env_file instance_dir unit_path backup_scope
+  IFS='|' read -r _ container_name env_file instance_dir unit_path backup_scope <<< "$picked"
 
   case "$db_type" in
     postgres)
-      _dbbackup_postgres_export "$container_name" "$env_file" "$instance_dir"
+      _dbbackup_postgres_export "$container_name" "$env_file" "$instance_dir" "1" "" "$backup_scope"
       ;;
     redis)
       _dbbackup_redis_export "$container_name" "$env_file" "$instance_dir"
       ;;
     mysql)
-      _dbbackup_mysql_export "$container_name" "$env_file" "$instance_dir"
+      _dbbackup_mysql_export "$container_name" "$env_file" "$instance_dir" "1" "$backup_scope"
       ;;
     mongo)
-      _dbbackup_mongo_export "$container_name" "$env_file" "$instance_dir"
+      _dbbackup_mongo_export "$container_name" "$env_file" "$instance_dir" "1" "$backup_scope"
       ;;
   esac
 }
@@ -63,21 +63,21 @@ dbbackup_p_import_menu() {
   [ "$picked_rc" -eq 2 ] && return 0
   [ "$picked_rc" -ne 0 ] && return 1
 
-  local _ container_name env_file instance_dir unit_path
-  IFS='|' read -r _ container_name env_file instance_dir unit_path <<< "$picked"
+  local _ container_name env_file instance_dir unit_path backup_scope
+  IFS='|' read -r _ container_name env_file instance_dir unit_path backup_scope <<< "$picked"
 
   case "$db_type" in
     postgres)
-      _dbbackup_postgres_import_overwrite "$container_name" "$env_file" "$instance_dir"
+      _dbbackup_postgres_import_overwrite "$container_name" "$env_file" "$instance_dir" "1" "" "0" "$backup_scope"
       ;;
     redis)
       _dbbackup_redis_import_overwrite "$container_name" "$env_file" "$instance_dir" "$unit_path"
       ;;
     mysql)
-      _dbbackup_mysql_import_overwrite "$container_name" "$env_file" "$instance_dir"
+      _dbbackup_mysql_import_overwrite "$container_name" "$env_file" "$instance_dir" "1" "" "0" "$backup_scope"
       ;;
     mongo)
-      _dbbackup_mongo_import_overwrite "$container_name" "$env_file" "$instance_dir"
+      _dbbackup_mongo_import_overwrite "$container_name" "$env_file" "$instance_dir" "1" "" "0" "$backup_scope"
       ;;
   esac
 }

@@ -311,6 +311,30 @@ _dbbackup_unit_has_tgdb_db_label() {
   ' "$file" 2>/dev/null
 }
 
+_dbbackup_scope_normalize() {
+  local scope
+  scope="$(_dbbackup_trim_ws "${1:-}")"
+  case "$scope" in
+    instance)
+      printf '%s\n' "instance"
+      ;;
+    *)
+      printf '%s\n' "database"
+      ;;
+  esac
+}
+
+_dbbackup_unit_backup_scope_get() {
+  local file="$1" db_type="${2:-}"
+  local raw_scope
+  [ -f "$file" ] || return 1
+  raw_scope="$(_dbbackup_unit_label_get_value "$file" "tgdb_db_backup_scope" 2>/dev/null || true)"
+  if [ -z "${raw_scope:-}" ] && [ "$db_type" = "redis" ]; then
+    raw_scope="instance"
+  fi
+  _dbbackup_scope_normalize "$raw_scope"
+}
+
 _dbbackup_unit_volume_host_for_container_path() {
   local file="$1" container_path="$2"
   [ -n "$file" ] || return 1
@@ -345,7 +369,7 @@ _dbbackup_find_db_endpoints() {
   while IFS= read -r file; do
     [ -f "$file" ] || continue
 
-    local container_name env_file instance_dir host_data_dir app_label display
+    local container_name env_file instance_dir host_data_dir app_label display backup_scope
 
     if [ "$db_type" = "mysql" ]; then
       if ! _dbbackup_unit_has_tgdb_db_label "$file" "mysql" && ! _dbbackup_unit_has_tgdb_db_label "$file" "mariadb"; then
@@ -382,13 +406,14 @@ _dbbackup_find_db_endpoints() {
     [ -f "$env_file" ] || continue
 
     app_label="$(_dbbackup_unit_label_get_value "$file" "app" 2>/dev/null || true)"
+    backup_scope="$(_dbbackup_unit_backup_scope_get "$file" "$db_type" 2>/dev/null || echo "database")"
     if [ -n "${app_label:-}" ]; then
       display="${app_label} / ${container_name}"
     else
       display="$container_name"
     fi
 
-    printf '%s|%s|%s|%s|%s\n' "$display" "$container_name" "$env_file" "$instance_dir" "$file"
+    printf '%s|%s|%s|%s|%s|%s\n' "$display" "$container_name" "$env_file" "$instance_dir" "$file" "$backup_scope"
   done < <(
     if declare -F rm_list_tgdb_runtime_quadlet_files_by_mode >/dev/null 2>&1; then
       rm_list_tgdb_runtime_quadlet_files_by_mode rootless 2>/dev/null | awk -F'\t' 'NF >= 4 && $3 ~ /\.container$/ { print $4 }'
@@ -456,12 +481,13 @@ _dbbackup_pick_db_endpoint() {
     echo "=================================="
     echo "類型：$db_type"
     echo "----------------------------------"
-    local i display container_name env_file instance_dir _
+    local i display container_name env_file instance_dir _ backup_scope
     for i in "${!endpoints[@]}"; do
-      IFS='|' read -r display container_name env_file instance_dir _ <<< "${endpoints[$i]}"
+      IFS='|' read -r display container_name env_file instance_dir _ backup_scope <<< "${endpoints[$i]}"
       printf '%2d. %s\n' "$((i + 1))" "$display"
       printf '    - 容器：%s\n' "$container_name"
       printf '    - 設定：%s\n' "$env_file"
+      printf '    - 備份範圍：%s\n' "$backup_scope"
     done
     echo "----------------------------------"
     echo "0. 取消"

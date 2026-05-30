@@ -120,6 +120,74 @@ _dbbackup_redis_start_container_best_effort() {
   return 1
 }
 
+_dbbackup_redis_unit_uses_aof() {
+  local unit_path="$1"
+  [ -f "$unit_path" ] || return 1
+  grep -Eiq -- 'appendonly[[:space:]]+yes|--appendonly[[:space:]]+yes' "$unit_path" 2>/dev/null
+}
+
+_dbbackup_redis_prepare_aof_from_rdb() {
+  local container_name="$1" host_data_dir="$2"
+  [ -n "$container_name" ] || return 1
+  [ -d "$host_data_dir" ] || return 1
+  [ -f "$host_data_dir/dump.rdb" ] || return 1
+
+  local image tmp_container
+  image="$(podman inspect -f '{{.Config.Image}}' "$container_name" 2>/dev/null || true)"
+  [ -n "${image:-}" ] || image="$(podman inspect -f '{{.ImageName}}' "$container_name" 2>/dev/null || true)"
+  if [ -z "${image:-}" ] || [ "$image" = "<no value>" ]; then
+    tgdb_warn "無法取得 Redis 容器映像，略過 AOF 重建；若啟動後資料為空，請手動檢查 appendonly 設定。"
+    return 0
+  fi
+
+  tmp_container="${container_name}-tgdb-aof-restore"
+  podman rm -f "$tmp_container" >/dev/null 2>&1 || true
+
+  if ! podman run -d --name "$tmp_container" -v "$host_data_dir:/data" "$image" sh -c 'exec redis-server --appendonly no --save "" --dir /data --dbfilename dump.rdb --port 6379 --protected-mode no' >/dev/null 2>&1; then
+    tgdb_fail "啟動 Redis AOF 重建暫存容器失敗：$tmp_container" 1 || true
+    return 1
+  fi
+
+  local waited=0
+  while [ "$waited" -lt 60 ]; do
+    if podman exec "$tmp_container" redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [ "$waited" -ge 60 ]; then
+    podman rm -f "$tmp_container" >/dev/null 2>&1 || true
+    tgdb_fail "等待 Redis AOF 重建暫存容器就緒逾時：$tmp_container" 1 || true
+    return 1
+  fi
+
+  if ! podman exec "$tmp_container" redis-cli -h 127.0.0.1 -p 6379 CONFIG SET appendonly yes >/dev/null 2>&1; then
+    podman rm -f "$tmp_container" >/dev/null 2>&1 || true
+    tgdb_fail "Redis AOF 重建失敗：無法啟用 appendonly。" 1 || true
+    return 1
+  fi
+
+  waited=0
+  while [ "$waited" -lt 120 ]; do
+    if podman exec "$tmp_container" redis-cli -h 127.0.0.1 -p 6379 INFO persistence 2>/dev/null | grep -q '^aof_rewrite_in_progress:0'; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [ "$waited" -ge 120 ]; then
+    podman rm -f "$tmp_container" >/dev/null 2>&1 || true
+    tgdb_fail "等待 Redis AOF 重建完成逾時。" 1 || true
+    return 1
+  fi
+
+  podman exec "$tmp_container" redis-cli -h 127.0.0.1 -p 6379 SHUTDOWN NOSAVE >/dev/null 2>&1 || true
+  sleep 1
+  podman rm -f "$tmp_container" >/dev/null 2>&1 || true
+  return 0
+}
+
 _dbbackup_redis_import_overwrite() {
   local container_name="$1" env_file="$2" instance_dir="$3" unit_path="$4" want_pause="${5:-1}" forced_rdb_path="${6:-}" assume_yes="${7:-0}"
   [ -n "$container_name" ] || return 1
@@ -187,6 +255,14 @@ _dbbackup_redis_import_overwrite() {
     return 1
   fi
   chmod 600 "$host_data_dir/dump.rdb" 2>/dev/null || true
+
+  if _dbbackup_redis_unit_uses_aof "$unit_path"; then
+    echo "⏳ 偵測到 Redis AOF 模式，正在由 RDB 重建 AOF..."
+    if ! _dbbackup_redis_prepare_aof_from_rdb "$container_name" "$host_data_dir"; then
+      _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
+      return 1
+    fi
+  fi
 
   if ! _dbbackup_redis_start_container_best_effort "$container_name"; then
     tgdb_fail "啟動容器失敗：$container_name（請檢查單元/日誌）。" 1 || true

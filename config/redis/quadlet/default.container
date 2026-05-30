@@ -9,6 +9,7 @@ Image=docker.io/redis:7-alpine
 ContainerName=${container_name}
 Label=app=redis
 Label=tgdb_db=redis
+Label=tgdb_db_backup_scope=instance
 
 Network=tgdb.network
 

@@ -9,6 +9,7 @@ Image=docker.io/library/postgres:16-alpine
 ContainerName=${container_name}
 Label=app=postgresql
 Label=tgdb_db=postgres
+Label=tgdb_db_backup_scope=instance
 
 Network=tgdb.network
 

@@ -15,6 +15,19 @@ _dbbackup_latest_backup_file() {
   _dbbackup_list_backups_newest_first "$dir" "$ext" | head -n 1 | awk 'NF{print; exit}'
 }
 
+_dbbackup_backup_ext_for_scope() {
+  local db_type="$1" backup_scope
+  backup_scope="$(_dbbackup_scope_normalize "${2:-database}")"
+  case "$db_type:$backup_scope" in
+    postgres:instance) printf '%s\n' "instance.tar.gz" ;;
+    postgres:*) printf '%s\n' "dump" ;;
+    mysql:*) printf '%s\n' "sql" ;;
+    mongo:*) printf '%s\n' "archive.gz" ;;
+    redis:*) printf '%s\n' "rdb" ;;
+    *) return 1 ;;
+  esac
+}
+
 dbbackup_p_export_all_run() {
   local include_globals="${1:-N}" want_pause_each="${2:-0}"
   include_globals="$(_dbbackup_trim_ws "$include_globals")"
@@ -47,11 +60,11 @@ dbbackup_p_export_all_run() {
   local ok=0 fail=0
   if [ ${#pg_eps[@]} -gt 0 ]; then
     echo "=== PostgreSQL：共 ${#pg_eps[@]} 個目標 ==="
-    local display container_name env_file instance_dir _
+    local display container_name env_file instance_dir _ backup_scope
     for line in "${pg_eps[@]}"; do
-      IFS='|' read -r display container_name env_file instance_dir _ <<< "$line"
+      IFS='|' read -r display container_name env_file instance_dir _ backup_scope <<< "$line"
       echo "▶ 匯出：$display"
-      if _dbbackup_postgres_export "$container_name" "$env_file" "$instance_dir" "$want_pause_each" "$include_globals"; then
+      if _dbbackup_postgres_export "$container_name" "$env_file" "$instance_dir" "$want_pause_each" "$include_globals" "$backup_scope"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -75,11 +88,11 @@ dbbackup_p_export_all_run() {
 
   if [ ${#m_eps[@]} -gt 0 ]; then
     echo "=== MySQL：共 ${#m_eps[@]} 個目標 ==="
-    local display3 container_name3 env_file3 instance_dir3
+    local display3 container_name3 env_file3 instance_dir3 _ backup_scope3
     for line in "${m_eps[@]}"; do
-      IFS='|' read -r display3 container_name3 env_file3 instance_dir3 _ <<< "$line"
+      IFS='|' read -r display3 container_name3 env_file3 instance_dir3 _ backup_scope3 <<< "$line"
       echo "▶ 匯出：$display3"
-      if _dbbackup_mysql_export "$container_name3" "$env_file3" "$instance_dir3" "$want_pause_each"; then
+      if _dbbackup_mysql_export "$container_name3" "$env_file3" "$instance_dir3" "$want_pause_each" "$backup_scope3"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -89,11 +102,11 @@ dbbackup_p_export_all_run() {
 
   if [ ${#mg_eps[@]} -gt 0 ]; then
     echo "=== MongoDB：共 ${#mg_eps[@]} 個目標 ==="
-    local display4 container_name4 env_file4 instance_dir4
+    local display4 container_name4 env_file4 instance_dir4 _ backup_scope4
     for line in "${mg_eps[@]}"; do
-      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ <<< "$line"
+      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ backup_scope4 <<< "$line"
       echo "▶ 匯出：$display4"
-      if _dbbackup_mongo_export "$container_name4" "$env_file4" "$instance_dir4" "$want_pause_each"; then
+      if _dbbackup_mongo_export "$container_name4" "$env_file4" "$instance_dir4" "$want_pause_each" "$backup_scope4"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -133,18 +146,19 @@ dbbackup_p_import_all_latest_run() {
   local ok=0 fail=0 skip=0
   if [ ${#pg_eps[@]} -gt 0 ]; then
     echo "=== PostgreSQL：開始批次匯入（latest） ==="
-    local display container_name env_file instance_dir _ dump_dir dump_path
+    local display container_name env_file instance_dir _ backup_scope dump_dir dump_path dump_ext
     for line in "${pg_eps[@]}"; do
-      IFS='|' read -r display container_name env_file instance_dir _ <<< "$line"
+      IFS='|' read -r display container_name env_file instance_dir _ backup_scope <<< "$line"
       dump_dir="$(_dbbackup_project_backup_dir "$instance_dir" "postgres")"
-      dump_path="$(_dbbackup_latest_backup_file "$dump_dir" "dump" 2>/dev/null || true)"
+      dump_ext="$(_dbbackup_backup_ext_for_scope "postgres" "$backup_scope")"
+      dump_path="$(_dbbackup_latest_backup_file "$dump_dir" "$dump_ext" 2>/dev/null || true)"
       if [ -z "${dump_path:-}" ]; then
         echo "⏭ 略過：$display（尚無備份檔）"
         skip=$((skip + 1))
         continue
       fi
       echo "▶ 匯入：$display（$(basename "$dump_path")）"
-      if _dbbackup_postgres_import_overwrite "$container_name" "$env_file" "$instance_dir" "$want_pause_each" "$dump_path" "1"; then
+      if _dbbackup_postgres_import_overwrite "$container_name" "$env_file" "$instance_dir" "$want_pause_each" "$dump_path" "1" "$backup_scope"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -154,9 +168,9 @@ dbbackup_p_import_all_latest_run() {
 
   if [ ${#r_eps[@]} -gt 0 ]; then
     echo "=== Redis：開始批次匯入（latest） ==="
-    local display2 container_name2 env_file2 instance_dir2 _ rdb_dir rdb_path
+    local display2 container_name2 env_file2 instance_dir2 unit_path2 _ rdb_dir rdb_path
     for line in "${r_eps[@]}"; do
-      IFS='|' read -r display2 container_name2 env_file2 instance_dir2 _ <<< "$line"
+      IFS='|' read -r display2 container_name2 env_file2 instance_dir2 unit_path2 _ <<< "$line"
       rdb_dir="$(_dbbackup_project_backup_dir "$instance_dir2" "redis")"
       rdb_path="$(_dbbackup_latest_backup_file "$rdb_dir" "rdb" 2>/dev/null || true)"
       if [ -z "${rdb_path:-}" ]; then
@@ -175,9 +189,9 @@ dbbackup_p_import_all_latest_run() {
 
   if [ ${#m_eps[@]} -gt 0 ]; then
     echo "=== MySQL：開始批次匯入（latest） ==="
-    local display3 container_name3 env_file3 instance_dir3 sql_dir sql_path
+    local display3 container_name3 env_file3 instance_dir3 _ backup_scope3 sql_dir sql_path
     for line in "${m_eps[@]}"; do
-      IFS='|' read -r display3 container_name3 env_file3 instance_dir3 _ <<< "$line"
+      IFS='|' read -r display3 container_name3 env_file3 instance_dir3 _ backup_scope3 <<< "$line"
       sql_dir="$(_dbbackup_project_backup_dir "$instance_dir3" "mysql")"
       sql_path="$(_dbbackup_latest_backup_file "$sql_dir" "sql" 2>/dev/null || true)"
       if [ -z "${sql_path:-}" ]; then
@@ -186,7 +200,7 @@ dbbackup_p_import_all_latest_run() {
         continue
       fi
       echo "▶ 匯入：$display3（$(basename "$sql_path")）"
-      if _dbbackup_mysql_import_overwrite "$container_name3" "$env_file3" "$instance_dir3" "$want_pause_each" "$sql_path" "1"; then
+      if _dbbackup_mysql_import_overwrite "$container_name3" "$env_file3" "$instance_dir3" "$want_pause_each" "$sql_path" "1" "$backup_scope3"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -196,9 +210,9 @@ dbbackup_p_import_all_latest_run() {
 
   if [ ${#mg_eps[@]} -gt 0 ]; then
     echo "=== MongoDB：開始批次匯入（latest） ==="
-    local display4 container_name4 env_file4 instance_dir4 archive_dir archive_path
+    local display4 container_name4 env_file4 instance_dir4 _ backup_scope4 archive_dir archive_path
     for line in "${mg_eps[@]}"; do
-      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ <<< "$line"
+      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ backup_scope4 <<< "$line"
       archive_dir="$(_dbbackup_project_backup_dir "$instance_dir4" "mongo")"
       archive_path="$(_dbbackup_latest_backup_file "$archive_dir" "archive.gz" 2>/dev/null || true)"
       if [ -z "${archive_path:-}" ]; then
@@ -207,7 +221,7 @@ dbbackup_p_import_all_latest_run() {
         continue
       fi
       echo "▶ 匯入：$display4（$(basename "$archive_path")）"
-      if _dbbackup_mongo_import_overwrite "$container_name4" "$env_file4" "$instance_dir4" "$want_pause_each" "$archive_path" "1"; then
+      if _dbbackup_mongo_import_overwrite "$container_name4" "$env_file4" "$instance_dir4" "$want_pause_each" "$archive_path" "1" "$backup_scope4"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -307,18 +321,19 @@ dbbackup_p_import_all_latest_menu() {
   local ok=0 fail=0 skip=0
   if [ ${#pg_eps[@]} -gt 0 ]; then
     echo "=== PostgreSQL：開始批次匯入 ==="
-    local display container_name env_file instance_dir _ dump_dir dump_path
+    local display container_name env_file instance_dir _ backup_scope dump_dir dump_path dump_ext
     for line in "${pg_eps[@]}"; do
-      IFS='|' read -r display container_name env_file instance_dir _ <<< "$line"
+      IFS='|' read -r display container_name env_file instance_dir _ backup_scope <<< "$line"
       dump_dir="$(_dbbackup_project_backup_dir "$instance_dir" "postgres")"
-      dump_path="$(_dbbackup_latest_backup_file "$dump_dir" "dump" 2>/dev/null || true)"
+      dump_ext="$(_dbbackup_backup_ext_for_scope "postgres" "$backup_scope")"
+      dump_path="$(_dbbackup_latest_backup_file "$dump_dir" "$dump_ext" 2>/dev/null || true)"
       if [ -z "${dump_path:-}" ]; then
         echo "⏭ 略過：$display（尚無備份檔）"
         skip=$((skip + 1))
         continue
       fi
       echo "▶ 匯入：$display（$(basename "$dump_path")）"
-      if _dbbackup_postgres_import_overwrite "$container_name" "$env_file" "$instance_dir" "0" "$dump_path" "1"; then
+      if _dbbackup_postgres_import_overwrite "$container_name" "$env_file" "$instance_dir" "0" "$dump_path" "1" "$backup_scope"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -349,9 +364,9 @@ dbbackup_p_import_all_latest_menu() {
 
   if [ ${#m_eps[@]} -gt 0 ]; then
     echo "=== MySQL：開始批次匯入 ==="
-    local display3 container_name3 env_file3 instance_dir3 sql_dir sql_path
+    local display3 container_name3 env_file3 instance_dir3 _ backup_scope3 sql_dir sql_path
     for line in "${m_eps[@]}"; do
-      IFS='|' read -r display3 container_name3 env_file3 instance_dir3 _ <<< "$line"
+      IFS='|' read -r display3 container_name3 env_file3 instance_dir3 _ backup_scope3 <<< "$line"
       sql_dir="$(_dbbackup_project_backup_dir "$instance_dir3" "mysql")"
       sql_path="$(_dbbackup_latest_backup_file "$sql_dir" "sql" 2>/dev/null || true)"
       if [ -z "${sql_path:-}" ]; then
@@ -360,7 +375,7 @@ dbbackup_p_import_all_latest_menu() {
         continue
       fi
       echo "▶ 匯入：$display3（$(basename "$sql_path")）"
-      if _dbbackup_mysql_import_overwrite "$container_name3" "$env_file3" "$instance_dir3" "0" "$sql_path" "1"; then
+      if _dbbackup_mysql_import_overwrite "$container_name3" "$env_file3" "$instance_dir3" "0" "$sql_path" "1" "$backup_scope3"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))
@@ -370,9 +385,9 @@ dbbackup_p_import_all_latest_menu() {
 
   if [ ${#mg_eps[@]} -gt 0 ]; then
     echo "=== MongoDB：開始批次匯入 ==="
-    local display4 container_name4 env_file4 instance_dir4 archive_dir archive_path
+    local display4 container_name4 env_file4 instance_dir4 _ backup_scope4 archive_dir archive_path
     for line in "${mg_eps[@]}"; do
-      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ <<< "$line"
+      IFS='|' read -r display4 container_name4 env_file4 instance_dir4 _ backup_scope4 <<< "$line"
       archive_dir="$(_dbbackup_project_backup_dir "$instance_dir4" "mongo")"
       archive_path="$(_dbbackup_latest_backup_file "$archive_dir" "archive.gz" 2>/dev/null || true)"
       if [ -z "${archive_path:-}" ]; then
@@ -381,7 +396,7 @@ dbbackup_p_import_all_latest_menu() {
         continue
       fi
       echo "▶ 匯入：$display4（$(basename "$archive_path")）"
-      if _dbbackup_mongo_import_overwrite "$container_name4" "$env_file4" "$instance_dir4" "0" "$archive_path" "1"; then
+      if _dbbackup_mongo_import_overwrite "$container_name4" "$env_file4" "$instance_dir4" "0" "$archive_path" "1" "$backup_scope4"; then
         ok=$((ok + 1))
       else
         fail=$((fail + 1))

@@ -9,6 +9,7 @@ Image=docker.io/library/mariadb:11
 ContainerName=${container_name}
 Label=app=mariadb
 Label=tgdb_db=mariadb
+Label=tgdb_db_backup_scope=instance
 
 Network=tgdb.network
 

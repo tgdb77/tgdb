@@ -76,7 +76,7 @@ _dbbackup_mongo_uri_get_query_value() {
 }
 
 _dbbackup_mongo_resolve_connection() {
-  local env_file="$1"
+  local env_file="$1" require_db="${2:-1}"
   [ -f "$env_file" ] || return 1
 
   _dbbackup_mongo_reset_conn
@@ -133,7 +133,7 @@ _dbbackup_mongo_resolve_connection() {
     return 1
   fi
 
-  if [ -z "${DBBACKUP_MONGO_DB:-}" ]; then
+  if [ "${require_db:-1}" = "1" ] && [ -z "${DBBACKUP_MONGO_DB:-}" ]; then
     tgdb_fail "找不到 MongoDB 目標資料庫名稱：$env_file（支援 MONGODB_URI / MONGO_URL / ACKEE_MONGODB / MONGO_INITDB_DATABASE 等）。" 1 || true
     return 1
   fi
@@ -187,10 +187,11 @@ _dbbackup_wait_mongo_ready() {
 }
 
 _dbbackup_mongo_export() {
-  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}"
+  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}" backup_scope="${5:-database}"
   [ -n "$container_name" ] || return 1
   [ -f "$env_file" ] || return 1
   [ -n "${instance_dir:-}" ] || instance_dir="$(dirname "$env_file" 2>/dev/null || echo "")"
+  backup_scope="$(_dbbackup_scope_normalize "$backup_scope")"
 
   _dbbackup_ensure_container_running "$container_name" || {
     local rc=$?
@@ -204,7 +205,9 @@ _dbbackup_mongo_export() {
     return 1
   fi
 
-  _dbbackup_mongo_resolve_connection "$env_file" || {
+  local require_db="1"
+  [ "$backup_scope" = "instance" ] && require_db="0"
+  _dbbackup_mongo_resolve_connection "$env_file" "$require_db" || {
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
   }
@@ -220,7 +223,11 @@ _dbbackup_mongo_export() {
   _dbbackup_ensure_dir_writable "$out_dir" || { _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."; return 1; }
   chmod 700 "$out_dir" 2>/dev/null || true
   echo "輸出目錄：$out_dir"
-  echo "目標資料庫：$DBBACKUP_MONGO_DB"
+  if [ "$backup_scope" = "instance" ]; then
+    echo "目標範圍：全實例（還原時排除 admin/config/local）"
+  else
+    echo "目標資料庫：$DBBACKUP_MONGO_DB"
+  fi
   echo "連線來源：$DBBACKUP_MONGO_AUTH_SOURCE"
   echo "設定檔：$env_file"
 
@@ -237,6 +244,7 @@ _dbbackup_mongo_export() {
     -e TGDB_PASS="$DBBACKUP_MONGO_PASS" \
     -e TGDB_AUTH_DB="$DBBACKUP_MONGO_AUTH_DB" \
     -e TGDB_OUT="$tmp_archive" \
+    -e TGDB_BACKUP_SCOPE="$backup_scope" \
     "$container_name" sh -c '
       set -eu
       set -- mongodump --archive="$TGDB_OUT" --gzip
@@ -251,7 +259,9 @@ _dbbackup_mongo_export() {
           fi
         fi
       fi
-      set -- "$@" --db "$TGDB_DB"
+      if [ "${TGDB_BACKUP_SCOPE:-database}" != "instance" ]; then
+        set -- "$@" --db "$TGDB_DB"
+      fi
       "$@"
     ' 2>&1)" || dump_rc=$?
   if [ "$dump_rc" -ne 0 ]; then
@@ -284,6 +294,7 @@ _dbbackup_mongo_export() {
     echo "container_name=$container_name"
     echo "env_file=$env_file"
     echo "db_name=$DBBACKUP_MONGO_DB"
+    echo "backup_scope=$backup_scope"
     echo "auth_source=$DBBACKUP_MONGO_AUTH_SOURCE"
     echo "auth_db=$DBBACKUP_MONGO_AUTH_DB"
     echo "uri_key=$DBBACKUP_MONGO_URI_KEY"
@@ -300,10 +311,11 @@ _dbbackup_mongo_export() {
 }
 
 _dbbackup_mongo_import_overwrite() {
-  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}" forced_archive_path="${5:-}" assume_yes="${6:-0}"
+  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}" forced_archive_path="${5:-}" assume_yes="${6:-0}" backup_scope="${7:-database}"
   [ -n "$container_name" ] || return 1
   [ -f "$env_file" ] || return 1
   [ -n "${instance_dir:-}" ] || instance_dir="$(dirname "$env_file" 2>/dev/null || echo "")"
+  backup_scope="$(_dbbackup_scope_normalize "$backup_scope")"
 
   _dbbackup_ensure_container_running "$container_name" || {
     local rc=$?
@@ -331,12 +343,14 @@ _dbbackup_mongo_import_overwrite() {
     _dbbackup_pick_existing_backup_file "$archive_dir" "archive.gz" archive_path || return $?
   fi
 
-  _dbbackup_mongo_resolve_connection "$env_file" || {
+  local require_db="1"
+  [ "$backup_scope" = "instance" ] && require_db="0"
+  _dbbackup_mongo_resolve_connection "$env_file" "$require_db" || {
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
   }
 
-  if [[ ! "$DBBACKUP_MONGO_DB" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  if [ "$backup_scope" != "instance" ] && [[ ! "$DBBACKUP_MONGO_DB" =~ ^[A-Za-z0-9._-]+$ ]]; then
     tgdb_fail "偵測到 MongoDB 名稱含特殊字元（db=$DBBACKUP_MONGO_DB）。此功能暫不支援自動覆蓋，請改用手動還原。" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
@@ -344,7 +358,11 @@ _dbbackup_mongo_import_overwrite() {
 
   echo "⚠️ 重要提醒：此操作會『覆蓋』目標 MongoDB 資料庫內容。"
   echo " - 目標容器：$container_name"
-  echo " - 目標資料庫：$DBBACKUP_MONGO_DB"
+  if [ "$backup_scope" = "instance" ]; then
+    echo " - 備份範圍：全實例（排除 admin/config/local）"
+  else
+    echo " - 目標資料庫：$DBBACKUP_MONGO_DB"
+  fi
   echo " - 連線來源：$DBBACKUP_MONGO_AUTH_SOURCE"
   echo " - 匯入檔案：$archive_path"
   echo "建議：先停止所有會連線到此 DB 的上游服務，避免匯入期間被寫入。"
@@ -381,10 +399,15 @@ _dbbackup_mongo_import_overwrite() {
     -e TGDB_USER="$DBBACKUP_MONGO_USER" \
     -e TGDB_PASS="$DBBACKUP_MONGO_PASS" \
     -e TGDB_AUTH_DB="$DBBACKUP_MONGO_AUTH_DB" \
+    -e TGDB_BACKUP_SCOPE="$backup_scope" \
     "$container_name" sh -c '
       set -eu
+      drop_js="db.getSiblingDB(\"$TGDB_DB\").dropDatabase()"
+      if [ "${TGDB_BACKUP_SCOPE:-database}" = "instance" ]; then
+        drop_js="db.adminCommand({listDatabases:1}).databases.forEach(function(d){ if ([\"admin\",\"config\",\"local\"].indexOf(d.name) < 0) { db.getSiblingDB(d.name).dropDatabase(); } })"
+      fi
       if [ -n "${TGDB_URI:-}" ]; then
-        mongosh "$TGDB_URI" --quiet --eval "db.getSiblingDB(\"$TGDB_DB\").dropDatabase()" >/dev/null
+        mongosh "$TGDB_URI" --quiet --eval "$drop_js" >/dev/null
         exit 0
       fi
 
@@ -395,12 +418,16 @@ _dbbackup_mongo_import_overwrite() {
           set -- "$@" --authenticationDatabase "$TGDB_AUTH_DB"
         fi
       fi
-      set -- "$@" --eval "db.getSiblingDB(\"$TGDB_DB\").dropDatabase()"
+      set -- "$@" --eval "$drop_js"
       "$@" >/dev/null
     ' 2>&1)" || drop_rc=$?
   if [ "$drop_rc" -ne 0 ]; then
     podman exec "$container_name" rm -f "$tmp_archive" >/dev/null 2>&1 || true
-    tgdb_fail "清空資料庫失敗：$DBBACKUP_MONGO_DB（$drop_out）" 1 || true
+    if [ "$backup_scope" = "instance" ]; then
+      tgdb_fail "清空 MongoDB 使用者資料庫失敗：$drop_out" 1 || true
+    else
+      tgdb_fail "清空資料庫失敗：$DBBACKUP_MONGO_DB（$drop_out）" 1 || true
+    fi
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
   fi
@@ -413,9 +440,15 @@ _dbbackup_mongo_import_overwrite() {
     -e TGDB_PASS="$DBBACKUP_MONGO_PASS" \
     -e TGDB_AUTH_DB="$DBBACKUP_MONGO_AUTH_DB" \
     -e TGDB_FILE="$tmp_archive" \
+    -e TGDB_BACKUP_SCOPE="$backup_scope" \
     "$container_name" sh -c '
       set -eu
-      set -- mongorestore --archive="$TGDB_FILE" --gzip --drop --nsInclude "$TGDB_DB.*"
+      set -- mongorestore --archive="$TGDB_FILE" --gzip --drop
+      if [ "${TGDB_BACKUP_SCOPE:-database}" = "instance" ]; then
+        set -- "$@" --nsExclude "admin.*" --nsExclude "config.*" --nsExclude "local.*"
+      else
+        set -- "$@" --nsInclude "$TGDB_DB.*"
+      fi
       if [ -n "${TGDB_URI:-}" ]; then
         set -- "$@" --uri "$TGDB_URI"
       else
@@ -439,7 +472,11 @@ _dbbackup_mongo_import_overwrite() {
   podman exec "$container_name" rm -f "$tmp_archive" >/dev/null 2>&1 || true
 
   if _dbbackup_wait_mongo_ready "$container_name" 30 2; then
-    echo "✅ 匯入完成：已覆蓋還原 $DBBACKUP_MONGO_DB"
+    if [ "$backup_scope" = "instance" ]; then
+      echo "✅ 匯入完成：已覆蓋還原 MongoDB 全實例（排除 admin/config/local）"
+    else
+      echo "✅ 匯入完成：已覆蓋還原 $DBBACKUP_MONGO_DB"
+    fi
   else
     tgdb_warn "匯入完成，但匯入後就緒檢查未通過，請手動確認容器日誌與資料完整性。"
   fi

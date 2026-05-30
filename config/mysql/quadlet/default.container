@@ -9,6 +9,7 @@ Image=docker.io/library/mysql:8.4.8
 ContainerName=${container_name}
 Label=app=mysql
 Label=tgdb_db=mysql
+Label=tgdb_db_backup_scope=instance
 
 Network=tgdb.network
 

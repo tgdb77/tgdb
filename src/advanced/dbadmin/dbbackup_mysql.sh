@@ -61,10 +61,11 @@ _dbbackup_mysql_dump_gtid_arg() {
 }
 
 _dbbackup_mysql_export() {
-  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}"
+  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}" backup_scope="${5:-database}"
   [ -n "$container_name" ] || return 1
   [ -f "$env_file" ] || return 1
   [ -n "${instance_dir:-}" ] || instance_dir="$(dirname "$env_file" 2>/dev/null || echo "")"
+  backup_scope="$(_dbbackup_scope_normalize "$backup_scope")"
 
   _dbbackup_ensure_container_running "$container_name" || {
     local rc=$?
@@ -78,6 +79,15 @@ _dbbackup_mysql_export() {
     tgdb_fail "容器內找不到 mysqldump / mariadb-dump：$container_name（此功能暫不支援該映像）。" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
+  fi
+  local client_cmd=""
+  if [ "$backup_scope" = "instance" ]; then
+    client_cmd="$(_dbbackup_mysql_client_cmd_in_container "$container_name" 2>/dev/null || true)"
+    if [ -z "${client_cmd:-}" ]; then
+      tgdb_fail "容器內缺少 mysql / mariadb 指令：$container_name（全實例備份需要用來列出資料庫）。" 1 || true
+      _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
+      return 1
+    fi
   fi
 
   local db user user_password root_password dump_user dump_password auth_source
@@ -108,7 +118,11 @@ _dbbackup_mysql_export() {
   _dbbackup_ensure_dir_writable "$out_dir" || { _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."; return 1; }
   chmod 700 "$out_dir" 2>/dev/null || true
   echo "輸出目錄：$out_dir"
-  echo "連線資訊：db=$db / user=$dump_user"
+  if [ "$backup_scope" = "instance" ]; then
+    echo "連線資訊：scope=instance（所有非系統 schema） / user=$dump_user"
+  else
+    echo "連線資訊：db=$db / user=$dump_user"
+  fi
   echo "設定檔：$env_file"
 
   ts="$(date +%Y%m%d-%H%M%S)"
@@ -118,7 +132,7 @@ _dbbackup_mysql_export() {
   local tmp_sql="/tmp/tgdb_${ts}.sql" dump_gtid_arg
   dump_gtid_arg="$(_dbbackup_mysql_dump_gtid_arg "$dump_cmd")"
   local dump_out="" dump_rc=0
-  dump_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$dump_user" -e TGDB_PASS="$dump_password" -e TGDB_OUT="$tmp_sql" -e TGDB_DUMP_CMD="$dump_cmd" -e TGDB_DUMP_GTID_ARG="$dump_gtid_arg" \
+  dump_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$dump_user" -e TGDB_PASS="$dump_password" -e TGDB_OUT="$tmp_sql" -e TGDB_DUMP_CMD="$dump_cmd" -e TGDB_DUMP_GTID_ARG="$dump_gtid_arg" -e TGDB_CLIENT_CMD="$client_cmd" -e TGDB_BACKUP_SCOPE="$backup_scope" \
     "$container_name" sh -c '
       set -eu
       export MYSQL_PWD="$TGDB_PASS"
@@ -126,7 +140,23 @@ _dbbackup_mysql_export() {
       if [ -n "${TGDB_DUMP_GTID_ARG:-}" ]; then
         set -- "$@" "$TGDB_DUMP_GTID_ARG"
       fi
-      set -- "$@" --databases "$TGDB_DB"
+      if [ "${TGDB_BACKUP_SCOPE:-database}" = "instance" ]; then
+        db_list="/tmp/tgdb_mysql_dbs_$$.txt"
+        "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -N -B \
+          -e "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME NOT IN ( '\''mysql'\'', '\''information_schema'\'', '\''performance_schema'\'', '\''sys'\'' ) ORDER BY SCHEMA_NAME;" >"$db_list"
+        if [ ! -s "$db_list" ]; then
+          echo "找不到可備份的使用者資料庫。" >&2
+          rm -f "$db_list"
+          exit 1
+        fi
+        set -- "$@" --add-drop-database --databases
+        while IFS= read -r one_db; do
+          [ -n "$one_db" ] && set -- "$@" "$one_db"
+        done <"$db_list"
+        rm -f "$db_list"
+      else
+        set -- "$@" --databases "$TGDB_DB"
+      fi
       "$@" >"$TGDB_OUT"
     ' 2>&1)" || dump_rc=$?
   if [ "$dump_rc" -ne 0 ]; then
@@ -159,6 +189,7 @@ _dbbackup_mysql_export() {
     echo "container_name=$container_name"
     echo "env_file=$env_file"
     echo "db_name=$db"
+    echo "backup_scope=$backup_scope"
     echo "dump_user=$dump_user"
     echo "auth_source=$auth_source"
     echo "format=mysqldump_sql"
@@ -174,10 +205,11 @@ _dbbackup_mysql_export() {
 }
 
 _dbbackup_mysql_import_overwrite() {
-  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}" forced_sql_path="${5:-}" assume_yes="${6:-0}"
+  local container_name="$1" env_file="$2" instance_dir="$3" want_pause="${4:-1}" forced_sql_path="${5:-}" assume_yes="${6:-0}" backup_scope="${7:-database}"
   [ -n "$container_name" ] || return 1
   [ -f "$env_file" ] || return 1
   [ -n "${instance_dir:-}" ] || instance_dir="$(dirname "$env_file" 2>/dev/null || echo "")"
+  backup_scope="$(_dbbackup_scope_normalize "$backup_scope")"
 
   _dbbackup_ensure_container_running "$container_name" || {
     local rc=$?
@@ -231,7 +263,7 @@ _dbbackup_mysql_import_overwrite() {
     return 1
   fi
 
-  if [[ ! "$db" =~ ^[A-Za-z0-9_]+$ ]]; then
+  if [ "$backup_scope" != "instance" ] && [[ ! "$db" =~ ^[A-Za-z0-9_]+$ ]]; then
     tgdb_fail "偵測到資料庫名稱含特殊字元（db=$db）。此功能暫不支援自動覆蓋，請改用手動還原。" 1 || true
     _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
     return 1
@@ -239,7 +271,11 @@ _dbbackup_mysql_import_overwrite() {
 
   echo "⚠️ 重要提醒：此操作會『覆蓋』目標資料庫內容。"
   echo " - 目標容器：$container_name"
-  echo " - 目標資料庫：$db"
+  if [ "$backup_scope" = "instance" ]; then
+    echo " - 備份範圍：全實例（所有非系統 schema）"
+  else
+    echo " - 目標資料庫：$db"
+  fi
   echo " - 還原帳號來源：$auth_source（user=$restore_user）"
   echo " - 匯入檔案：$sql_path"
   echo "建議：先停止所有會連線到此 DB 的上游服務，避免匯入期間被寫入。"
@@ -270,8 +306,21 @@ _dbbackup_mysql_import_overwrite() {
   fi
 
   local rebuild_out="" rebuild_rc=0
-  rebuild_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_CLIENT_CMD="$client_cmd" \
-    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "DROP DATABASE IF EXISTS \`$TGDB_DB\`; CREATE DATABASE \`$TGDB_DB\`;"' 2>&1)" || rebuild_rc=$?
+  if [ "$backup_scope" = "instance" ]; then
+    rebuild_out="$(podman exec -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_CLIENT_CMD="$client_cmd" \
+      "$container_name" sh -c '
+        set -eu
+        export MYSQL_PWD="$TGDB_PASS"
+        drop_sql="$("$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -N -B \
+          -e '\''SELECT CONCAT("DROP DATABASE IF EXISTS `", REPLACE(SCHEMA_NAME, "`", "``"), "`;") FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME NOT IN ("mysql", "information_schema", "performance_schema", "sys") ORDER BY SCHEMA_NAME;'\'')"
+        if [ -n "${drop_sql:-}" ]; then
+          printf "%s\n" "$drop_sql" | "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER"
+        fi
+      ' 2>&1)" || rebuild_rc=$?
+  else
+    rebuild_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_CLIENT_CMD="$client_cmd" \
+      "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" -e "DROP DATABASE IF EXISTS \`$TGDB_DB\`; CREATE DATABASE \`$TGDB_DB\`;"' 2>&1)" || rebuild_rc=$?
+  fi
   if [ "$rebuild_rc" -ne 0 ]; then
     podman exec "$container_name" rm -f "$tmp_sql" >/dev/null 2>&1 || true
     tgdb_fail "重建資料庫失敗：$db（$rebuild_out）" 1 || true
@@ -280,8 +329,13 @@ _dbbackup_mysql_import_overwrite() {
   fi
 
   local restore_out="" restore_rc=0
-  restore_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_FILE="$tmp_sql" -e TGDB_CLIENT_CMD="$client_cmd" \
-    "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" "$TGDB_DB" <"$TGDB_FILE"' 2>&1)" || restore_rc=$?
+  if [ "$backup_scope" = "instance" ]; then
+    restore_out="$(podman exec -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_FILE="$tmp_sql" -e TGDB_CLIENT_CMD="$client_cmd" \
+      "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" <"$TGDB_FILE"' 2>&1)" || restore_rc=$?
+  else
+    restore_out="$(podman exec -e TGDB_DB="$db" -e TGDB_USER="$restore_user" -e TGDB_PASS="$restore_password" -e TGDB_FILE="$tmp_sql" -e TGDB_CLIENT_CMD="$client_cmd" \
+      "$container_name" sh -c 'set -eu; export MYSQL_PWD="$TGDB_PASS"; "$TGDB_CLIENT_CMD" -h 127.0.0.1 -P 3306 -u"$TGDB_USER" "$TGDB_DB" <"$TGDB_FILE"' 2>&1)" || restore_rc=$?
+  fi
   if [ "$restore_rc" -ne 0 ]; then
     podman exec "$container_name" rm -f "$tmp_sql" >/dev/null 2>&1 || true
     tgdb_fail "匯入失敗：$container_name（$restore_out）" 1 || true
@@ -291,7 +345,11 @@ _dbbackup_mysql_import_overwrite() {
 
   podman exec "$container_name" rm -f "$tmp_sql" >/dev/null 2>&1 || true
 
-  echo "✅ 匯入完成：已覆蓋還原 $db"
+  if [ "$backup_scope" = "instance" ]; then
+    echo "✅ 匯入完成：已覆蓋還原全實例（非系統 schema）"
+  else
+    echo "✅ 匯入完成：已覆蓋還原 $db"
+  fi
   echo "ℹ️ 建議：啟動上游服務前先做基本查詢/健康檢查確認資料完整。"
   _dbbackup_ui_pause_if "$want_pause" "按任意鍵返回..."
   return 0
