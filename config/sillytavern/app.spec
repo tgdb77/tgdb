@@ -1,5 +1,6 @@
 spec_version=1
 display_name=SillyTavern
+description=AI 角色對話前端，可管理角色卡、聊天設定並連接多種模型 API。
 image=ghcr.io/sillytavern/sillytavern:latest
 doc_url=https://github.com/SillyTavern/SillyTavern
 menu_order=29

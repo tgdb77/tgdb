@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Wiki.js
+description=建立與管理團隊文件、知識庫與協作頁面。
 image=docker.io/requarks/wiki:2
 doc_url=https://docs.requarks.io/install/docker
 menu_order=87

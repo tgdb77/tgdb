@@ -1,5 +1,6 @@
 spec_version=1
 display_name=FlareSolverr
+description=替其他服務處理受 Cloudflare 防護頁面影響的瀏覽器請求。
 image=ghcr.io/flaresolverr/flaresolverr:latest
 doc_url=https://github.com/FlareSolverr/FlareSolverr
 menu_order=88

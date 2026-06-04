@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Hoppscotch
+description=測試、管理與分享 REST、GraphQL 等 API 請求。
 image=docker.io/hoppscotch/hoppscotch:latest
 doc_url=https://docs.hoppscotch.io/documentation/self-host/community-edition/install-and-build
 menu_order=137

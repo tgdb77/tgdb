@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Dozzle
+description=即時查看與搜尋容器日誌的 Web 工具。
 image=docker.io/amir20/dozzle:latest
 doc_url=https://dozzle.dev/
 menu_order=51

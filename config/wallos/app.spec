@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Wallos
+description=訂閱費用與週期付款追蹤服務。
 image=docker.io/bellamy/wallos:latest
 doc_url=https://github.com/ellite/Wallos
 menu_order=39

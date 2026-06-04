@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Sub2API
+description=管理 AI 服務訂閱額度、API Key 與請求轉發。
 image=docker.io/weishaw/sub2api:latest
 doc_url=https://github.com/Wei-Shaw/sub2api
 menu_order=159

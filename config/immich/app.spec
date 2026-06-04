@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Immich
+description=照片與影片管理服務，可備份、瀏覽、搜尋並整理個人媒體庫。
 image=ghcr.io/immich-app/immich-server:v2.7.5
 doc_url=https://immich.app/docs/
 menu_order=8

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Healthchecks
+description=監控排程任務與背景作業是否按時回報的健康檢查服務。
 image=docker.io/healthchecks/healthchecks:v4.0
 doc_url=https://healthchecks.io/docs/self_hosted_docker/
 menu_order=50

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Readeck
+description=保存稍後閱讀的文章與網頁並整理個人閱讀清單。
 image=codeberg.org/readeck/readeck:latest
 doc_url=https://codeberg.org/readeck/readeck
 menu_order=132

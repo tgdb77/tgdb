@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Technitium DNS
+description=提供含網頁控制台的 DNS 伺服器與區域管理功能。
 image=docker.io/technitium/dns-server:latest
 doc_url=https://github.com/TechnitiumSoftware/DnsServer
 menu_order=74

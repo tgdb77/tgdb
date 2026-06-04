@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Whoogle
+description=Google 搜尋的隱私前端，可移除廣告、追蹤與 JavaScript 依賴後呈現搜尋結果。
 image=ghcr.io/benbusby/whoogle-search:latest
 doc_url=https://github.com/benbusby/whoogle-search
 menu_order=15

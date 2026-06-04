@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Audiobookshelf
+description=管理有聲書、Podcast 與電子書媒體庫。
 image=ghcr.io/advplyr/audiobookshelf:latest
 doc_url=https://www.audiobookshelf.org/docs
 menu_order=188

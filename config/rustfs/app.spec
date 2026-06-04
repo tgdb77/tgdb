@@ -1,5 +1,6 @@
 spec_version=1
 display_name=RustFS
+description=提供相容 S3 的物件儲存服務。
 image=docker.io/rustfs/rustfs:latest
 doc_url=https://github.com/rustfs/rustfs
 menu_order=148

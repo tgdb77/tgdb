@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Stirling-PDF
+description=PDF 合併、轉換、壓縮與編輯工具。
 image=docker.io/stirlingtools/stirling-pdf:latest
 doc_url=https://github.com/Stirling-Tools/Stirling-PDF
 menu_order=37

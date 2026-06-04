@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Syncthing
+description=點對點檔案同步工具，可在多台裝置之間同步資料夾，不需集中式伺服器。
 image=docker.io/syncthing/syncthing:latest
 doc_url=https://syncthing.net/
 menu_order=13

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Blinko
+description=管理筆記、待辦與靈感內容，支援快速記錄與搜尋。
 image=docker.io/blinkospace/blinko:latest
 doc_url=https://github.com/blinkospace/blinko
 menu_order=185

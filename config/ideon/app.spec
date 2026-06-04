@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Ideon
+description=在無限畫布上整理專案、筆記、檔案與待辦。
 image=ghcr.io/3xpyth0n/ideon:latest
 doc_url=https://github.com/3xpyth0n/ideon
 menu_order=198

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Owncast
+description=建立可透過 RTMP 推流的個人直播服務。
 image=docker.io/owncast/owncast:latest
 doc_url=https://owncast.online/docs/
 menu_order=83

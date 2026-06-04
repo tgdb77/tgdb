@@ -1,5 +1,6 @@
 spec_version=1
 display_name=code-server
+description=在瀏覽器中使用 VS Code 編輯器與遠端專案環境。
 image=docker.io/codercom/code-server:latest
 doc_url=https://coder.com/docs/code-server/install
 menu_order=61

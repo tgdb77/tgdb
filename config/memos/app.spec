@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Memos
+description=輕量筆記與備忘錄管理服務。
 image=docker.io/neosmemo/memos:stable
 doc_url=https://usememos.com/docs/installation/docker
 menu_order=35

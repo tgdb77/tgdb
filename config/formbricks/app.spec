@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Formbricks
+description=建立問卷與產品內調查並收集使用者回饋。
 image=ghcr.io/formbricks/formbricks:latest
 doc_url=https://formbricks.com/docs/self-hosting/setup/docker
 menu_order=99

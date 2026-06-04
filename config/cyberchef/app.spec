@@ -1,5 +1,6 @@
 spec_version=1
 display_name=CyberChef
+description=提供瀏覽器中的資料編碼、解碼、加密與格式轉換工具。
 image=ghcr.io/gchq/cyberchef:10
 doc_url=https://github.com/gchq/CyberChef#running-locally-with-docker
 menu_order=84

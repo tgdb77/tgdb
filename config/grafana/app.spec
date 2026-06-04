@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Grafana
+description=建立指標、日誌與監控資料的儀表板。
 image=docker.io/grafana/grafana:latest
 doc_url=https://github.com/grafana/grafana
 menu_order=110

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Umami
+description=網站流量分析工具，可收集訪客、頁面瀏覽與事件統計資料。
 image=ghcr.io/umami-software/umami:postgresql-latest
 doc_url=https://github.com/umami-software/umami
 menu_order=32

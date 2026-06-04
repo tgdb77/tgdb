@@ -1,5 +1,6 @@
 spec_version=1
 display_name=ArchiveBox
+description=保存網頁快照與連結資料，建立可搜尋的個人網頁典藏。
 image=docker.io/archivebox/archivebox:latest
 doc_url=https://docs.archivebox.io/dev/Docker.html
 menu_order=62

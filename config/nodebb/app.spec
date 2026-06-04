@@ -1,5 +1,6 @@
 spec_version=1
 display_name=NodeBB
+description=建立可擴充的社群論壇與討論平台。
 image=ghcr.io/nodebb/nodebb:latest
 doc_url=https://docs.nodebb.org/installing/cloud/docker/
 menu_order=144

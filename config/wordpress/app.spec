@@ -1,5 +1,6 @@
 spec_version=1
 display_name=WordPress
+description=網站與部落格內容管理系統。
 image=docker.io/library/wordpress:php8.3-fpm
 doc_url=https://github.com/WordPress/WordPress
 menu_order=41

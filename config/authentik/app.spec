@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Authentik
+description=身分驗證與單一登入平台，可集中管理使用者、登入流程與應用存取。
 image=ghcr.io/goauthentik/server:2025.10.3
 doc_url=https://github.com/goauthentik/authentik
 menu_order=20

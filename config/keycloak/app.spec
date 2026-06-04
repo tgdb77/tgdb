@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Keycloak
+description=提供使用者登入、身分管理與單一登入服務。
 image=quay.io/keycloak/keycloak:latest
 doc_url=https://github.com/keycloak/keycloak
 menu_order=119

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Whisparr
+description=追蹤成人影集並自動管理下載與整理流程。
 image=ghcr.io/hotio/whisparr:v3
 doc_url=https://wiki.servarr.com/whisparr/installation/docker
 menu_order=999

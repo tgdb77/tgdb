@@ -1,5 +1,6 @@
 spec_version=1
 display_name=MeTube
+description=透過網頁介面使用 yt-dlp 下載影音內容。
 image=ghcr.io/alexta69/metube:latest
 doc_url=https://github.com/alexta69/metube
 menu_order=75

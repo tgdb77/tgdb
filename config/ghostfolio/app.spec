@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Ghostfolio
+description=個人投資組合管理工具，可追蹤資產、交易紀錄與投資表現。
 image=docker.io/ghostfolio/ghostfolio:latest
 doc_url=https://github.com/ghostfolio/ghostfolio
 menu_order=30

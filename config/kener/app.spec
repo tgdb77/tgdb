@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Kener
+description=建立服務狀態頁並追蹤事件、維護公告與可用性。
 image=docker.io/rajnandan1/kener:latest
 doc_url=https://github.com/rajnandan1/kener
 menu_order=91

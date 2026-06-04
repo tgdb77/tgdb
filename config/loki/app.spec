@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Loki
+description=收集與查詢應用程式和系統日誌。
 image=docker.io/grafana/loki:latest
 doc_url=https://github.com/grafana/loki
 menu_order=113

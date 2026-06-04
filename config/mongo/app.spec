@@ -1,5 +1,6 @@
 spec_version=1
 display_name=MongoDB
+description=文件型資料庫，以 BSON 文件儲存資料，適合彈性結構與快速迭代的應用。
 image=docker.io/library/mongo:8.0.17
 doc_url=https://github.com/docker-library/mongo
 menu_order=5

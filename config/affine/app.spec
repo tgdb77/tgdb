@@ -1,5 +1,6 @@
 spec_version=1
 display_name=AFFiNE
+description=整合文件、白板與知識庫的協作工作區。
 image=ghcr.io/toeverything/affine:stable
 doc_url=https://github.com/toeverything/AFFiNE
 menu_order=80

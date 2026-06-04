@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Apache Answer
+description=建立問答社群與知識討論平台。
 image=docker.io/apache/answer:2.0.0
 doc_url=https://answer.apache.org/docs/installation
 menu_order=156

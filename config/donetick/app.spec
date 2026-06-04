@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Donetick
+description=管理家務、例行待辦與任務分派。
 image=docker.io/donetick/donetick:latest
 doc_url=https://github.com/donetick/donetick
 menu_order=103

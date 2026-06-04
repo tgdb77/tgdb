@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Beszel-hub
+description=集中查看伺服器與服務的監控資料。
 image=docker.io/henrygd/beszel
 doc_url=https://github.com/henrygd/beszel
 menu_order=163

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Web-Check
+description=檢查網站的 DNS、憑證、安全標頭與網路連線資訊。
 image=docker.io/lissy93/web-check:latest
 doc_url=https://github.com/Lissy93/web-check
 menu_order=67

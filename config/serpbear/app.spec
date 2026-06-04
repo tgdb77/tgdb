@@ -1,5 +1,6 @@
 spec_version=1
 display_name=SerpBear
+description=追蹤網站關鍵字排名與搜尋結果變化。
 image=docker.io/towfiqi/serpbear:latest
 doc_url=https://github.com/towfiqi/serpbear
 menu_order=150

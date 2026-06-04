@@ -1,5 +1,6 @@
 spec_version=1
 display_name=MySQL
+description=開源關聯式資料庫，可用 SQL 儲存、查詢與管理應用程式資料。
 image=docker.io/library/mysql:8.4.8
 doc_url=https://github.com/docker-library/mysql
 menu_order=4

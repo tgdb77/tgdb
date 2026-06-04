@@ -1,5 +1,6 @@
 spec_version=1
 display_name=qBittorrent
+description=BitTorrent 下載工具，可透過網頁介面管理種子、下載與分享任務。
 image=lscr.io/linuxserver/qbittorrent:latest
 doc_url=https://github.com/linuxserver/docker-qbittorrent
 menu_order=22

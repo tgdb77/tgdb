@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Excalidraw
+description=開源手繪風白板，可用來繪製流程圖、線框圖、草圖與協作筆記。
 image=docker.io/excalidraw/excalidraw:latest
 doc_url=https://github.com/excalidraw/excalidraw
 menu_order=1

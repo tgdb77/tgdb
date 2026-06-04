@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Twenty
+description=管理客戶、公司、商機與業務流程的 CRM 系統。
 image=docker.io/twentycrm/twenty:latest
 doc_url=https://docs.twenty.com/developers/self-host/capabilities/docker-compose
 menu_order=71

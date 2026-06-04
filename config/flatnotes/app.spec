@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Flatnotes
+description=以網頁介面建立、搜尋與管理 Markdown 筆記。
 image=docker.io/dullage/flatnotes:latest
 doc_url=https://github.com/dullage/flatnotes
 menu_order=151

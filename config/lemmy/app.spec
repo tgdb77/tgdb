@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Lemmy
+description=提供聯邦式討論平台，管理社群、貼文與留言。
 image=docker.io/dessalines/lemmy:0.19.18
 doc_url=https://join-lemmy.org/docs/administration/install_docker.html
 menu_order=195

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Paperless-ngx
+description=文件掃描、歸檔與全文搜尋服務。
 image=ghcr.io/paperless-ngx/paperless-ngx:latest
 doc_url=https://docs.paperless-ngx.com/setup/#docker
 menu_order=44

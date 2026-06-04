@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Tdarr
+description=批次轉碼與整理影音檔案，協助統一媒體格式與品質。
 image=ghcr.io/haveagitgat/tdarr:latest
 doc_url=https://docs.tdarr.io/
 menu_order=181

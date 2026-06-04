@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Radarr
+description=追蹤電影並自動管理下載與整理流程。
 image=lscr.io/linuxserver/radarr:latest
 doc_url=https://docs.linuxserver.io/images/docker-radarr/
 menu_order=178

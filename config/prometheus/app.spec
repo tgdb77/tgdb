@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Prometheus
+description=收集、儲存與查詢監控指標資料。
 image=docker.io/prom/prometheus:latest
 doc_url=https://github.com/prometheus/prometheus
 menu_order=111

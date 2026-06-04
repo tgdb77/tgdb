@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Webtop
+description=在瀏覽器中使用 Linux 桌面環境的遠端工作區。
 image=lscr.io/linuxserver/webtop:debian-xfce
 doc_url=https://docs.linuxserver.io/images/docker-webtop/
 menu_order=53

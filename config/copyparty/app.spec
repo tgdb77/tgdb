@@ -1,5 +1,6 @@
 spec_version=1
 display_name=copyparty
+description=透過網頁介面分享、上傳與下載檔案。
 image=docker.io/copyparty/ac:latest
 doc_url=https://github.com/9001/copyparty
 menu_order=175

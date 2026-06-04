@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Zot
+description=儲存與分發 OCI 容器映像及相關成品。
 image=ghcr.io/project-zot/zot:v2.1.15
 doc_url=https://zotregistry.dev/
 menu_order=77

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Glance
+description=建立可自訂的資訊看板，集中顯示狀態與內容摘要。
 image=docker.io/glanceapp/glance:latest
 doc_url=https://github.com/glanceapp/glance
 menu_order=129

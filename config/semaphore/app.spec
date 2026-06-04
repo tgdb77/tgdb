@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Semaphore UI
+description=管理 Ansible、Terraform 等自動化工作與部署流程。
 image=docker.io/semaphoreui/semaphore:v2.17.33
 doc_url=https://semaphoreui.com/docs/admin-guide/installation/docker
 menu_order=141

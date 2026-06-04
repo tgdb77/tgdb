@@ -1,5 +1,6 @@
 spec_version=1
 display_name=ChangeDetection.io
+description=網站變更監控工具，可追蹤頁面內容變動並在符合條件時通知。
 image=ghcr.io/dgtlmoon/changedetection.io
 doc_url=https://github.com/dgtlmoon/changedetection.io
 menu_order=16

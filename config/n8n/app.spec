@@ -1,5 +1,6 @@
 spec_version=1
 display_name=N8n
+description=工作流程自動化工具，可串接服務、排程任務並處理資料流。
 image=docker.n8n.io/n8nio/n8n
 doc_url=https://docs.n8n.io/
 menu_order=19

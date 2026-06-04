@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Remark42
+description=為網站加入可嵌入的留言系統與管理介面。
 image=ghcr.io/umputun/remark42:latest
 doc_url=https://remark42.com/docs/getting-started/
 menu_order=59

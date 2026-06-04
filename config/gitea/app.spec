@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Gitea
+description=Git 程式碼託管與協作服務。
 image=docker.io/gitea/gitea:latest
 doc_url=https://docs.gitea.com/installation/install-with-docker
 menu_order=36

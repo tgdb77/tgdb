@@ -1,5 +1,6 @@
 spec_version=1
 display_name=oauth2-proxy
+description=為反向代理站點加入 OAuth2/OIDC 登入驗證。
 image=quay.io/oauth2-proxy/oauth2-proxy:v7.13.0
 doc_url=https://oauth2-proxy.github.io/oauth2-proxy/configuration/integration/
 menu_order=138

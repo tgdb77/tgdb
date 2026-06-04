@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Browserless
+description=提供遠端 Chromium 瀏覽器執行與自動化 API。
 image=ghcr.io/browserless/chromium:latest
 doc_url=https://github.com/browserless/browserless
 menu_order=142

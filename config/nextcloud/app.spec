@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Nextcloud
+description=同步、分享與管理檔案、行事曆和聯絡人。
 image=docker.io/library/nextcloud:33-apache
 doc_url=https://github.com/nextcloud/docker
 menu_order=76

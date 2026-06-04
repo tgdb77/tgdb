@@ -1,5 +1,6 @@
 spec_version=1
 display_name=FossFLOW
+description=繪製與保存基礎架構圖、流程圖與等距風格技術圖表的網頁工具。
 image=docker.io/stnsmith/fossflow:latest
 doc_url=https://github.com/stan-smith/FossFLOW
 menu_order=201

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Blackbox Exporter
+description=從外部探測 HTTP、TCP、DNS 與 ICMP 端點。
 image=quay.io/prometheus/blackbox-exporter:latest
 doc_url=https://github.com/prometheus/blackbox_exporter
 menu_order=116

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Actual Budget
+description=管理個人或家庭預算與帳務紀錄。
 image=docker.io/actualbudget/actual-server:latest
 doc_url=https://actualbudget.org/docs/install/docker/
 menu_order=166

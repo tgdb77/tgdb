@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Karakeep
+description=保存網頁、筆記與連結，並支援全文搜尋。
 image=ghcr.io/karakeep-app/karakeep:release
 doc_url=https://github.com/karakeep-app/karakeep
 menu_order=128

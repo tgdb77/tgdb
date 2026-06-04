@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Ollama
+description=本機執行與管理大型語言模型的服務。
 image=docker.io/ollama/ollama:latest
 doc_url=https://github.com/ollama/ollama
 menu_order=46

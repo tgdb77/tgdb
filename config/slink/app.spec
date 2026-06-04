@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Slink
+description=提供圖片上傳、管理與分享連結服務。
 image=docker.io/anirdev/slink:latest
 doc_url=https://docs.slinkapp.io/installation/01-docker-compose/
 menu_order=190

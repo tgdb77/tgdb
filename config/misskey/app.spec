@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Misskey
+description=架設聯邦式社群平台，提供貼文、互動與時間軸功能。
 image=localhost/tgdb/misskey:latest
 doc_url=https://misskey-hub.net/en/docs/for-admin/install/guides/docker/
 menu_order=192

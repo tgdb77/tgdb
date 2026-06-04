@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Planka
+description=以看板方式管理專案任務與協作流程。
 image=docker.io/plankanban/planka:latest
 doc_url=https://github.com/plankanban/planka
 menu_order=173

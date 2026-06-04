@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Tandoor Recipes
+description=保存食譜、規劃菜單與管理食材清單。
 image=docker.io/vabene1111/recipes:latest
 doc_url=https://docs.tandoor.dev/install/docker/
 menu_order=172

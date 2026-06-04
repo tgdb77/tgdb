@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Seerr
+description=管理 Jellyfin、Sonarr 與 Radarr 的影音請求。
 image=ghcr.io/seerr-team/seerr:latest
 doc_url=https://docs.seerr.dev/getting-started/docker
 menu_order=176

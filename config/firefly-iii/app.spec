@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Firefly III
+description=個人財務記帳與預算管理服務。
 image=docker.io/fireflyiii/core:latest
 doc_url=https://github.com/firefly-iii/firefly-iii
 menu_order=47

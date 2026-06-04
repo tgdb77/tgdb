@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Rybbit
+description=收集與分析網站流量、事件與訪客行為。
 image=ghcr.io/rybbit-io/rybbit-client:latest
 doc_url=https://www.rybbit.io/docs/self-hosting-advanced
 menu_order=147

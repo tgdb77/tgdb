@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Infisical
+description=管理應用程式密鑰、環境變數與團隊存取權限。
 image=docker.io/infisical/infisical:latest
 doc_url=https://github.com/Infisical/infisical
 menu_order=130

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=HedgeDoc
+description=多人協作撰寫與分享 Markdown 筆記。
 image=quay.io/hedgedoc/hedgedoc:1.10.3
 doc_url=https://docs.hedgedoc.org/setup/docker/
 menu_order=165

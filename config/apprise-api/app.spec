@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Apprise API
+description=透過 API 統一發送多種通知服務訊息。
 image=docker.io/caronc/apprise:latest
 doc_url=https://github.com/caronc/apprise-api
 menu_order=134

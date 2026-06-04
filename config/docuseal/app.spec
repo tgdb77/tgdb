@@ -1,5 +1,6 @@
 spec_version=1
 display_name=DocuSeal
+description=建立、寄送與管理文件電子簽署流程。
 image=docker.io/docuseal/docuseal:latest
 doc_url=https://github.com/docusealco/docuseal
 menu_order=152

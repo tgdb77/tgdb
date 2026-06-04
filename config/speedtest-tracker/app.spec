@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Speedtest Tracker
+description=排程執行網路測速並以圖表追蹤歷史結果。
 image=lscr.io/linuxserver/speedtest-tracker:latest
 doc_url=https://docs.speedtest-tracker.dev
 menu_order=95

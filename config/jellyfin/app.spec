@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Jellyfin
+description=媒體伺服器，可整理並串流電影、影集、音樂與相簿到瀏覽器或用戶端。
 image=ghcr.io/jellyfin/jellyfin:latest
 doc_url=https://jellyfin.org/
 menu_order=14

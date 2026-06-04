@@ -1,5 +1,6 @@
 spec_version=1
 display_name=ntfy
+description=透過 HTTP、CLI 或應用程式發送推播通知。
 image=docker.io/binwiederhier/ntfy:latest
 doc_url=https://github.com/binwiederhier/ntfy
 menu_order=127

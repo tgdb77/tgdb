@@ -1,5 +1,6 @@
 spec_version=1
 display_name=PeerTube
+description=提供聯邦式影音平台，管理影片上傳、播放與頻道。
 image=docker.io/chocobozzz/peertube:production
 doc_url=https://docs.joinpeertube.org/install/docker
 menu_order=194

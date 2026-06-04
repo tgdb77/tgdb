@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Node-RED
+description=用視覺化流程編排裝置、API 與自動化任務。
 image=docker.io/nodered/node-red:latest
 doc_url=https://github.com/node-red/node-red
 menu_order=124

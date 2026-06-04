@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Homebox
+description=家庭物品清單與資產管理服務。
 image=ghcr.io/sysadminsmedia/homebox:latest
 doc_url=https://homebox.software/en/quick-start/install/
 menu_order=34

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=New-Api
+description=AI API 轉發與管理平台，可統一管理模型通道、金鑰與用量。
 image=docker.io/calciumion/new-api:latest
 doc_url=https://github.com/QuantumNous/new-api
 menu_order=31

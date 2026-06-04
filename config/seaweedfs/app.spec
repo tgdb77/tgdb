@@ -1,5 +1,6 @@
 spec_version=1
 display_name=SeaweedFS
+description=分散式檔案與物件儲存系統，可管理大量檔案並提供 S3 相容存取。
 image=docker.io/chrislusf/seaweedfs:latest
 doc_url=https://github.com/seaweedfs/seaweedfs
 menu_order=25

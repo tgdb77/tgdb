@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Navidrome
+description=音樂伺服器與串流服務，可透過 Web UI 或相容客戶端播放個人音樂庫。
 image=docker.io/deluan/navidrome:latest
 doc_url=https://github.com/deluan/navidrome
 menu_order=9

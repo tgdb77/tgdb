@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Yt-Dlp WebUI
+description=提供 yt-dlp 的網頁下載介面與 API。
 image=docker.io/marcobaobao/yt-dlp-webui:latest
 doc_url=https://hub.docker.com/r/marcobaobao/yt-dlp-webui
 menu_order=82

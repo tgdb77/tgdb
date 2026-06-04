@@ -1,5 +1,6 @@
 spec_version=1
 display_name=PhotoPrism
+description=整理、瀏覽與搜尋照片收藏。
 image=docker.io/photoprism/photoprism:latest
 doc_url=https://docs.photoprism.app/getting-started/docker-compose/
 menu_order=167

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Fider
+description=收集使用者建議、投票與產品回饋討論。
 image=docker.io/getfider/fider:stable
 doc_url=https://docs.fider.io/hosting-instance/
 menu_order=98

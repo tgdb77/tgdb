@@ -51,13 +51,17 @@ _apps_shortcut_delete_reverse_proxy_site() {
 
 _service_menu() {
   local service="$1" display_name="$2" image="$3"
-  local doc_url
+  local description doc_url
+  description="$(_apps_service_description "$service")"
   doc_url="$(_apps_service_doc_url "$service")"
   while true; do
     clear
     echo "=================================="
     echo "❖ $display_name 管理（Quadlet）❖"
     echo "=================================="
+    if [ -n "$description" ]; then
+      echo "簡介：$description"
+    fi
     if [ -n "$doc_url" ]; then
       echo "教學與文件：$doc_url"
     fi

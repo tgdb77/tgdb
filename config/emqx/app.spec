@@ -1,5 +1,6 @@
 spec_version=1
 display_name=EMQX
+description=提供 MQTT 訊息代理與物聯網連線管理。
 image=docker.io/emqx/emqx:latest
 doc_url=https://docs.emqx.com/en/emqx/latest/deploy/install-docker.html
 menu_order=146

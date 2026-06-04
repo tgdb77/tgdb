@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Vane
+description=提供可連接 Ollama 的本地聊天與模型使用介面。
 image=docker.io/itzcrazykns1337/vane:latest
 doc_url=https://github.com/ItzCrazyKns/Vane
 menu_order=136

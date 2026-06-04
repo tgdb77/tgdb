@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Draw.io
+description=在瀏覽器中繪製流程圖、架構圖與各類圖表。
 image=docker.io/jgraph/drawio:latest
 doc_url=https://github.com/jgraph/drawio
 menu_order=58

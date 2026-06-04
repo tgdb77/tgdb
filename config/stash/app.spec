@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Stash
+description=管理、標記與瀏覽本機成人媒體收藏。
 image=docker.io/stashapp/stash:latest
 doc_url=https://docs.stashapp.cc/installation/docker/
 menu_order=69

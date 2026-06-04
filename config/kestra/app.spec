@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Kestra
+description=編排資料工作流與事件驅動的自動化任務。
 image=docker.io/kestra/kestra:latest
 doc_url=https://kestra.io/docs/installation/docker-compose
 menu_order=158

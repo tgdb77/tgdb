@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Mautic
+description=管理行銷活動、聯絡人、表單與追蹤資料。
 image=docker.io/mautic/mautic:latest
 doc_url=https://github.com/mautic/docker-mautic
 menu_order=189

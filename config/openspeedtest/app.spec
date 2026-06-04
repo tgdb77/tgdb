@@ -1,5 +1,6 @@
 spec_version=1
 display_name=OpenSpeedTest
+description=提供瀏覽器可直接執行的網路上傳與下載測速頁面。
 image=docker.io/openspeedtest/latest:latest
 doc_url=https://hub.docker.com/r/openspeedtest/latest
 menu_order=94

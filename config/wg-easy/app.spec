@@ -1,5 +1,6 @@
 spec_version=1
 display_name=wg-easy
+description=建立與管理 WireGuard VPN 用戶端設定。
 image=ghcr.io/wg-easy/wg-easy:15
 doc_url=https://github.com/wg-easy/wg-easy
 menu_order=169

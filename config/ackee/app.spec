@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Ackee
+description=收集網站流量與訪客行為統計。
 image=docker.io/electerious/ackee:latest
 doc_url=https://github.com/electerious/Ackee
 menu_order=162

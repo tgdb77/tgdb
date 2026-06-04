@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Chatwoot
+description=提供客服收件匣、即時聊天與客戶對話管理。
 image=docker.io/chatwoot/chatwoot:latest
 doc_url=https://github.com/chatwoot/chatwoot
 menu_order=121

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=KitchenOwl
+description=管理家庭食譜、購物清單、庫存與餐點規劃。
 image=docker.io/tombursch/kitchenowl:latest
 doc_url=https://docs.kitchenowl.org/latest/self-hosting/
 menu_order=100

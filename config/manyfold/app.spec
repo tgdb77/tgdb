@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Manyfold
+description=整理、搜尋與分享 3D 模型檔案庫。
 image=ghcr.io/manyfold3d/manyfold:latest
 doc_url=https://manyfold.app/get-started/docker
 menu_order=81

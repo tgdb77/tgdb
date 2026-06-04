@@ -1,5 +1,6 @@
 spec_version=1
 display_name=BookStack
+description=以書籍、章節與頁面結構管理知識文件。
 image=lscr.io/linuxserver/bookstack:latest
 doc_url=https://www.bookstackapp.com/docs/admin/installation/
 menu_order=174

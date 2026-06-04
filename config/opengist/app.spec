@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Opengist
+description=程式碼片段分享服務，可建立公開或私有 Gist 並支援 Git over SSH。
 image=ghcr.io/thomiceli/opengist:1
 doc_url=https://opengist.io/docs/installation/docker.html
 menu_order=202

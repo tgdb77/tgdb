@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Home Assistant
+description=整合智慧家庭裝置並建立本地自動化控制。
 image=ghcr.io/home-assistant/home-assistant:stable
 doc_url=https://github.com/home-assistant/core
 menu_order=123

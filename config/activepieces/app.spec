@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Activepieces
+description=以視覺化流程串接服務並自動執行任務。
 image=ghcr.io/activepieces/activepieces:latest
 doc_url=https://www.activepieces.com/docs/install/options/docker-compose
 menu_order=149

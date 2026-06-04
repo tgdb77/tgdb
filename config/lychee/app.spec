@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Lychee
+description=管理相片上傳、相簿整理與圖片分享。
 image=ghcr.io/lycheeorg/lychee:latest
 doc_url=https://github.com/LycheeOrg/Lychee
 menu_order=187

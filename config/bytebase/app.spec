@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Bytebase
+description=管理資料庫變更、審核與版本發布流程。
 image=docker.io/bytebase/bytebase:latest
 doc_url=https://docs.bytebase.com/get-started/self-host/deploy-with-docker
 menu_order=157

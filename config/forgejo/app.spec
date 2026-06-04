@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Forgejo
+description=管理 Git 儲存庫、Issue、合併請求與協作開發。
 image=codeberg.org/forgejo/forgejo:13-rootless
 doc_url=https://forgejo.org/docs/latest/admin/installation-docker/
 menu_order=133

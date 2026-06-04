@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Linkwarden
+description=保存、整理與搜尋網頁書籤和稍後閱讀內容。
 image=ghcr.io/linkwarden/linkwarden:latest
 doc_url=https://github.com/linkwarden/linkwarden
 menu_order=161

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Alertmanager
+description=接收 Prometheus 告警並路由到通知管道。
 image=docker.io/prom/alertmanager:latest
 doc_url=https://github.com/prometheus/alertmanager
 menu_order=117

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Beszel-agent
+description=回報主機資源與狀態資料給 Beszel Hub。
 image=docker.io/henrygd/beszel-agent:alpine
 doc_url=https://github.com/henrygd/beszel
 menu_order=164

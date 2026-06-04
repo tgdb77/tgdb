@@ -1,5 +1,6 @@
 spec_version=1
 display_name=FreshRSS + RSSHub
+description=RSS 訂閱閱讀與來源轉換服務。
 image=docker.io/freshrss/freshrss:latest
 doc_url=https://github.com/FreshRSS/FreshRSS & https://github.com/DIYgod/RSSHub
 menu_order=43

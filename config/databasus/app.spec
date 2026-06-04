@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Databasus
+description=設定資料庫備份、儲存目的地與通知。
 image=docker.io/databasus/databasus:latest
 doc_url=https://databasus.com/installation
 menu_order=172

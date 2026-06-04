@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Grav
+description=使用檔案式內容管理的 PHP 網站與部落格系統。
 image=docker.io/getgrav/grav:latest
 doc_url=https://github.com/getgrav/docker-grav
 menu_order=60

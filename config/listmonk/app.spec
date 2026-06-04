@@ -1,5 +1,6 @@
 spec_version=1
 display_name=listmonk
+description=管理郵件名單、電子報與群發活動。
 image=docker.io/listmonk/listmonk:latest
 doc_url=https://listmonk.app/docs/installation
 menu_order=106

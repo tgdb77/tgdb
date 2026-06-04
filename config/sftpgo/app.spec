@@ -1,5 +1,6 @@
 spec_version=1
 display_name=SFTPGo
+description=提供 SFTP、WebDAV 與檔案傳輸帳號管理。
 image=docker.io/drakkan/sftpgo:latest
 doc_url=https://github.com/drakkan/sftpgo
 menu_order=131

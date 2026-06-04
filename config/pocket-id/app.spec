@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Pocket ID
+description=提供 Passkey 登入與 OIDC 身分驗證服務。
 image=ghcr.io/pocket-id/pocket-id:v2
 doc_url=https://pocket-id.org/docs/setup/installation/
 menu_order=139

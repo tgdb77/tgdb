@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Gatus
+description=監測 HTTP、TCP、DNS 等服務狀態並顯示可用性。
 image=ghcr.io/twin/gatus:stable
 doc_url=https://github.com/TwiN/gatus
 menu_order=140

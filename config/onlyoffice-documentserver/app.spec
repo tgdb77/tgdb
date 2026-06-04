@@ -1,5 +1,6 @@
 spec_version=1
 display_name=ONLYOFFICE
+description=提供線上文件、試算表與簡報協作編輯服務。
 image=docker.io/onlyoffice/documentserver:latest
 doc_url=https://github.com/ONLYOFFICE/Docker-DocumentServer
 menu_order=65

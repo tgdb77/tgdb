@@ -1,5 +1,6 @@
 spec_version=1
 display_name=OpenList
+description=檔案列表與網盤掛載工具，可整合多種儲存來源並提供瀏覽與分享。
 image=docker.io/openlistteam/openlist:latest-aio
 doc_url=https://github.com/openlistteam/openlist
 menu_order=28

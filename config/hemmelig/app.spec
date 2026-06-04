@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Hemmelig
+description=建立可設定到期時間與存取限制的加密文字或檔案分享。
 image=docker.io/hemmeligapp/hemmelig:v7
 doc_url=https://github.com/HemmeligOrg/Hemmelig.app
 menu_order=96

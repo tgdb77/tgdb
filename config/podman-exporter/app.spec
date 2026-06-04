@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Podman Exporter
+description=匯出 Podman 容器與 Pod 的監控指標。
 image=quay.io/navidys/prometheus-podman-exporter:latest
 doc_url=https://github.com/containers/prometheus-podman-exporter
 menu_order=115

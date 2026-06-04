@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Gopeed
+description=透過網頁介面管理檔案下載任務。
 image=docker.io/liwei2633/gopeed:latest
 doc_url=https://gopeed.com/zh-TW/docs/install
 menu_order=168

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Hermes Agent
+description=AI Agent 執行環境，提供 Dashboard 與 Gateway API 來操作工作區、指令與網頁任務。
 image=docker.io/nousresearch/hermes-agent:latest
 doc_url=https://hermes-agent.nousresearch.com/docs/user-guide/docker
 menu_order=999

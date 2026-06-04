@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Argus
+description=監控軟體版本與發行資訊並通知更新。
 image=docker.io/releaseargus/argus:latest
 doc_url=https://github.com/release-argus/Argus
 menu_order=78

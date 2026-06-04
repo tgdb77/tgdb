@@ -336,6 +336,11 @@ _apps_service_doc_url() {
   appspec_get "$service" "doc_url" ""
 }
 
+_apps_service_description() {
+  local service="$1"
+  appspec_get "$service" "description" ""
+}
+
 _apps_service_uses_volume_dir() {
   local service="$1"
   local v

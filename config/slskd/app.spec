@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Slskd
+description=提供 Soulseek 檔案分享與下載的網頁管理介面。
 image=docker.io/slskd/slskd:latest
 doc_url=https://github.com/slskd/slskd
 menu_order=70

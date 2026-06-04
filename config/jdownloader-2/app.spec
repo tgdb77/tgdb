@@ -1,5 +1,6 @@
 spec_version=1
 display_name=JDownloader 2
+description=下載管理工具，可集中處理連結解析、佇列下載與帳號整合。
 image=docker.io/jlesage/jdownloader-2:latest
 doc_url=https://github.com/jlesage/docker-jdownloader-2
 menu_order=23

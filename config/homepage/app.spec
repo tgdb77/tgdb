@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Homepage
+description=可自訂的服務儀表板，用來集中顯示常用連結、服務狀態與整合小工具。
 image=ghcr.io/gethomepage/homepage:latest
 doc_url=https://gethomepage.dev/
 menu_order=12

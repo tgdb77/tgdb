@@ -22,6 +22,7 @@
 # ------------------------------------------------------------
 spec_version=1
 display_name=My App
+description=一句話說明這個 App 的主要用途。
 image=docker.io/example/myapp:latest
 doc_url=https://example.com/docs
 menu_order=100

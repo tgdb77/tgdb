@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Invoice Ninja
+description=管理客戶、報價、發票、付款與基本帳務流程。
 image=docker.io/invoiceninja/invoiceninja-debian:latest
 doc_url=https://github.com/invoiceninja/dockerfiles
 menu_order=90

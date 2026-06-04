@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Outline
+description=團隊知識庫與文件平台，可整理文件、協作編輯並管理存取權限。
 image=docker.io/outlinewiki/outline:latest
 doc_url=https://docs.getoutline.com/s/hosting
 menu_order=18

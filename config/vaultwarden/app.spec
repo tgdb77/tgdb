@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Vaultwarden
+description=輕量的非官方 Bitwarden 相容伺服器，可用 Bitwarden 客戶端同步密碼庫。
 image=docker.io/vaultwarden/server:latest
 doc_url=https://github.com/dani-garcia/vaultwarden/wiki
 menu_order=10

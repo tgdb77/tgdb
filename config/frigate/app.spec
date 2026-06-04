@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Frigate
+description=處理攝影機影像、物件偵測與錄影事件。
 image=ghcr.io/blakeblackshear/frigate:stable
 doc_url=https://github.com/blakeblackshear/frigate
 menu_order=125

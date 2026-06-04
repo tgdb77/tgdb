@@ -1,5 +1,6 @@
 spec_version=1
 display_name=PostgreSQL
+description=開源物件關聯式資料庫，適合需要 SQL、交易一致性與資料完整性的服務。
 image=docker.io/library/postgres:16-alpine
 doc_url=https://github.com/postgres/postgres
 menu_order=2

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Paperclip
+description=管理工作中的 AI Agent 與相關協作流程。
 image=ghcr.io/paperclipai/paperclip:latest
 doc_url=https://github.com/paperclipai/paperclip
 menu_order=197

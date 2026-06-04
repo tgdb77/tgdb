@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Docmost
+description=建立團隊文件、知識庫與協作筆記。
 image=docker.io/docmost/docmost:latest
 doc_url=https://docmost.com/docs/installation
 menu_order=105

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Penpot
+description=建立介面設計、原型與團隊協作設計檔。
 image=docker.io/penpotapp/frontend:latest
 doc_url=https://github.com/penpot/penpot
 menu_order=126

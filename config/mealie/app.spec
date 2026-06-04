@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Mealie
+description=管理食譜、餐點規劃與購物清單。
 image=ghcr.io/mealie-recipes/mealie:latest
 doc_url=https://docs.mealie.io/documentation/getting-started/installation/sqlite/
 menu_order=101

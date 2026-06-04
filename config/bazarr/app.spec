@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Bazarr
+description=為 Sonarr 與 Radarr 管理字幕搜尋與下載。
 image=lscr.io/linuxserver/bazarr:latest
 doc_url=https://docs.linuxserver.io/images/docker-bazarr/
 menu_order=180

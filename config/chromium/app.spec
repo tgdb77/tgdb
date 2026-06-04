@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Chromium
+description=瀏覽器容器，可透過網頁介面使用隔離的 Chromium 桌面瀏覽環境。
 image=docker.io/jlesage/chromium:latest
 doc_url=https://github.com/jlesage/docker-chromium
 menu_order=24

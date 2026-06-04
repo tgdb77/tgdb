@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Sonarr
+description=追蹤影集並自動管理下載與整理流程。
 image=lscr.io/linuxserver/sonarr:latest
 doc_url=https://docs.linuxserver.io/images/docker-sonarr/
 menu_order=177

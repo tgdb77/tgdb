@@ -1,5 +1,6 @@
 spec_version=1
 display_name=LiteLLM
+description=提供統一的 LLM Proxy，集中管理模型與 API 金鑰。
 image=docker.litellm.ai/berriai/litellm:main-stable
 doc_url=https://docs.litellm.ai/docs/proxy/deploy
 menu_order=135

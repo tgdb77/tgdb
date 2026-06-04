@@ -1,5 +1,6 @@
 spec_version=1
 display_name=MeiliSearch
+description=提供快速全文搜尋與索引 API。
 image=docker.io/getmeili/meilisearch:v1.42.1
 doc_url=https://www.meilisearch.com/docs/resources/self_hosting/getting_started/docker
 menu_order=154

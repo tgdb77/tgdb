@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Homarr
+description=建立服務捷徑與狀態整合的首頁儀表板。
 image=ghcr.io/homarr-labs/homarr:latest
 doc_url=https://homarr.dev/docs/next/getting-started/installation/portainer/
 menu_order=170

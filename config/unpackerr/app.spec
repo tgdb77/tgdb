@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Unpackerr
+description=監看下載完成事件並自動解壓縮壓縮檔。
 image=ghcr.io/unpackerr/unpackerr:latest
 doc_url=https://unpackerr.zip/docs/install/docker/
 menu_order=183

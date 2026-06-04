@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Claper
+description=製作互動簡報並收集投票、問答與即時回饋。
 image=ghcr.io/claperco/claper:latest
 doc_url=https://github.com/ClaperCo/Claper
 menu_order=97

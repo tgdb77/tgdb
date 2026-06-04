@@ -1,5 +1,6 @@
 spec_version=1
 display_name=FileBrowser Quantum
+description=透過網頁介面瀏覽、上傳與管理指定檔案目錄。
 image=docker.io/gtstef/filebrowser:stable
 doc_url=https://github.com/gtsteffaniak/filebrowser
 menu_order=143

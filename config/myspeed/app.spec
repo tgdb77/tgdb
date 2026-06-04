@@ -1,5 +1,6 @@
 spec_version=1
 display_name=MySpeed
+description=定期測量網路速度並保存歷史測速紀錄。
 image=docker.io/germannewsmaker/myspeed:latest
 doc_url=https://docs.myspeed.dev/setup/linux
 menu_order=93

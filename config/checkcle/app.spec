@@ -1,5 +1,6 @@
 spec_version=1
 display_name=CheckCle
+description=監控網站與服務狀態並顯示可用性檢查結果。
 image=docker.io/operacle/checkcle:latest
 doc_url=https://docs.checkcle.io/getting-started/quickstart
 menu_order=92

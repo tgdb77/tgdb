@@ -1,5 +1,6 @@
 spec_version=1
 display_name=LLDAP
+description=提供輕量 LDAP 目錄服務，用於集中管理帳號與群組。
 image=ghcr.io/lldap/lldap:latest-alpine-rootless
 doc_url=https://github.com/lldap/lldap
 menu_order=186

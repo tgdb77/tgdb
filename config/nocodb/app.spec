@@ -1,5 +1,6 @@
 spec_version=1
 display_name=NocoDB
+description=用試算表介面管理資料庫資料。
 image=docker.io/nocodb/nocodb:latest
 doc_url=https://docs.nocodb.com/
 menu_order=108

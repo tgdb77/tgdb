@@ -1,5 +1,6 @@
 spec_version=1
 display_name=IT-Tools
+description=常用開發與維運小工具集合。
 image=docker.io/corentinth/it-tools:latest
 doc_url=https://github.com/CorentinTh/it-tools
 menu_order=38

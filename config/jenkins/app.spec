@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Jenkins
+description=建立持續整合與部署自動化任務。
 image=docker.io/jenkins/jenkins:lts-jdk21
 doc_url=https://github.com/jenkinsci/docker
 menu_order=155

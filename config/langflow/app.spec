@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Langflow
+description=以視覺化流程建立、測試與部署 LLM 應用。
 image=docker.io/langflowai/langflow:latest
 doc_url=https://github.com/langflow-ai/langflow
 menu_order=66

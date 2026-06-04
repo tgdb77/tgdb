@@ -1,5 +1,6 @@
 spec_version=1
 display_name=CLIProxyAPI
+description=將命令列工具封裝為 API 的代理服務。
 image=docker.io/eceasy/cli-proxy-api:latest
 doc_url=https://github.com/router-for-me/CLIProxyAPI
 menu_order=42

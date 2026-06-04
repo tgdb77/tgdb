@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Ghost
+description=部落格與內容發布平台。
 image=docker.io/library/ghost:5-alpine
 doc_url=https://github.com/TryGhost/Ghost
 menu_order=40

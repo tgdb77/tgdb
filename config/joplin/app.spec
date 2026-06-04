@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Joplin Server
+description=同步 Joplin 筆記、使用者與分享資料。
 image=docker.io/joplin/server:latest
 doc_url=https://github.com/laurent22/joplin
 menu_order=145

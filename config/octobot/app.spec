@@ -1,5 +1,6 @@
 spec_version=1
 display_name=OctoBot
+description=建立、測試與執行加密貨幣交易策略機器人。
 image=docker.io/drakkarsoftware/octobot:stable
 doc_url=https://www.octobot.cloud/en/guides/octobot-installation/install-octobot-with-docker-video
 menu_order=89

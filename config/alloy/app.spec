@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Grafana Alloy
+description=收集指標與日誌並轉送到 Prometheus 和 Loki。
 image=docker.io/grafana/alloy:latest
 doc_url=https://github.com/grafana/alloy
 menu_order=114

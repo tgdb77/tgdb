@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Mumble
+description=提供低延遲語音聊天伺服器，適合團隊通話與遊戲語音。
 image=docker.io/mumblevoip/mumble-server:latest
 doc_url=https://github.com/mumble-voip/mumble-docker
 menu_order=56

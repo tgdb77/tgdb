@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Bichon
+description=封存 IMAP 郵件並提供全文搜尋與 WebUI 查閱。
 image=docker.io/rustmailer/bichon:latest
 doc_url=https://github.com/rustmailer/bichon
 menu_order=199

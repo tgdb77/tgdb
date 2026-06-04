@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Scrutiny
+description=監控硬碟 SMART 狀態並追蹤磁碟健康趨勢。
 image=ghcr.io/analogj/scrutiny:v0.8.6-omnibus
 doc_url=https://github.com/AnalogJ/scrutiny
 menu_order=184

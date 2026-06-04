@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Komga
+description=管理漫畫、書籍與閱讀進度的媒體伺服器。
 image=docker.io/gotson/komga:latest
 doc_url=https://komga.org/docs/installation/docker
 menu_order=160

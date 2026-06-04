@@ -1,5 +1,6 @@
 spec_version=1
 display_name=LibreDesk
+description=處理客服對話、工單與支援信箱。
 image=docker.io/libredesk/libredesk:latest
 doc_url=https://docs.libredesk.io/getting-started/installation
 menu_order=104

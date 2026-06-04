@@ -1,5 +1,6 @@
 spec_version=1
 display_name=LibreTranslate
+description=提供可透過網頁或 API 使用的機器翻譯服務。
 image=docker.io/libretranslate/libretranslate:latest
 doc_url=https://docs.libretranslate.com/guides/installation/
 menu_order=86

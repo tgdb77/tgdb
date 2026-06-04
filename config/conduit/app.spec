@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Conduit
+description=提供 Matrix 通訊協定伺服器，用於即時聊天與聯邦通訊。
 image=registry.gitlab.com/famedly/conduit/matrix-conduit:latest
 doc_url=https://docs.conduit.rs/deploying/docker.html
 menu_order=54

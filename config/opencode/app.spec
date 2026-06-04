@@ -1,5 +1,6 @@
 spec_version=1
 display_name=OpenCode
+description=透過瀏覽器操作具備檔案讀寫與指令執行能力的程式碼代理。
 image=ghcr.io/anomalyco/opencode
 doc_url=https://github.com/anomalyco/opencode
 menu_order=120

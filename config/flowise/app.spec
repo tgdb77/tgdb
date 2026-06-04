@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Flowise
+description=以視覺化流程建立 LLM 應用與聊天機器人。
 image=docker.io/flowiseai/flowise:latest
 doc_url=https://docs.flowiseai.com/
 menu_order=109

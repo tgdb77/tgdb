@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Domain Locker
+description=追蹤網域到期日、DNS 記錄與安全設定狀態。
 image=docker.io/lissy93/domain-locker:latest
 doc_url=https://domain-locker.com/about/self-hosting/deploying-with-docker-compose
 menu_order=85

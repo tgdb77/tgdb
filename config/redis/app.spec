@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Redis
+description=記憶體資料庫，可作為快取、訊息代理、佇列與即時資料處理元件。
 image=docker.io/redis:7-alpine
 doc_url=https://github.com/redis/redis
 menu_order=3

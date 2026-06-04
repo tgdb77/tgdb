@@ -1,5 +1,6 @@
 spec_version=1
 display_name=MariaDB
+description=開源關聯式資料庫，提供 SQL 介面並常作為 MySQL 相容替代方案。
 image=docker.io/library/mariadb:11
 doc_url=https://github.com/MariaDB/mariadb-docker
 menu_order=6

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Pinchflat
+description=影片下載與整理工具，可訂閱頻道並自動保存 YouTube 內容。
 image=ghcr.io/kieraneglin/pinchflat:dev
 doc_url=https://github.com/kieraneglin/pinchflat
 menu_order=27

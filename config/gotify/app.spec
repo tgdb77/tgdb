@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Gotify
+description=應用程式訊息推送與通知接收服務。
 image=docker.io/gotify/server:latest
 doc_url=https://github.com/gotify/server
 menu_order=49

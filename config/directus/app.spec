@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Directus
+description=為資料庫提供內容管理、API 與權限管理介面。
 image=docker.io/directus/directus:latest
 doc_url=https://docs.directus.io/self-hosted/quickstart
 menu_order=153

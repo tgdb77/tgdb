@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Kutt
+description=短網址產生與連結管理服務。
 image=docker.io/kutt/kutt:latest
 doc_url=https://github.com/thedevs-network/kutt
 menu_order=33

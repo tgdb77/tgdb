@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Stalwart + Snappymail
+description=提供郵件伺服器與 Webmail 介面，用於收發與管理信箱。
 image=docker.io/stalwartlabs/stalwart:latest
 doc_url=https://stalwart.email/docs/install/platform/docker & https://github.com/the-djmaze/snappymail
 menu_order=57

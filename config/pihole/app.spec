@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Pi-hole
+description=在 DNS 層級封鎖廣告、追蹤器與惡意網域。
 image=docker.io/pihole/pihole:latest
 doc_url=https://github.com/pi-hole/docker-pi-hole
 menu_order=73

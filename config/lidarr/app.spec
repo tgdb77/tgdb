@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Lidarr
+description=管理音樂收藏並整合下載來源與整理流程。
 image=lscr.io/linuxserver/lidarr:latest
 doc_url=https://docs.linuxserver.io/images/docker-lidarr/
 menu_order=182

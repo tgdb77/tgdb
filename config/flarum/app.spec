@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Flarum
+description=提供論壇系統，管理討論串、使用者與權限。
 image=docker.io/crazymax/flarum:latest
 doc_url=https://github.com/crazy-max/docker-flarum
 menu_order=196

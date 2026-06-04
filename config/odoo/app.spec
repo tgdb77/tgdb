@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Odoo
+description=管理 CRM、銷售、庫存、會計等企業流程的 ERP 系統。
 image=docker.io/odoo:latest
 doc_url=https://github.com/odoo/docker
 menu_order=63

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Gokapi
+description=檔案分享服務，可建立限時或限次下載連結並管理上傳檔案。
 image=docker.io/f0rc3/gokapi:latest
 doc_url=https://github.com/Forceu/Gokapi
 menu_order=26

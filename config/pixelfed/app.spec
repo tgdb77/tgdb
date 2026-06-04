@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Pixelfed
+description=提供聯邦式相片分享平台，管理圖片貼文與互動。
 image=ghcr.io/jippi/docker-pixelfed:v0.12-apache-8.4-bookworm
 doc_url=https://jippi.github.io/docker-pixelfed/installation/guide/
 menu_order=193

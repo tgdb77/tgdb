@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Mailpit
+description=接收與檢查開發測試用的電子郵件。
 image=docker.io/axllent/mailpit:latest
 doc_url=https://mailpit.axllent.org/docs/
 menu_order=107

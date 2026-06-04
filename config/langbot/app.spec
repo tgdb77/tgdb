@@ -1,5 +1,6 @@
 spec_version=1
 display_name=LangBot
+description=串接多種聊天平台與大型語言模型的機器人框架。
 image=docker.io/rockchin/langbot:latest
 doc_url=https://github.com/langbot-app/LangBot
 menu_order=79

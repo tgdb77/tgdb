@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Vikunja
+description=待辦事項、專案與工作清單管理服務。
 image=docker.io/vikunja/vikunja:latest
 doc_url=https://github.com/go-vikunja/vikunja
 menu_order=48

@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Prowlarr
+description=集中管理索引器並提供給影音自動化服務使用。
 image=lscr.io/linuxserver/prowlarr:latest
 doc_url=https://docs.linuxserver.io/images/docker-prowlarr/
 menu_order=179

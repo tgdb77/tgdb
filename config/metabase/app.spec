@@ -1,5 +1,6 @@
 spec_version=1
 display_name=Metabase
+description=連接資料庫並製作查詢、圖表與儀表板的資料分析工具。
 image=docker.io/metabase/metabase:latest
 doc_url=https://www.metabase.com/docs/latest/installation-and-operation/running-metabase-on-docker
 menu_order=55
