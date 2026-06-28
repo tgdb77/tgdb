@@ -211,6 +211,54 @@ _list_site_domains() {
     done < <(find "$conf_dir" -maxdepth 1 -type f -name "*.conf" -print0 2>/dev/null)
 }
 
+_list_derper_cert_domains() {
+    local env_path="$TGDB_DIR/derper/derper.env"
+    local le_live="$TGDB_DIR/nginx/letsencrypt/live"
+    local cert_dir="$TGDB_DIR/nginx/certs"
+    local seen=""
+    local domain path base
+
+    if [ -f "$env_path" ]; then
+        domain="$(awk -F= '
+          /^[[:space:]]*DERP_DOMAIN=/ {
+            v=$2
+            gsub(/\r/, "", v)
+            print v
+            exit
+          }
+        ' "$env_path" 2>/dev/null || true)"
+        if [ -n "${domain:-}" ]; then
+            printf '%s\n' "$domain"
+            seen="${seen}${domain}
+"
+        fi
+    fi
+
+    if [ -d "$le_live" ]; then
+        for path in "$le_live"/derp.*; do
+            [ -d "$path" ] || continue
+            base="$(basename "$path")"
+            if [ -n "$base" ] && ! printf '%s' "$seen" | grep -Fx -- "$base" >/dev/null 2>&1; then
+                printf '%s\n' "$base"
+                seen="${seen}${base}
+"
+            fi
+        done
+    fi
+
+    if [ -d "$cert_dir" ]; then
+        for path in "$cert_dir"/derp.*.crt; do
+            [ -f "$path" ] || continue
+            base="$(basename "$path" .crt)"
+            if [ -f "$cert_dir/${base}.key" ] && ! printf '%s' "$seen" | grep -Fx -- "$base" >/dev/null 2>&1; then
+                printf '%s\n' "$base"
+                seen="${seen}${base}
+"
+            fi
+        done
+    fi
+}
+
 _nginx_extract_ssl_value_from_conf() {
     local conf="$1"
     local key="$2"
@@ -261,20 +309,35 @@ _nginx_print_sites_cert_summary() {
         [ -n "$d" ] && domains+=("$d")
     done < <(_list_site_domains)
 
+    local i max
     if [ "${#domains[@]}" -eq 0 ]; then
         echo "站點/憑證：尚無站點"
-        return 0
+    else
+        echo "站點/憑證（域名 / 剩餘天數）："
+        max="${#domains[@]}"
+        if [ "$limit" -gt 0 ] 2>/dev/null && [ "$max" -gt "$limit" ] 2>/dev/null; then
+            max="$limit"
+        fi
+        for ((i=0; i<max; i++)); do
+            _cert_status_line "${domains[$i]}"
+        done
     fi
 
-    echo "站點/憑證（域名 / 剩餘天數）："
-    local i max
-    max="${#domains[@]}"
-    if [ "$limit" -gt 0 ] 2>/dev/null && [ "$max" -gt "$limit" ] 2>/dev/null; then
-        max="$limit"
+    local derp_domains=()
+    while IFS= read -r d; do
+        [ -n "$d" ] && derp_domains+=("$d")
+    done < <(_list_derper_cert_domains)
+
+    if [ "${#derp_domains[@]}" -gt 0 ]; then
+        echo "DERP 憑證（域名 / 剩餘天數）："
+        max="${#derp_domains[@]}"
+        if [ "$limit" -gt 0 ] 2>/dev/null && [ "$max" -gt "$limit" ] 2>/dev/null; then
+            max="$limit"
+        fi
+        for ((i=0; i<max; i++)); do
+            _cert_status_line "${derp_domains[$i]}"
+        done
     fi
-    for ((i=0; i<max; i++)); do
-        _cert_status_line "${domains[$i]}"
-    done
     return 0
 }
 

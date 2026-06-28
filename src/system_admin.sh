@@ -33,6 +33,7 @@ _system_admin_source_or_die "$SYSTEM_DIR/ssh.sh" || return 1
 _system_admin_source_or_die "$SYSTEM_DIR/dns.sh" || return 1
 _system_admin_source_or_die "$SYSTEM_DIR/cron.sh" || return 1
 _system_admin_source_or_die "$SYSTEM_DIR/kernel.sh" || return 1
+_system_admin_source_or_die "$SYSTEM_DIR/reboot.sh" || return 1
 
 _system_admin_source_or_die "$SYSTEM_DIR/hostname.sh" || return 1
 _system_admin_source_or_die "$SYSTEM_DIR/timezone.sh" || return 1

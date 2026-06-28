@@ -608,7 +608,7 @@ podman_auto_update_menu() {
         echo "=================================="
         echo "❖ 容器自動更新（podman auto-update）（${label}）❖"
         echo "=================================="
-        local timer_enabled="unknown" timer_active="unknown"
+        local timer_enabled="unknown" timer_active="unknown" current_days="unknown" current_time="unknown"
         if command -v systemctl >/dev/null 2>&1; then
             timer_enabled="$(_podman_systemctl "$scope" is-enabled -- podman-auto-update.timer 2>/dev/null || true)"
             timer_active="$(_podman_systemctl "$scope" is-active -- podman-auto-update.timer 2>/dev/null || true)"
@@ -618,7 +618,18 @@ podman_auto_update_menu() {
             timer_enabled="not_supported"
             timer_active="not_supported"
         fi
+        current_days="$(_podman_auto_update_timer_current_days "$scope" 2>/dev/null || true)"
+        [ -z "$current_days" ] && current_days="unknown"
+        current_time="$(_podman_auto_update_timer_current_time "$scope" 2>/dev/null || true)"
+        [ -z "$current_time" ] && current_time="unknown"
         echo "podman-auto-update.timer：啟用=$timer_enabled / 狀態=$timer_active"
+        if [[ "$current_days" =~ ^[0-9]+$ ]] && [[ "$current_time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]]; then
+            echo "目前更新排程：每 ${current_days} 天 ${current_time}"
+        elif [[ "$current_days" =~ ^[0-9]+$ ]]; then
+            echo "目前更新排程：每 ${current_days} 天"
+        else
+            echo "目前更新排程：未設定"
+        fi
         echo "----------------------------------"
         tgdb_warn "警語（務必閱讀）："
         echo "- 需容器本身已設定 AutoUpdate 才會被更新（例如 Quadlet .container 內 [Container] 加上 AutoUpdate=registry）。"
@@ -627,7 +638,7 @@ podman_auto_update_menu() {
         echo "- 建議：先備份、避免使用 latest、優先固定版本 tag，並在測試環境驗證。"
         echo "----------------------------------"
         echo "1. 立即執行一次 podman auto-update"
-        echo "2. 啟用 podman-auto-update.timer（每七天更新一次）"
+        echo "2. 啟用 podman-auto-update.timer（自訂更新頻率與時間）"
         echo "3. 停用並移除 podman-auto-update.timer / service"
         echo "----------------------------------"
         echo "0. 返回"
@@ -654,7 +665,32 @@ podman_auto_update_menu() {
                 ui_pause
                 ;;
             2)
-                _podman_auto_update_timer_enable "$scope" || true
+                local update_days update_time default_days default_time
+                default_days="$current_days"
+                [[ "$default_days" =~ ^[0-9]+$ ]] || default_days="7"
+                default_time="$current_time"
+                [[ "$default_time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || default_time="03:00"
+                if ui_prompt_index update_days "請輸入每幾天更新一次 [1-3650]（預設：${default_days}，輸入 0 取消）: " 1 3650 "$default_days" 0; then
+                    while true; do
+                        read -r -e -p "請輸入執行時間（HH:MM，24 小時制，預設：${default_time}，輸入 0 取消）: " update_time
+                        case "$update_time" in
+                            0)
+                                echo "已取消"
+                                break
+                                ;;
+                            "")
+                                update_time="$default_time"
+                                ;;
+                        esac
+                        if [[ "$update_time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]]; then
+                            _podman_auto_update_timer_enable "$scope" "$update_days" "$update_time" || true
+                            break
+                        fi
+                        tgdb_err "時間格式錯誤，請使用 HH:MM（例如 03:00、23:30）。"
+                    done
+                else
+                    echo "已取消"
+                fi
                 echo "提示：可用 ${journalctl_cmd} -u podman-auto-update.service 查看更新紀錄。"
                 ui_pause
                 ;;

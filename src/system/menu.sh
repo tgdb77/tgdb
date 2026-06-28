@@ -29,9 +29,11 @@ system_admin_menu() {
         echo "11. Fail2Ban 防禦管理"
         echo "12. SSH 服務與登入安全"
         echo "----------------------------------"
+        echo "r. 重新啟動系統"
+        echo "----------------------------------"
         echo "0. 返回主選單"
         echo "=================================="
-        read -r -e -p "請輸入選擇 [0-12]: " admin_choice
+        read -r -e -p "請輸入選擇 [0-12/r]: " admin_choice
         
         case $admin_choice in
             1)
@@ -77,6 +79,9 @@ system_admin_menu() {
                 ;;
             12)
                 manage_ssh
+                ;;
+            r)
+                reboot_system_now
                 ;;
             0)
                 return
