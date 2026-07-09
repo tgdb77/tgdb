@@ -615,6 +615,7 @@ tgdb_observe_print_unit_detail() {
   local kind="${TGDB_OBSERVE_KIND[$idx]}"
   local service_key="${TGDB_OBSERVE_SERVICE_KEY[$idx]}"
   local source_path="${TGDB_OBSERVE_SOURCE_PATH[$idx]}"
+  local status_output=""
 
   clear
   print_header "服務狀態詳情"
@@ -636,7 +637,10 @@ tgdb_observe_print_unit_detail() {
   echo
   echo "systemctl status 摘要："
   echo "----------------------------------"
-  if ! tgdb_observe_systemctl_read "$scope" status --no-pager --lines=20 -- "$unit"; then
+  status_output="$(tgdb_observe_systemctl_read "$scope" status --no-pager --lines=20 -- "$unit" 2>&1 || true)"
+  if [ -n "$status_output" ]; then
+    printf '%s\n' "$status_output"
+  else
     tgdb_warn "無法讀取 $unit 的 status。"
   fi
 

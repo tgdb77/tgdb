@@ -608,7 +608,7 @@ podman_auto_update_menu() {
         echo "=================================="
         echo "❖ 容器自動更新（podman auto-update）（${label}）❖"
         echo "=================================="
-        local timer_enabled="unknown" timer_active="unknown" current_days="unknown" current_time="unknown"
+        local timer_enabled="unknown" timer_active="unknown" current_days="unknown" current_time="unknown" timer_next_line=""
         if command -v systemctl >/dev/null 2>&1; then
             timer_enabled="$(_podman_systemctl "$scope" is-enabled -- podman-auto-update.timer 2>/dev/null || true)"
             timer_active="$(_podman_systemctl "$scope" is-active -- podman-auto-update.timer 2>/dev/null || true)"
@@ -622,6 +622,7 @@ podman_auto_update_menu() {
         [ -z "$current_days" ] && current_days="unknown"
         current_time="$(_podman_auto_update_timer_current_time "$scope" 2>/dev/null || true)"
         [ -z "$current_time" ] && current_time="unknown"
+        timer_next_line="$(_podman_auto_update_timer_next_line "$scope" 2>/dev/null || true)"
         echo "podman-auto-update.timer：啟用=$timer_enabled / 狀態=$timer_active"
         if [[ "$current_days" =~ ^[0-9]+$ ]] && [[ "$current_time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]]; then
             echo "目前更新排程：每 ${current_days} 天 ${current_time}"
@@ -629,6 +630,11 @@ podman_auto_update_menu() {
             echo "目前更新排程：每 ${current_days} 天"
         else
             echo "目前更新排程：未設定"
+        fi
+        if [ -n "$timer_next_line" ]; then
+            echo "下一次執行：$timer_next_line"
+        else
+            echo "下一次執行：未出現在 systemd timer 清單"
         fi
         echo "----------------------------------"
         tgdb_warn "警語（務必閱讀）："
@@ -646,18 +652,16 @@ podman_auto_update_menu() {
         read -r -e -p "請輸入選擇 [0-3]: " c
         case "$c" in
             1)
-                if ! command -v podman >/dev/null 2>&1; then
-                    tgdb_err "Podman 未安裝，無法執行 podman auto-update"
-                    ui_pause
-                    continue
-                fi
                 if ui_confirm_yn "⚠️ 可能因映像更新/不相容導致服務無法運行，確定要立即執行 podman auto-update 嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+                    local run_cmd_label
+                    run_cmd_label="$(_podman_auto_update_run_command_label "$scope")"
                     echo "⏳ 正在執行：podman auto-update（${label}）"
-                    if _podman_podman_cmd "$scope" auto-update; then
+                    echo "執行指令：${run_cmd_label}"
+                    if _podman_auto_update_run_once "$scope"; then
                         echo "✅ 已完成：podman auto-update（${label}）"
                         echo "提示：若服務異常，請用 ${systemctl_cmd} status <單元> 與 ${journalctl_cmd} -u <單元> 檢查。"
                     else
-                        tgdb_warn "podman auto-update 執行失敗，請查看輸出訊息與日誌後再重試。"
+                        tgdb_warn "podman auto-update 執行失敗（${label}），請查看輸出訊息與日誌後再重試。"
                     fi
                 else
                     echo "已取消"

@@ -160,6 +160,44 @@ _podman_auto_update_timer_current_time() {
     _podman_auto_update_parse_oncalendar_time "$oncalendar"
 }
 
+_podman_auto_update_timer_next_line() {
+    local scope="${1:-user}"
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 1
+    fi
+
+    _podman_systemctl "$scope" list-timers --all --no-pager --no-legend -- podman-auto-update.timer 2>/dev/null \
+        | awk 'NF { print; exit }'
+}
+
+_podman_auto_update_run_command_label() {
+    local scope="${1:-user}"
+
+    if [ "$(_podman_scope_normalize "$scope")" = "system" ] && ! _podman_is_root; then
+        printf '%s\n' "sudo podman auto-update"
+        return 0
+    fi
+
+    printf '%s\n' "podman auto-update"
+}
+
+_podman_auto_update_run_once() {
+    local scope="${1:-user}"
+
+    scope="$(_podman_scope_normalize "$scope")"
+    if ! command -v podman >/dev/null 2>&1; then
+        tgdb_err "Podman 未安裝，無法執行 podman auto-update"
+        return 1
+    fi
+    if [ "$scope" = "system" ] && ! _podman_is_root && ! command -v sudo >/dev/null 2>&1; then
+        tgdb_err "找不到 sudo，無法執行 rootful 的 podman auto-update"
+        return 1
+    fi
+
+    _podman_podman_cmd "$scope" auto-update
+}
+
 _podman_auto_update_ensure_units() {
     local scope="$1" days="${2:-7}" time_str="${3:-03:00}"
     local dir podman_bin service_path timer_path service_content timer_content schedule_content
@@ -179,6 +217,13 @@ _podman_auto_update_ensure_units() {
     _podman_auto_update_write_unit_file "$scope" "$service_path" "$service_content" || return 1
     _podman_auto_update_write_unit_file "$scope" "$timer_path" "$timer_content" || return 1
     _podman_systemctl "$scope" daemon-reload >/dev/null 2>&1 || true
+}
+
+_podman_auto_update_enable_and_restart_timer() {
+    local scope="$1"
+
+    _podman_systemctl "$scope" enable --now -- podman-auto-update.timer || return 1
+    _podman_systemctl "$scope" restart -- podman-auto-update.timer || return 1
 }
 
 _podman_auto_update_remove_units() {
@@ -213,7 +258,7 @@ _podman_auto_update_timer_enable() {
 
     if [ "$scope" = "user" ]; then
         _enable_user_systemd_and_linger || true
-        if _podman_systemctl user enable --now -- podman-auto-update.timer; then
+        if _podman_auto_update_enable_and_restart_timer user; then
             echo "✅ 已啟用：podman-auto-update.timer（rootless）"
             echo "更新排程：每 ${days} 天 ${time_str}"
             return 0
@@ -222,7 +267,7 @@ _podman_auto_update_timer_enable() {
         return 1
     fi
 
-    if _podman_systemctl system enable --now -- podman-auto-update.timer; then
+    if _podman_auto_update_enable_and_restart_timer system; then
         echo "✅ 已啟用：podman-auto-update.timer（rootful）"
         echo "更新排程：每 ${days} 天 ${time_str}"
         return 0
