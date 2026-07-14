@@ -44,12 +44,13 @@ gameserver_p_menu() {
     echo "4. 重啟伺服器（單元）"
     echo "5. 查看伺服器日誌"
     echo "6. LinuxGSM 維運命令"
-    echo "7. 移除伺服器單元"
-    echo "8. 編輯伺服器單元"
+    echo "7. 更新容器映像並重啟"
+    echo "8. 移除伺服器單元"
+    echo "9. 編輯伺服器單元"
     echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-8]: " choice
+    read -r -e -p "請輸入選擇 [0-9]: " choice
 
     case "$choice" in
       1) gameserver_p_deploy || true ;;
@@ -58,8 +59,9 @@ gameserver_p_menu() {
       4) gameserver_p_restart || true ;;
       5) gameserver_p_logs || true ;;
       6) gameserver_p_lgsm_menu || true ;;
-      7) gameserver_p_remove || true ;;
-      8) gameserver_p_edit_unit || true ;;
+      7) gameserver_p_update_image || true ;;
+      8) gameserver_p_remove || true ;;
+      9) gameserver_p_edit_unit || true ;;
       0) return 0 ;;
       *) echo "無效選項，請重新輸入。"; sleep 1 ;;
     esac

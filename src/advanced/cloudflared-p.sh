@@ -665,6 +665,10 @@ cloudflared_p_update() {
 
   if _cloudflared_restart_unit "$unit_name"; then
     echo "✅ 已嘗試拉取最新映像並重啟"
+    echo "🧹 更新成功，正在清理無標籤的舊映像..."
+    if ! podman image prune -f; then
+      tgdb_warn "舊映像清理失敗，請稍後從 Podman 管理選單重試。"
+    fi
   else
     tgdb_warn "已完成映像拉取，但重啟失敗，請手動檢查單元狀態與日誌。"
   fi

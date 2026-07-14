@@ -165,6 +165,74 @@ gameserver_p_restart() {
   return 0
 }
 
+_gameserver_restart_unit_for_image_update() {
+  local unit_base="$1"
+  local scope name
+  local -a units=()
+
+  while IFS=$'\t' read -r scope name _; do
+    [ -n "${scope:-}" ] || continue
+    [ -n "${name:-}" ] || continue
+
+    _podman_systemctl "$scope" daemon-reload >/dev/null 2>&1 || true
+    mapfile -t units < <(_podman_action_unit_candidates "$name" | awk 'NF && !seen[$0]++')
+    [ "${#units[@]}" -gt 0 ] || continue
+
+    if _podman_systemctl_try_candidates "$scope" restart -- "${units[@]}"; then
+      return 0
+    fi
+  done < <(_resolve_unit_records "${unit_base}.container")
+
+  return 1
+}
+
+gameserver_p_update_image() {
+  _gameserver_require_tty || return $?
+  _gameserver_require_podman || { ui_pause "按任意鍵返回..."; return 1; }
+  _gameserver_ensure_podman_helpers || { ui_pause "按任意鍵返回..."; return 1; }
+
+  local unit_base=""
+  _gameserver_select_unit_base unit_base "更新容器映像並重啟" || return 0
+
+  local image=""
+  image="$(_gameserver_image_of_unit "$unit_base" 2>/dev/null || true)"
+  if [ -z "$image" ]; then
+    tgdb_fail "找不到實例映像紀錄，無法更新：$unit_base" 1 || true
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  echo "將拉取並套用最新容器映像：$image"
+  echo "提示：這不會更新遊戲伺服器資料；請使用「LinuxGSM 維運命令」中的 update。"
+  if ! ui_confirm_yn "映像更新可能造成不相容，確定要更新並重啟嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+    echo "已取消。"
+    return 0
+  fi
+
+  echo "⏳ 正在拉取映像：$image"
+  if ! podman pull "$image"; then
+    tgdb_warn "拉取映像失敗，將不重啟目前的遊戲伺服器。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  echo "⏳ 正在重啟伺服器：$unit_base"
+  if ! _gameserver_restart_unit_for_image_update "$unit_base"; then
+    tgdb_warn "映像已拉取，但重啟失敗；將保留舊映像以便排查。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  echo "🧹 更新成功，正在清理無標籤的舊映像..."
+  if ! podman image prune -f; then
+    tgdb_warn "舊映像清理失敗，請稍後從 Podman 管理選單重試。"
+  fi
+
+  echo "✅ 已更新容器映像並重啟：$unit_base"
+  ui_pause "按任意鍵返回..."
+  return 0
+}
+
 gameserver_p_logs() {
   _gameserver_require_tty || return $?
   _gameserver_ensure_podman_helpers || { ui_pause "按任意鍵返回..."; return 1; }

@@ -86,8 +86,20 @@ nginx_p_deploy() {
 nginx_p_update() {
     echo "=== 更新 Nginx（podman pull + systemd --user restart） ==="
     podman pull docker.io/kjlion/nginx:alpine || true
-    _systemctl_user_try restart --no-block -- nginx.container nginx.service container-nginx.service || \
-    _systemctl_user_try restart -- nginx.container nginx.service container-nginx.service || true
+    local restart_ok=0
+    if _systemctl_user_try restart --no-block -- nginx.container nginx.service container-nginx.service; then
+        restart_ok=1
+    elif _systemctl_user_try restart -- nginx.container nginx.service container-nginx.service; then
+        restart_ok=1
+    fi
+    if [ "$restart_ok" -eq 1 ]; then
+        echo "🧹 更新成功，正在清理無標籤的舊映像..."
+        if ! podman image prune -f; then
+            tgdb_warn "舊映像清理失敗，請稍後從 Podman 管理選單重試。"
+        fi
+    else
+        tgdb_warn "已完成映像拉取，但重啟失敗，將不清理舊映像。"
+    fi
     podman exec "$NGINX_CONTAINER_NAME" nginx -t || true
     echo "✅ 更新流程完成，正在啟動nginx，可用「查看單元日誌」追蹤進度"
     ui_pause "按任意鍵返回..."
