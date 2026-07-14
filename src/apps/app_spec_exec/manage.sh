@@ -230,9 +230,16 @@ appspec_update_and_restart_instance() {
   fi
 
   if [ ${#runtime_units[@]} -gt 0 ] && declare -F _app_restart_units_by_filenames >/dev/null 2>&1; then
-    _app_restart_units_by_filenames "${runtime_units[@]}"
+    _app_restart_units_by_filenames "${runtime_units[@]}" || return 1
   else
-    tgdb_systemctl_try "$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")" restart -- "${name}.container" "${name}.service" "container-${name}.service" || true
+    tgdb_systemctl_try "$(_apps_current_scope 2>/dev/null || printf '%s\n' "user")" restart -- "${name}.container" "${name}.service" "container-${name}.service" || return 1
+  fi
+
+  if command -v podman >/dev/null 2>&1; then
+    echo "🧹 更新成功，正在清理無標籤的舊映像..."
+    if ! tgdb_podman image prune -f; then
+      tgdb_warn "舊映像清理失敗，請稍後從 Podman 管理選單重試。"
+    fi
   fi
 }
 

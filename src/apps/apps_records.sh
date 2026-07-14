@@ -221,13 +221,13 @@ _app_systemd_restart_by_unit_filename() {
 
   case "$ext" in
     container)
-      tgdb_systemctl_try "$scope" restart -- "$unit_filename" "$base.service" "container-$base.service" || true
+      tgdb_systemctl_try "$scope" restart -- "$unit_filename" "$base.service" "container-$base.service"
       ;;
     pod)
-      tgdb_systemctl_try "$scope" restart -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service" || true
+      tgdb_systemctl_try "$scope" restart -- "$unit_filename" "$base-pod.service" "pod-$base.service" "podman-pod-$base.service"
       ;;
     *)
-      tgdb_systemctl_try "$scope" restart -- "$unit_filename" || true
+      tgdb_systemctl_try "$scope" restart -- "$unit_filename"
       ;;
   esac
 }
@@ -261,7 +261,7 @@ _app_restart_units_by_filenames() {
 
   local unit
   for unit in "$@"; do
-    _app_systemd_restart_by_unit_filename "$unit"
+    _app_systemd_restart_by_unit_filename "$unit" || return 1
   done
 }
 

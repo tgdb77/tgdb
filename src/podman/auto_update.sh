@@ -182,6 +182,13 @@ _podman_auto_update_run_command_label() {
     printf '%s\n' "podman auto-update"
 }
 
+_podman_auto_update_prune_dangling_images() {
+    local scope="${1:-user}"
+
+    echo "🧹 更新成功，正在清理無標籤的舊映像..."
+    _podman_podman_cmd "$scope" image prune -f
+}
+
 _podman_auto_update_run_once() {
     local scope="${1:-user}"
 
@@ -195,7 +202,13 @@ _podman_auto_update_run_once() {
         return 1
     fi
 
-    _podman_podman_cmd "$scope" auto-update
+    _podman_podman_cmd "$scope" auto-update || return 1
+
+    if ! _podman_auto_update_prune_dangling_images "$scope"; then
+        tgdb_warn "舊映像清理失敗，請稍後從 Podman 管理選單重試。"
+    fi
+
+    return 0
 }
 
 _podman_auto_update_ensure_units() {
@@ -211,7 +224,7 @@ _podman_auto_update_ensure_units() {
     timer_path="$dir/podman-auto-update.timer"
     schedule_content="$(_podman_auto_update_timer_schedule_content "$days" "$time_str")"
 
-    service_content="[Unit]\nDescription=Podman auto-update\nDocumentation=man:podman-auto-update(1)\n\n[Service]\nType=oneshot\nExecStart=${podman_bin} auto-update\n"
+    service_content="[Unit]\nDescription=Podman auto-update\nDocumentation=man:podman-auto-update(1)\n\n[Service]\nType=oneshot\nExecStart=${podman_bin} auto-update\nExecStartPost=-${podman_bin} image prune -f\n"
     timer_content="[Unit]\nDescription=Podman auto-update timer\nDocumentation=man:podman-auto-update(1)\n\n[Timer]\n${schedule_content}\n[Install]\nWantedBy=timers.target\n"
 
     _podman_auto_update_write_unit_file "$scope" "$service_path" "$service_content" || return 1

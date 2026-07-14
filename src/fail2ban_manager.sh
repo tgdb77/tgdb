@@ -1040,8 +1040,8 @@ require_root || { ui_pause; return 1; }
     ui_pause
 }
 
-# 子選單：安裝/移除
-install_remove_menu() {
+# 子選單：安裝/更新
+install_update_menu() {
     if ! ui_is_interactive; then
         tgdb_fail "Fail2ban 管理需要互動式終端（TTY）。" 2 || true
         return 2
@@ -1050,21 +1050,19 @@ install_remove_menu() {
     while true; do
         clear
         echo "=================================="
-        echo "❖ 安裝/更新/移除 Fail2ban ❖"
+        echo "❖ 安裝/更新 Fail2ban ❖"
         echo "=================================="
         echo "1. 安裝（預設開啟 SSH）"
         echo "2. 更新"
-        echo "3. 移除"
-        echo "4. 重新載入服務"
+        echo "3. 重新載入服務"
         echo "----------------------------------"
         echo "0. 返回"
         echo "=================================="
-        read -r -e -p "請輸入選擇 [0-4]: " c
+        read -r -e -p "請輸入選擇 [0-3]: " c
         case "$c" in
             1) install_fail2ban_package ;;
             2) update_fail2ban_package ;;
-            3) remove_fail2ban_package ;;
-            4) if command -v systemctl >/dev/null 2>&1; then sudo systemctl reload fail2ban 2>/dev/null || sudo systemctl restart fail2ban; ui_pause; fi ;;
+            3) if command -v systemctl >/dev/null 2>&1; then sudo systemctl reload fail2ban 2>/dev/null || sudo systemctl restart fail2ban; ui_pause; fi ;;
             0) return ;;
             *) echo "無效選項"; sleep 1 ;;
         esac
@@ -1088,7 +1086,7 @@ fail2ban_menu() {
         active=${status##*,}
         echo "服務: $([ "$active" = "true" ] && echo 運行中 || echo 未運行)"
         echo "----------------------------------"
-        echo "1. 安裝/更新/移除"
+        echo "1. 安裝/更新"
         echo "2. 查看 SSH 防護紀錄"
         echo "3. 查看 Nginx 防護紀錄"
         echo "4. 查看自訂 jail 紀錄"
@@ -1105,11 +1103,13 @@ fail2ban_menu() {
         echo "15. 清除當前黑名單 IP"
         echo "16. 設定 SSH 日誌來源（journal/檔案）"
         echo "----------------------------------"
+        echo "d. 移除 Fail2ban"
+        echo "----------------------------------"
         echo "0. 返回主選單"
         echo "=================================="
-        read -r -e -p "請輸入選擇 [0-16]: " choice
+        read -r -e -p "請輸入選擇 [0-16/d]: " choice
         case "$choice" in
-            1) install_remove_menu ;;
+            1) install_update_menu ;;
             2) show_ssh_protection_logs ;;
             3) show_nginx_protection_logs ;;
             4) show_custom_jail_logs ;;
@@ -1125,6 +1125,7 @@ fail2ban_menu() {
             14) restore_fail2ban_local ;;
             15) clear_all_bans ;;
             16) configure_sshd_log_backend ;;
+            d|D) remove_fail2ban_package ;;
             0) return ;;
             *) echo "無效選項"; sleep 1 ;;
         esac
