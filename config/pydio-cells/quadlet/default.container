@@ -1,0 +1,32 @@
+[Unit]
+Description=Pydio Cells
+After=network-online.target
+Wants=network-online.target
+
+After=${container_name}-mysql.service container-${container_name}-mysql.service
+Wants=${container_name}-mysql.service container-${container_name}-mysql.service
+
+[Container]
+Image=docker.io/pydio/cells:latest
+#AutoUpdate=registry
+ContainerName=${container_name}
+Label=app=pydio-cells
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/cells:/var/cells
+Volume=${volume_dir}:/data
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ "$i" -lt 180 ]; do /usr/bin/podman exec ${container_name}-mysql mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; echo "MySQL 尚未就緒，取消啟動 Pydio Cells" >&2; exit 1'
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false

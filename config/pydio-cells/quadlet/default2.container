@@ -1,0 +1,31 @@
+[Unit]
+Description=Pydio Cells MySQL
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/library/mysql:8
+#AutoUpdate=registry
+ContainerName=${container_name}-mysql
+Label=app=pydio-cells
+Label=tgdb_db=mysql
+
+Pod=${container_name}.pod
+
+EnvironmentFile=${instance_dir}/.env
+
+Volume=${instance_dir}/mysql:/var/lib/mysql
+Volume=${instance_dir}/initdb:/docker-entrypoint-initdb.d:ro
+
+Exec=mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+[Service]
+Restart=always
+RestartSec=15s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
+
+[Quadlet]
+DefaultDependencies=false
