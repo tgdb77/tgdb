@@ -477,6 +477,9 @@ DERP_HTTP_PORT=-1
 
 # Headscale 官方建議：使用 /verify 作為驗證端點（避免 tailscaled 本地 API 依賴）
 DERP_VERIFY_CLIENT_URL=${verify_url}
+
+# 安全預設：驗證端點不可達時拒絕連線，避免公開 DERP 被陌生客戶端使用
+DERP_VERIFY_CLIENT_URL_FAIL_OPEN=false
 EOF
   echo "✅ 已寫入：$env_path"
   return 0

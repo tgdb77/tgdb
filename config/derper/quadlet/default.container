@@ -21,6 +21,10 @@ Volume=${TGDB_DIR}/nginx/certs:/app/certs:ro
 
 EnvironmentFile=${instance_dir}/derper.env
 
+# fredliang/derper 的預設 CMD 未提供 verify-client-url-fail-open 參數。
+# 這裡明確覆蓋啟動命令，避免 Headscale /verify 不可達時放行陌生客戶端。
+Exec=/bin/sh -c 'exec /app/derper --hostname="$DERP_DOMAIN" --certmode="$DERP_CERT_MODE" --certdir="$DERP_CERT_DIR" --a="$DERP_ADDR" --stun="$DERP_STUN" --stun-port="$DERP_STUN_PORT" --http-port="$DERP_HTTP_PORT" --verify-clients="${DERP_VERIFY_CLIENTS:-false}" --verify-client-url="$DERP_VERIFY_CLIENT_URL" --verify-client-url-fail-open="${DERP_VERIFY_CLIENT_URL_FAIL_OPEN:-false}"'
+
 [Service]
 Restart=always
 RestartSec=15s

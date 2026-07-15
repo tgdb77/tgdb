@@ -1379,35 +1379,24 @@ headscale_p_menu() {
     echo "----------------------------------"
     echo "1. 部署 headscale"
     echo "2. 產生 Headscale API Key"
-    echo "3. 安裝/更新 tailscale 客戶端"
-    echo "4. 加入 Headscale 伺服器"
-    echo "5. Tailnet 服務埠轉發"
-    echo "6. 切換 tailscale(up/down）"
-    echo "7. 查看 tailscale 狀態"
-    echo "8. 部署/更新 DERP"
-    echo "9. 注入自建 DERP"
+    echo "3. Tailscale 管理"
+    echo "4. 部署/更新 DERP"
+    echo "5. 注入自建 DERP"
     echo "----------------------------------"
     echo "d. 移除應用"
     echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-9/d]: " choice
+    read -r -e -p "請輸入選擇 [0-5/d]: " choice
 
     case "$choice" in
       1) headscale_p_deploy || true ;;
       2) _headscale_create_ui_apikey_action 0 || true ;;
-      3) headscale_p_install_tailscale_client || true ;;
-      4) headscale_p_join_headscale_server || true ;;
-      5) headscale_p_tailnet_port_forward || true ;;
-      6)
+      3)
         _headscale_load_tailscale_module || { ui_pause "按任意鍵返回..."; continue; }
-        tailscale_p_client_toggle || true
+        tailscale_p_menu || true
         ;;
-      7)
-        _headscale_load_tailscale_module || { ui_pause "按任意鍵返回..."; continue; }
-        tailscale_p_show_status || true
-        ;;
-      8)
+      4)
         if declare -F tgdb_load_module >/dev/null 2>&1; then
           tgdb_load_module "derper-p" || { ui_pause "按任意鍵返回..."; continue; }
         else
@@ -1416,7 +1405,7 @@ headscale_p_menu() {
         fi
         derper_p_deploy || true
         ;;
-      9)
+      5)
         if declare -F tgdb_load_module >/dev/null 2>&1; then
           tgdb_load_module "derper-p" || { ui_pause "按任意鍵返回..."; continue; }
         else

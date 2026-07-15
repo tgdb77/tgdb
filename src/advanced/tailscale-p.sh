@@ -209,6 +209,36 @@ tailscale_p_show_status() {
   return 0
 }
 
+_tailscale_p_print_status_summary() {
+  echo "❖ 目前狀態 ❖"
+
+  if ! command -v tailscale >/dev/null 2>&1; then
+    echo "尚未安裝 tailscale。"
+    echo "----------------------------------"
+    return 0
+  fi
+
+  if [ "$(id -u 2>/dev/null || echo 1)" -ne 0 ] 2>/dev/null && ! sudo -n true 2>/dev/null; then
+    echo "需要 sudo 權限才能讀取 tailscale 狀態。"
+    echo "----------------------------------"
+    return 0
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
+  fi
+
+  local st=""
+  st="$(_tailscale_p_sudo tailscale status 2>&1 || true)"
+  if [ -z "${st:-}" ]; then
+    echo "無法取得 tailscale 狀態。"
+  else
+    printf '%s\n' "$st" | sed -n '1,12p'
+  fi
+
+  echo "----------------------------------"
+}
+
 _tailscale_p_install_official_script() {
   # 需要系統層級安裝：使用 sudo/root
   require_root || return 1
@@ -350,6 +380,393 @@ tailscale_p_tailnet_port_forward() {
 
   nftables_ts_forward_menu || true
   return 0
+}
+
+_tailscale_p_require_client_ready() {
+  if ! command -v tailscale >/dev/null 2>&1; then
+    tgdb_err "尚未安裝 tailscale，請先執行「安裝/更新 tailscale 客戶端」。"
+    return 1
+  fi
+
+  require_root || return 1
+
+  if command -v systemctl >/dev/null 2>&1; then
+    _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
+  fi
+
+  return 0
+}
+
+_tailscale_p_ip_forwarding_sysctl_file() {
+  if [ -d /etc/sysctl.d ]; then
+    printf '%s\n' "/etc/sysctl.d/99-tailscale.conf"
+  else
+    printf '%s\n' "/etc/sysctl.conf"
+  fi
+}
+
+_tailscale_p_enable_ip_forwarding() {
+  local sysctl_file
+  sysctl_file="$(_tailscale_p_ip_forwarding_sysctl_file)"
+
+  echo "將設定 Linux IP forwarding：$sysctl_file"
+
+  if ! _tailscale_p_sudo grep -Eq '^[[:space:]]*net\.ipv4\.ip_forward[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$sysctl_file" 2>/dev/null; then
+    printf '%s\n' 'net.ipv4.ip_forward = 1' | _tailscale_p_sudo tee -a "$sysctl_file" >/dev/null
+  fi
+
+  if ! _tailscale_p_sudo grep -Eq '^[[:space:]]*net\.ipv6\.conf\.all\.forwarding[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$sysctl_file" 2>/dev/null; then
+    printf '%s\n' 'net.ipv6.conf.all.forwarding = 1' | _tailscale_p_sudo tee -a "$sysctl_file" >/dev/null
+  fi
+
+  _tailscale_p_sudo sysctl -p "$sysctl_file" >/dev/null 2>&1 || {
+    tgdb_warn "套用 sysctl 失敗，請手動檢查：$sysctl_file"
+    return 1
+  }
+
+  return 0
+}
+
+_tailscale_p_disable_ip_forwarding() {
+  local sysctl_file
+  sysctl_file="$(_tailscale_p_ip_forwarding_sysctl_file)"
+
+  echo "將關閉 Linux IP forwarding：$sysctl_file"
+
+  if [ -d /etc/sysctl.d ]; then
+    {
+      printf '%s\n' 'net.ipv4.ip_forward = 0'
+      printf '%s\n' 'net.ipv6.conf.all.forwarding = 0'
+    } | _tailscale_p_sudo tee "$sysctl_file" >/dev/null
+  else
+    printf '%s\n' 'net.ipv4.ip_forward = 0' | _tailscale_p_sudo tee -a "$sysctl_file" >/dev/null
+    printf '%s\n' 'net.ipv6.conf.all.forwarding = 0' | _tailscale_p_sudo tee -a "$sysctl_file" >/dev/null
+  fi
+
+  _tailscale_p_sudo sysctl -w net.ipv4.ip_forward=0 >/dev/null 2>&1 || true
+  _tailscale_p_sudo sysctl -w net.ipv6.conf.all.forwarding=0 >/dev/null 2>&1 || true
+  _tailscale_p_sudo sysctl -p "$sysctl_file" >/dev/null 2>&1 || {
+    tgdb_warn "套用 sysctl 失敗，請手動檢查：$sysctl_file"
+    return 1
+  }
+
+  return 0
+}
+
+tailscale_p_advertise_exit_node() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; return 1; }
+
+  clear
+  echo "=================================="
+  echo "❖ 宣告本機為 Tailscale 出口節點 ❖"
+  echo "=================================="
+  echo "此操作會："
+  echo "1. 啟用 Linux IPv4/IPv6 forwarding。"
+  echo "2. 執行：tailscale set --advertise-exit-node"
+  echo "3. 仍需在 Headscale / Tailscale 管理介面允許此節點作為出口節點。"
+  echo "----------------------------------"
+  ui_confirm_yn "確定要繼續嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+    [ "$?" -eq 2 ] && return 0
+    return 0
+  }
+
+  _tailscale_p_enable_ip_forwarding || true
+
+  echo "----------------------------------"
+  _tailscale_p_sudo tailscale set --advertise-exit-node 2>&1 || {
+    tgdb_err "宣告出口節點失敗，請確認 tailscale 已登入且 tailscaled 正常運作。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
+
+  echo "✅ 已宣告本機為出口節點。"
+  tgdb_warn "請到 Headscale / Tailscale 管理介面核准 Use as exit node，其他裝置才可使用。"
+  ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_unadvertise_exit_node() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; return 1; }
+
+  clear
+  echo "=================================="
+  echo "❖ 停止宣告本機為出口節點 ❖"
+  echo "=================================="
+  echo "將執行：tailscale set --advertise-exit-node=false"
+  echo "並一併關閉 Linux IPv4/IPv6 forwarding。"
+  echo "----------------------------------"
+  ui_confirm_yn "確定要停止宣告出口節點嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+    [ "$?" -eq 2 ] && return 0
+    return 0
+  }
+
+  _tailscale_p_sudo tailscale set --advertise-exit-node=false 2>&1 || {
+    tgdb_err "停止宣告出口節點失敗。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
+
+  _tailscale_p_disable_ip_forwarding || true
+
+  echo "✅ 已停止宣告本機為出口節點。"
+  ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_use_exit_node() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; return 1; }
+
+  clear
+  echo "=================================="
+  echo "❖ 使用 Tailscale 出口節點 ❖"
+  echo "=================================="
+  if tailscale exit-node list >/dev/null 2>&1; then
+    _tailscale_p_sudo tailscale exit-node list 2>&1 || true
+    echo "----------------------------------"
+  else
+    tgdb_warn "目前 tailscale 版本可能不支援 exit-node list，請手動輸入節點名稱或 100.x IP。"
+    echo "----------------------------------"
+  fi
+
+  local exit_node=""
+  read -r -e -p "請輸入出口節點名稱/IP（可填 auto:any，輸入 0 取消）: " exit_node
+  if [ "$exit_node" = "0" ]; then
+    return 0
+  fi
+  if [ -z "${exit_node:-}" ]; then
+    tgdb_err "出口節點不可為空。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+  if printf '%s' "$exit_node" | grep -q '[[:space:]]' 2>/dev/null; then
+    tgdb_err "出口節點名稱/IP 不可包含空白。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  local lan_flag="--exit-node-allow-lan-access=false"
+  if ui_confirm_yn "使用出口節點時是否保留本機 LAN 存取？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+    lan_flag="--exit-node-allow-lan-access=true"
+  else
+    [ "$?" -eq 2 ] && return 0
+  fi
+
+  echo "----------------------------------"
+  _tailscale_p_sudo tailscale set "--exit-node=$exit_node" "$lan_flag" 2>&1 || {
+    tgdb_err "設定出口節點失敗，請確認節點已核准為出口節點，且目前帳號/ACL 允許使用。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
+
+  echo "✅ 已設定使用出口節點：$exit_node"
+  ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_clear_exit_node() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; return 1; }
+
+  clear
+  echo "=================================="
+  echo "❖ 停止使用 Tailscale 出口節點 ❖"
+  echo "=================================="
+  echo "將執行：tailscale set --exit-node="
+  echo "----------------------------------"
+  ui_confirm_yn "確定要停止使用出口節點嗎？(Y/n，預設 Y，輸入 0 取消): " "Y" || {
+    [ "$?" -eq 2 ] && return 0
+    return 0
+  }
+
+  _tailscale_p_sudo tailscale set --exit-node= 2>&1 || {
+    tgdb_err "停止使用出口節點失敗。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
+
+  echo "✅ 已停止使用出口節點。"
+  ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_exit_node_menu() {
+  _tailscale_p_require_tty || return $?
+
+  while true; do
+    clear
+    echo "=================================="
+    echo "❖ Tailscale 出口節點 ❖"
+    echo "=================================="
+    echo "1. 宣告本機為出口節點"
+    echo "2. 停止宣告本機為出口節點"
+    echo "3. 本機使用出口節點"
+    echo "4. 本機停止使用出口節點"
+    echo "5. 列出可用出口節點"
+    echo "0. 返回上一層"
+    echo "=================================="
+    read -r -e -p "請輸入選擇 [0-5]: " choice
+
+    case "$choice" in
+      1) tailscale_p_advertise_exit_node || true ;;
+      2) tailscale_p_unadvertise_exit_node || true ;;
+      3) tailscale_p_use_exit_node || true ;;
+      4) tailscale_p_clear_exit_node || true ;;
+      5)
+        _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; continue; }
+        clear
+        echo "=================================="
+        echo "❖ 可用出口節點 ❖"
+        echo "=================================="
+        _tailscale_p_sudo tailscale exit-node list 2>&1 || true
+        ui_pause "完成，按任意鍵返回..."
+        ;;
+      0) return 0 ;;
+      *) tgdb_err "無效選項"; ui_pause "按任意鍵返回..." ;;
+    esac
+  done
+}
+
+_tailscale_p_supports_ssh() {
+  command -v tailscale >/dev/null 2>&1 || return 1
+  tailscale set --help 2>&1 | grep -q -- '--ssh'
+}
+
+tailscale_p_enable_ssh() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; return 1; }
+
+  if ! _tailscale_p_supports_ssh; then
+    tgdb_err "目前 tailscale 版本不支援 Tailscale SSH，請先更新 tailscale 客戶端。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  clear
+  echo "=================================="
+  echo "❖ 啟用 Tailscale SSH ❖"
+  echo "=================================="
+  echo "此操作會執行：tailscale set --ssh"
+  echo "提醒：連線權限仍需由 Headscale/Tailscale ACL policy 允許。"
+  echo "建議：到 Headplane 的 ACL 頁面設定 ssh 規則後再測試連線。"
+  echo "----------------------------------"
+  ui_confirm_yn "確定要啟用 Tailscale SSH 嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+    [ "$?" -eq 2 ] && return 0
+    return 0
+  }
+
+  _tailscale_p_sudo tailscale set --ssh 2>&1 || {
+    tgdb_err "啟用 Tailscale SSH 失敗。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
+
+  echo "✅ 已啟用 Tailscale SSH。"
+  ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_disable_ssh() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  _tailscale_p_require_client_ready || { ui_pause "按任意鍵返回..."; return 1; }
+
+  if ! _tailscale_p_supports_ssh; then
+    tgdb_err "目前 tailscale 版本不支援 Tailscale SSH，請先更新 tailscale 客戶端。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  fi
+
+  clear
+  echo "=================================="
+  echo "❖ 停用 Tailscale SSH ❖"
+  echo "=================================="
+  echo "將執行：tailscale set --ssh=false"
+  echo "----------------------------------"
+  ui_confirm_yn "確定要停用 Tailscale SSH 嗎？(Y/n，預設 Y，輸入 0 取消): " "Y" || {
+    [ "$?" -eq 2 ] && return 0
+    return 0
+  }
+
+  _tailscale_p_sudo tailscale set --ssh=false 2>&1 || {
+    tgdb_err "停用 Tailscale SSH 失敗。"
+    ui_pause "按任意鍵返回..."
+    return 1
+  }
+
+  echo "✅ 已停用 Tailscale SSH。"
+  ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_ssh_menu() {
+  _tailscale_p_require_tty || return $?
+
+  while true; do
+    clear
+    echo "=================================="
+    echo "❖ Tailscale SSH ❖"
+    echo "=================================="
+    echo " 使用方式： ssh 用戶名@目標 IP 連接，輸入 exit 退出。"
+    echo "=================================="
+    echo "1. 啟用本機 Tailscale SSH"
+    echo "2. 停用本機 Tailscale SSH"
+    echo "0. 返回上一層"
+    echo "=================================="
+    read -r -e -p "請輸入選擇 [0-2]: " choice
+
+    case "$choice" in
+      1) tailscale_p_enable_ssh || true ;;
+      2) tailscale_p_disable_ssh || true ;;
+      0) return 0 ;;
+      *) tgdb_err "無效選項"; ui_pause "按任意鍵返回..." ;;
+    esac
+  done
+}
+
+tailscale_p_menu() {
+  _tailscale_p_require_tty || return $?
+
+  while true; do
+    clear
+    echo "=================================="
+    echo "❖ Tailscale 管理 ❖"
+    echo "=================================="
+    _tailscale_p_print_status_summary
+    echo "1. 安裝/更新 tailscale 客戶端"
+    echo "2. 加入 Headscale 伺服器"
+    echo "3. Tailnet 服務埠轉發"
+    echo "4. 切換 tailscale(up/down）"
+    echo "5. 出口節點"
+    echo "6. SSH"
+    echo "0. 返回上一層"
+    echo "=================================="
+    read -r -e -p "請輸入選擇 [0-6]: " choice
+
+    case "$choice" in
+      1) tailscale_p_install_client || true ;;
+      2) tailscale_p_join_headscale_server || true ;;
+      3) tailscale_p_tailnet_port_forward || true ;;
+      4) tailscale_p_client_toggle || true ;;
+      5) tailscale_p_exit_node_menu || true ;;
+      6) tailscale_p_ssh_menu || true ;;
+      0) return 0 ;;
+      *) tgdb_err "無效選項"; ui_pause "按任意鍵返回..." ;;
+    esac
+  done
 }
 
 _tailscale_p_current_state() {
