@@ -212,13 +212,22 @@ tailscale_p_show_status() {
 _tailscale_p_print_status_summary() {
   echo "❖ 目前狀態 ❖"
 
+  if ! command -v tailscale >/dev/null 2>&1 && ! command -v tailscaled >/dev/null 2>&1; then
+    echo "安裝狀態：未安裝 tailscale"
+    echo "連線狀態：不可用"
+    echo "----------------------------------"
+    return 0
+  fi
+
   if ! command -v tailscale >/dev/null 2>&1; then
-    echo "尚未安裝 tailscale。"
+    echo "安裝狀態：偵測到 tailscaled，但找不到 tailscale CLI。"
+    echo "連線狀態：不可用"
     echo "----------------------------------"
     return 0
   fi
 
   if [ "$(id -u 2>/dev/null || echo 1)" -ne 0 ] 2>/dev/null && ! sudo -n true 2>/dev/null; then
+    echo "安裝狀態：已安裝 tailscale"
     echo "需要 sudo 權限才能讀取 tailscale 狀態。"
     echo "----------------------------------"
     return 0
@@ -230,6 +239,7 @@ _tailscale_p_print_status_summary() {
 
   local st=""
   st="$(_tailscale_p_sudo tailscale status 2>&1 || true)"
+  echo "安裝狀態：已安裝 tailscale"
   if [ -z "${st:-}" ]; then
     echo "無法取得 tailscale 狀態。"
   else
@@ -397,6 +407,32 @@ _tailscale_p_require_client_ready() {
   return 0
 }
 
+_tailscale_p_debug_prefs_json() {
+  command -v tailscale >/dev/null 2>&1 || return 1
+  _tailscale_p_sudo tailscale debug prefs 2>/dev/null || return 1
+}
+
+_tailscale_p_prefs_json_value() {
+  local json="${1:-}"
+  local key="${2:-}"
+  [ -n "$json" ] && [ -n "$key" ] || return 1
+
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s\n' "$json" | jq -r --arg key "$key" '.[$key] // empty' 2>/dev/null
+    return 0
+  fi
+
+  printf '%s\n' "$json" | sed -nE 's/^[[:space:]]*"'"$key"'"[[:space:]]*:[[:space:]]*"?([^",]+)"?,?[[:space:]]*$/\1/p' | head -n1
+}
+
+_tailscale_p_bool_label() {
+  case "${1:-}" in
+    true) printf '%s\n' "已啟用" ;;
+    false) printf '%s\n' "未啟用" ;;
+    *) printf '%s\n' "未知" ;;
+  esac
+}
+
 _tailscale_p_ip_forwarding_sysctl_file() {
   if [ -d /etc/sysctl.d ]; then
     printf '%s\n' "/etc/sysctl.d/99-tailscale.conf"
@@ -468,7 +504,7 @@ tailscale_p_advertise_exit_node() {
   echo "2. 執行：tailscale set --advertise-exit-node"
   echo "3. 仍需在 Headscale / Tailscale 管理介面允許此節點作為出口節點。"
   echo "----------------------------------"
-  ui_confirm_yn "確定要繼續嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+  ui_confirm_yn "確定要繼續嗎？(y/N，預設 Y，輸入 0 取消): " "Y" || {
     [ "$?" -eq 2 ] && return 0
     return 0
   }
@@ -501,7 +537,7 @@ tailscale_p_unadvertise_exit_node() {
   echo "將執行：tailscale set --advertise-exit-node=false"
   echo "並一併關閉 Linux IPv4/IPv6 forwarding。"
   echo "----------------------------------"
-  ui_confirm_yn "確定要停止宣告出口節點嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+  ui_confirm_yn "確定要停止宣告出口節點嗎？(y/N，預設 Y，輸入 0 取消): " "Y" || {
     [ "$?" -eq 2 ] && return 0
     return 0
   }
@@ -553,11 +589,22 @@ tailscale_p_use_exit_node() {
     return 1
   fi
 
+  echo "⚠️  強烈建議保留本機 LAN 存取。"
+  echo "若關閉 LAN 存取，正在使用的 SSH / 區網連線可能會立刻斷線。"
+  echo "除非你明確知道自己正在做什麼，請保持預設 Y。"
+  echo "----------------------------------"
+
   local lan_flag="--exit-node-allow-lan-access=false"
   if ui_confirm_yn "使用出口節點時是否保留本機 LAN 存取？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
     lan_flag="--exit-node-allow-lan-access=true"
   else
     [ "$?" -eq 2 ] && return 0
+    echo "----------------------------------"
+    tgdb_warn "你選擇關閉 LAN 存取，這可能造成目前 SSH 連線斷線。"
+    ui_confirm_yn "最後確認：仍要關閉 LAN 存取並繼續嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+      [ "$?" -eq 2 ] && return 0
+      return 0
+    }
   fi
 
   echo "----------------------------------"
@@ -600,6 +647,48 @@ tailscale_p_clear_exit_node() {
   return 0
 }
 
+_tailscale_p_print_exit_node_state() {
+  echo "❖ 出口節點狀態 ❖"
+
+  if ! command -v tailscale >/dev/null 2>&1; then
+    echo "tailscale：尚未安裝"
+    echo "----------------------------------"
+    return 0
+  fi
+
+  local prefs="" advertise_routes="" advertise_exit="false"
+  local exit_node_id="" exit_node_ip="" lan_access="" status_json="" exit_node_name=""
+  prefs="$(_tailscale_p_debug_prefs_json || true)"
+
+  advertise_routes="$(_tailscale_p_prefs_json_value "$prefs" "AdvertiseRoutes" | tr -d '[] "' || true)"
+  if printf '%s\n' "$advertise_routes" | grep -Eq '(^|,)0\.0\.0\.0/0(,|$)|(^|,)::/0(,|$)'; then
+    advertise_exit="true"
+  fi
+
+  exit_node_id="$(_tailscale_p_prefs_json_value "$prefs" "ExitNodeID" || true)"
+  exit_node_ip="$(_tailscale_p_prefs_json_value "$prefs" "ExitNodeIP" || true)"
+  lan_access="$(_tailscale_p_prefs_json_value "$prefs" "ExitNodeAllowLANAccess" || true)"
+
+  if command -v jq >/dev/null 2>&1; then
+    status_json="$(_tailscale_p_sudo tailscale status --json 2>/dev/null || true)"
+    if [ -n "${exit_node_id:-}" ] && [ -n "${status_json:-}" ]; then
+      exit_node_name="$(printf '%s\n' "$status_json" | jq -r --arg id "$exit_node_id" '.Peer[]? | select(.ID == $id) | (.HostName // .DNSName // .TailscaleIPs[0] // empty)' 2>/dev/null | head -n1)"
+    fi
+  fi
+
+  echo "本機宣告出口節點：$(_tailscale_p_bool_label "$advertise_exit")"
+  if [ -n "${exit_node_id:-}${exit_node_ip:-}" ]; then
+    echo "目前使用出口節點：已連接"
+    [ -n "${exit_node_name:-}" ] && echo "出口節點名稱：$exit_node_name"
+    [ -n "${exit_node_ip:-}" ] && echo "出口節點 IP：$exit_node_ip"
+    [ -n "${exit_node_id:-}" ] && echo "出口節點 ID：$exit_node_id"
+    [ -n "${lan_access:-}" ] && echo "保留 LAN 存取：$(_tailscale_p_bool_label "$lan_access")"
+  else
+    echo "目前使用出口節點：未連接"
+  fi
+  echo "----------------------------------"
+}
+
 tailscale_p_exit_node_menu() {
   _tailscale_p_require_tty || return $?
 
@@ -608,6 +697,7 @@ tailscale_p_exit_node_menu() {
     echo "=================================="
     echo "❖ Tailscale 出口節點 ❖"
     echo "=================================="
+    _tailscale_p_print_exit_node_state
     echo "1. 宣告本機為出口節點"
     echo "2. 停止宣告本機為出口節點"
     echo "3. 本機使用出口節點"
@@ -662,7 +752,7 @@ tailscale_p_enable_ssh() {
   echo "提醒：連線權限仍需由 Headscale/Tailscale ACL policy 允許。"
   echo "建議：到 Headplane 的 ACL 頁面設定 ssh 規則後再測試連線。"
   echo "----------------------------------"
-  ui_confirm_yn "確定要啟用 Tailscale SSH 嗎？(y/N，預設 N，輸入 0 取消): " "N" || {
+  ui_confirm_yn "確定要啟用 Tailscale SSH 嗎？(y/N，預設 Y，輸入 0 取消): " "Y" || {
     [ "$?" -eq 2 ] && return 0
     return 0
   }
@@ -712,6 +802,23 @@ tailscale_p_disable_ssh() {
   return 0
 }
 
+_tailscale_p_print_ssh_state() {
+  echo "❖ SSH 狀態 ❖"
+
+  if ! command -v tailscale >/dev/null 2>&1; then
+    echo "tailscale：尚未安裝"
+    echo "----------------------------------"
+    return 0
+  fi
+
+  local prefs="" run_ssh=""
+  prefs="$(_tailscale_p_debug_prefs_json || true)"
+  run_ssh="$(_tailscale_p_prefs_json_value "$prefs" "RunSSH" || true)"
+
+  echo "本機 Tailscale SSH：$(_tailscale_p_bool_label "$run_ssh")"
+  echo "----------------------------------"
+}
+
 tailscale_p_ssh_menu() {
   _tailscale_p_require_tty || return $?
 
@@ -720,6 +827,7 @@ tailscale_p_ssh_menu() {
     echo "=================================="
     echo "❖ Tailscale SSH ❖"
     echo "=================================="
+    _tailscale_p_print_ssh_state
     echo " 使用方式： ssh 用戶名@目標 IP 連接，輸入 exit 退出。"
     echo "=================================="
     echo "1. 啟用本機 Tailscale SSH"
@@ -750,11 +858,14 @@ tailscale_p_menu() {
     echo "2. 加入 Headscale 伺服器"
     echo "3. Tailnet 服務埠轉發"
     echo "4. 切換 tailscale(up/down）"
-    echo "5. 出口節點"
-    echo "6. SSH"
+    echo "5. 出口節點管理"
+    echo "6. SSH 管理"
+    echo "----------------------------------"
+    echo "d. 移除/清理 Tailscale"
+    echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-6]: " choice
+    read -r -e -p "請輸入選擇 [0-6/d]: " choice
 
     case "$choice" in
       1) tailscale_p_install_client || true ;;
@@ -763,6 +874,7 @@ tailscale_p_menu() {
       4) tailscale_p_client_toggle || true ;;
       5) tailscale_p_exit_node_menu || true ;;
       6) tailscale_p_ssh_menu || true ;;
+      d|D) tailscale_p_cleanup_action || true ;;
       0) return 0 ;;
       *) tgdb_err "無效選項"; ui_pause "按任意鍵返回..." ;;
     esac
@@ -897,6 +1009,49 @@ tailscale_p_client_disable() {
   _tailscale_p_sudo tailscale down 2>&1 || true
 
   ui_pause "完成，按任意鍵返回..."
+  return 0
+}
+
+tailscale_p_cleanup_action() {
+  _tailscale_p_require_tty || return $?
+  load_system_config || true
+
+  clear
+  echo "=================================="
+  echo "❖ Tailscale：移除/清理 ❖"
+  echo "=================================="
+  echo "此操作會嘗試："
+  echo "1) tailscale down / logout"
+  echo "2) 停用 tailscaled"
+  echo "3) 若偵測為 TGDB 安裝，則嘗試卸載套件"
+  echo "----------------------------------"
+
+  if ! command -v tailscale >/dev/null 2>&1 && ! command -v tailscaled >/dev/null 2>&1; then
+    tgdb_warn "未偵測到 tailscale/tailscaled，目前狀態為未安裝。"
+    ui_pause "按任意鍵返回..."
+    return 0
+  fi
+
+  if ! ui_confirm_yn "確定要移除/清理 Tailscale 嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
+    [ "$?" -eq 2 ] && return 0
+    ui_pause "按任意鍵返回..."
+    return 0
+  fi
+
+  local managed=0
+  if _tailscale_p_installed_by_tgdb || _tailscale_p_joined_by_tgdb; then
+    managed=1
+  fi
+
+  tailscale_p_cleanup_if_needed || true
+
+  if [ "$managed" -eq 1 ]; then
+    echo "✅ 已完成 Tailscale 移除/清理。"
+  else
+    tgdb_warn "未偵測到 TGDB 安裝/加入標記；已略過自動卸載。若需完全移除，請再用系統套件管理器手動卸載。"
+  fi
+
+  ui_pause "按任意鍵返回..."
   return 0
 }
 

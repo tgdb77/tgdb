@@ -1181,53 +1181,6 @@ _headscale_remove_nginx_site_auto() {
   return 0
 }
 
-_headscale_remove_tailscale_client_action() {
-  _headscale_require_tty || return $?
-
-  if ! _headscale_load_tailscale_module; then
-    ui_pause "按任意鍵返回..."
-    return 1
-  fi
-
-  echo "=================================="
-  echo "❖ Tailscale：清理客戶端 ❖"
-  echo "=================================="
-  echo "此操作會嘗試："
-  echo "1) tailscale down / logout"
-  echo "2) 停用 tailscaled"
-  echo "3) 若偵測為 TGDB 安裝，則嘗試卸載套件"
-  echo "----------------------------------"
-
-  if ! command -v tailscale >/dev/null 2>&1 && ! command -v tailscaled >/dev/null 2>&1; then
-    tgdb_warn "未偵測到 tailscale/tailscaled。"
-    ui_pause "按任意鍵返回..."
-    return 0
-  fi
-
-  if ! ui_confirm_yn "確定要清理 Tailscale 客戶端嗎？(Y/n，預設 Y，輸入 0 取消): " "Y"; then
-    [ "$?" -eq 2 ] && return 0
-    ui_pause "按任意鍵返回..."
-    return 0
-  fi
-
-  local managed=0
-  if { declare -F _tailscale_p_installed_by_tgdb >/dev/null 2>&1 && _tailscale_p_installed_by_tgdb; } || \
-     { declare -F _tailscale_p_joined_by_tgdb >/dev/null 2>&1 && _tailscale_p_joined_by_tgdb; }; then
-    managed=1
-  fi
-
-  tailscale_p_cleanup_if_needed || true
-
-  if [ "$managed" -eq 1 ]; then
-    echo "✅ 已完成 Tailscale 客戶端清理。"
-  else
-    tgdb_warn "未偵測到 TGDB 安裝/加入標記；已略過自動卸載。若需完全移除，請再用系統套件管理器手動卸載。"
-  fi
-
-  ui_pause "按任意鍵返回..."
-  return 0
-}
-
 _headscale_remove_menu() {
   _headscale_require_tty || return $?
 
@@ -1238,11 +1191,10 @@ _headscale_remove_menu() {
     echo "=================================="
     echo "1. 移除 Headscale（含 Postgres / Headplane / Nginx 站點）"
     echo "2. 移除 DERP（derper）"
-    echo "3. 清理 Tailscale 客戶端"
     echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-3]: " choice
+    read -r -e -p "請輸入選擇 [0-2]: " choice
 
     case "$choice" in
       1) headscale_p_full_remove || true ;;
@@ -1255,7 +1207,6 @@ _headscale_remove_menu() {
         fi
         derper_p_full_remove || true
         ;;
-      3) _headscale_remove_tailscale_client_action || true ;;
       0) return 0 ;;
       *) echo "無效選項，請重新輸入。"; sleep 1 ;;
     esac
@@ -1380,7 +1331,7 @@ headscale_p_menu() {
     echo "1. 部署 headscale"
     echo "2. 產生 Headscale API Key"
     echo "3. Tailscale 管理"
-    echo "4. 部署/更新 DERP"
+    echo "4. 部署 DERP"
     echo "5. 注入自建 DERP"
     echo "----------------------------------"
     echo "d. 移除應用"
