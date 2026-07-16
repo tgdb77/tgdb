@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=docker.io/kopia/kopia:20260223.0.231822
+Image=docker.io/kopia/kopia:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
 Label=app=kopia

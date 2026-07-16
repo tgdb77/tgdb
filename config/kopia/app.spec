@@ -1,6 +1,6 @@
 spec_version=1
 display_name=Kopia（快照備份）
-image=docker.io/kopia/kopia:20260223.0.231822
+image=docker.io/kopia/kopia:latest
 doc_url=https://github.com/kopia/kopia
 menu_order=999
 

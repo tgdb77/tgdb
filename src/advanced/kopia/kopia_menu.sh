@@ -24,12 +24,13 @@ kopia_p_menu() {
     echo "4. 編輯 .kopiaignore"
     echo "5. 統一備份排程（systemd --user timer）"
     echo "6. 還原快照（覆蓋模式）"
+    echo "7. 更新 Kopia 主程式"
     echo "----------------------------------"
     echo "d. 完全移除"
     echo "----------------------------------"
     echo "0. 返回"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-6,d]: " choice
+    read -r -e -p "請輸入選擇 [0-7,d]: " choice
 
     local runner
     runner="$(_kopia_runner_script)"
@@ -62,6 +63,9 @@ kopia_p_menu() {
           tgdb_fail "找不到腳本：$runner" 1 || true
         fi
         ui_pause "按任意鍵返回..."
+        ;;
+      7)
+        kopia_p_update_main_program || true
         ;;
       d)
         kopia_p_full_remove || true

@@ -30,5 +30,7 @@ source "$KOPIA_MODULE_DIR/kopia_menu_deploy.sh"
 source "$KOPIA_MODULE_DIR/kopia_menu_remove.sh"
 # shellcheck source=src/advanced/kopia/kopia_menu_timers.sh
 source "$KOPIA_MODULE_DIR/kopia_menu_timers.sh"
+# shellcheck source=src/advanced/kopia/kopia_menu_update.sh
+source "$KOPIA_MODULE_DIR/kopia_menu_update.sh"
 # shellcheck source=src/advanced/kopia/kopia_menu.sh
 source "$KOPIA_MODULE_DIR/kopia_menu.sh"
