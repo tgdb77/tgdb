@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=docker.io/fredliang/derper:a71fc43adf9fdea7e5ea6dc4fa1b570ab4010929
+Image=docker.io/fredliang/derper:latest
 #AutoUpdate=registry
 ContainerName=${container_name}
 Label=app=headscale

@@ -24,7 +24,7 @@ server:
   # 本計畫預設不公開到網域，建議只用 SSH 轉發訪問。
   base_url: "http://127.0.0.1:18081"
 
-  # 必填：部屬流程會自動產生（Headplane 0.6.x 要求長度「剛好 32」）
+  # 必填：部屬流程會自動產生（Headplane 0.7.x 要求長度「剛好 32」）
   # 手動產生範例：openssl rand -hex 16
   cookie_secret: "<請自行替換>"
 
@@ -35,13 +35,8 @@ headscale:
   # 同 Pod：headscale 監聽 8080，因此可用 localhost 連線
   url: "http://127.0.0.1:8080"
 
-  # Headplane 0.6.x 需求：必須存在（可為 true/false 或字串）
-  config_strict: false
-
   # Integrated Mode（可寫檔管理）時需要（容器內路徑）
   config_path: "/etc/headscale/config.yaml"
-  # 建議在 headscale config.yaml 啟用 dns.extra_records_path 後再填入
-  dns_records_path: "/etc/headscale/dns_records.json"
 
 integration:
   docker:

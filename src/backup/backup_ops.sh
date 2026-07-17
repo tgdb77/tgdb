@@ -8,6 +8,31 @@ if [ -n "${_TGDB_BACKUP_OPS_LOADED:-}" ] && [ "${TGDB_FORCE_RELOAD_LIBS:-0}" != 
 fi
 _TGDB_BACKUP_OPS_LOADED=1
 
+_backup_tar_create() {
+    local archive="$1"
+    local base_dir="$2"
+    shift 2
+
+    # rootless Podman 的資料目錄可能使用 user namespace UID/GID，需在同一命名空間讀取。
+    if command -v podman >/dev/null 2>&1; then
+        podman unshare tar -czf "$archive" -C "$base_dir" "$@" && return 0
+    fi
+
+    tar -czf "$archive" -C "$base_dir" "$@"
+}
+
+_backup_tar_extract() {
+    local archive="$1"
+    local dest_dir="$2"
+
+    # 還原時也維持 rootless Podman 的 user namespace 權限語意。
+    if command -v podman >/dev/null 2>&1; then
+        podman unshare tar -xzf "$archive" -C "$dest_dir" && return 0
+    fi
+
+    tar -xzf "$archive" -C "$dest_dir"
+}
+
 backup_create() {
     _backup_ensure_dirs || return 1
     tgdb_timer_units_stage_to_persist || true
@@ -78,7 +103,7 @@ backup_create() {
         fi
     fi
 
-    if tar -czf "$archive" -C "$BACKUP_ROOT" "${tar_excludes[@]}" "${items[@]}"; then
+    if _backup_tar_create "$archive" "$BACKUP_ROOT" "${tar_excludes[@]}" "${items[@]}"; then
         _backup_resume_after_cold_snapshot
         echo "✅ 備份完成：$archive"
         _backup_cleanup_old
@@ -143,7 +168,7 @@ backup_create_selected() {
         tgdb_fail "指定備份暫存內容為空，已取消。" 1 || return $?
     fi
 
-    if podman unshare tar -czf "$archive" -C "$stage_dir" "${items[@]}"; then
+    if _backup_tar_create "$archive" "$stage_dir" "${items[@]}"; then
         rm -rf "$stage_dir" 2>/dev/null || true
         _backup_resume_after_cold_snapshot
         echo "✅ 指定實例備份完成：$archive"
@@ -225,7 +250,7 @@ _backup_restore_from_archive() {
 
     mkdir -p "$BACKUP_ROOT"
 
-    if ! tar -xzf "$archive" -C "$BACKUP_ROOT"; then
+    if ! _backup_tar_extract "$archive" "$BACKUP_ROOT"; then
         if [ "$had_running" -eq 1 ]; then
             _backup_resume_after_cold_snapshot
         fi
@@ -311,7 +336,7 @@ _backup_restore_selected_instance_from_archive() {
     extract_dir="$(mktemp -d "${TMPDIR:-/tmp}/tgdb_select_restore.XXXXXX")"
     tgdb_name="$(basename "$TGDB_DIR")"
 
-    if ! tar -xzf "$archive" -C "$extract_dir"; then
+    if ! _backup_tar_extract "$archive" "$extract_dir"; then
         rm -rf "$extract_dir" 2>/dev/null || true
         tgdb_fail "解壓縮指定備份失敗：$archive" 1 || return $?
     fi

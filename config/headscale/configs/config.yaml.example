@@ -1,5 +1,5 @@
 ---
-# Headscale v0.27.1（搭配 TGDB 的最小可用範本）
+# Headscale v0.29.1（搭配 TGDB 的最小可用範本）
 #
 # 使用情境：
 # - TLS 由 TGDB/Nginx/Certbot 負責（Headscale 內建 TLS 關閉）
@@ -22,7 +22,7 @@ grpc_listen_addr: "127.0.0.1:50443"
 grpc_allow_insecure: false
 
 noise:
-  private_key_path: "/var/lib/headscale/keys/noise_private.key"
+  private_key_path: "/var/lib/headscale/noise_private.key"
 
 prefixes:
   v4: "100.64.0.0/10"
@@ -37,7 +37,7 @@ derp:
     region_name: "Headscale Embedded DERP"
     verify_clients: true
     stun_listen_addr: "0.0.0.0:3478"
-    private_key_path: "/var/lib/headscale/keys/derp_server_private.key"
+    private_key_path: "/var/lib/headscale/derp_server_private.key"
     automatically_add_embedded_derp_region: true
     ipv4: "198.51.100.1"
     ipv6: "2001:db8::1"
@@ -48,7 +48,10 @@ derp:
   update_frequency: "3h"
 
 disable_check_updates: false
-ephemeral_node_inactivity_timeout: "30m"
+# 節點生命週期設定（Headscale 0.29 起使用 node.ephemeral）
+node:
+  ephemeral:
+    inactivity_timeout: "30m"
 
 database:
   type: "postgres"
@@ -107,5 +110,3 @@ unix_socket_permission: "0770"
 
 logtail:
   enabled: false
-
-randomize_client_port: false

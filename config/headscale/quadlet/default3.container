@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Container]
 # 版本請依需求調整；建議固定 tag 避免升級破壞。
-Image=ghcr.io/tale/headplane:0.6.1
+Image=ghcr.io/tale/headplane:0.7.0
 ContainerName=${container_name}-headplane
-Label=app=headplane
+Label=app=headscale
 
 Pod=${container_name}.pod
 
