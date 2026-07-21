@@ -106,6 +106,13 @@ _backup_select_targets_to_array() {
   done
 }
 
+_backup_prepare_rclone_config() {
+  # systemd --user 不會讀取 ~/.bashrc；若未帶入環境變數，改用 TGDB 的專用設定檔。
+  if [ -z "${RCLONE_CONFIG:-}" ] && [ -f "$TGDB_DIR/rclone.conf" ]; then
+    export RCLONE_CONFIG="$TGDB_DIR/rclone.conf"
+  fi
+}
+
 _backup_rclone_sync_to_remote() {
   local remote
   remote="$(_backup_rclone_remote_get)"
@@ -117,6 +124,7 @@ _backup_rclone_sync_to_remote() {
     tgdb_warn "已設定 Rclone 遠端，但找不到 rclone 指令，略過遠端同步。"
     return 1
   fi
+  _backup_prepare_rclone_config
 
   local remote_base="${remote%:}"
   if [ -z "$remote_base" ]; then
@@ -158,6 +166,7 @@ _backup_list_remote_archives_newest_first() {
   if ! command -v rclone >/dev/null 2>&1; then
     return 1
   fi
+  _backup_prepare_rclone_config
 
   local src
   src="$(_backup_rclone_backup_remote_path)" || return 1
@@ -172,6 +181,7 @@ _backup_rclone_restore_selected_to_local() {
   if ! command -v rclone >/dev/null 2>&1; then
     tgdb_fail "找不到 rclone 指令，無法從遠端還原備份。" 1 || return $?
   fi
+  _backup_prepare_rclone_config
 
   local src_root
   src_root="$(_backup_rclone_backup_remote_path)" || {

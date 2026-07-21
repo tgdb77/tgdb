@@ -21,7 +21,7 @@ backup_timer_ensure_units() {
     local runner_abs svc_content tim_content
 
     runner_abs="$(tgdb_timer_runner_script_path)"
-    svc_content="[Unit]\nDescription=TGDB 全系統備份\n\n[Service]\nType=oneshot\nExecStart=/bin/bash \"$runner_abs\" run backup timer\n"
+    svc_content="[Unit]\nDescription=TGDB 全系統備份\n\n[Service]\nType=oneshot\nEnvironment=RCLONE_CONFIG=$TGDB_DIR/rclone.conf\nExecStart=/bin/bash \"$runner_abs\" run backup timer\n"
     tim_content="[Unit]\nDescription=TGDB 自動備份\n\n[Timer]\nOnCalendar=daily\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 
     tgdb_timer_write_user_unit "$BACKUP_SERVICE_NAME" "$svc_content"
@@ -75,7 +75,7 @@ backup_select_timer_ensure_units() {
     local runner_abs svc_content tim_content
 
     runner_abs="$(tgdb_timer_runner_script_path)"
-    svc_content="[Unit]\nDescription=TGDB 指定實例備份\n\n[Service]\nType=oneshot\nExecStart=/bin/bash \"$runner_abs\" run backup_select timer\n"
+    svc_content="[Unit]\nDescription=TGDB 指定實例備份\n\n[Service]\nType=oneshot\nEnvironment=RCLONE_CONFIG=$TGDB_DIR/rclone.conf\nExecStart=/bin/bash \"$runner_abs\" run backup_select timer\n"
     tim_content="[Unit]\nDescription=TGDB 指定實例自動備份\n\n[Timer]\nOnCalendar=daily\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 
     tgdb_timer_write_user_unit "$BACKUP_SELECT_SERVICE_NAME" "$svc_content"

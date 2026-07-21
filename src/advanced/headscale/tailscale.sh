@@ -12,5 +12,7 @@ source "$HEADSCALE_TAILSCALE_DIR/join.sh"
 source "$HEADSCALE_TAILSCALE_DIR/exit_node.sh"
 # shellcheck source=src/advanced/headscale/tailscale/ssh.sh
 source "$HEADSCALE_TAILSCALE_DIR/ssh.sh"
+# shellcheck source=src/advanced/headscale/tailscale/drive.sh
+source "$HEADSCALE_TAILSCALE_DIR/drive.sh"
 # shellcheck source=src/advanced/headscale/tailscale/menu.sh
 source "$HEADSCALE_TAILSCALE_DIR/menu.sh"

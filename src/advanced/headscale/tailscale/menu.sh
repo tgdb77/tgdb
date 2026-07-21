@@ -14,12 +14,13 @@ tailscale_p_menu() {
     echo "4. 切換 tailscale(up/down）"
     echo "5. 出口節點管理"
     echo "6. SSH 管理"
+    echo "7. Taildrive 檔案同步"
     echo "----------------------------------"
     echo "d. 移除/清理 Tailscale"
     echo "----------------------------------"
     echo "0. 返回上一層"
     echo "=================================="
-    read -r -e -p "請輸入選擇 [0-6/d]: " choice
+    read -r -e -p "請輸入選擇 [0-7/d]: " choice
 
     case "$choice" in
       1) tailscale_p_install_client || true ;;
@@ -28,6 +29,7 @@ tailscale_p_menu() {
       4) tailscale_p_client_toggle || true ;;
       5) tailscale_p_exit_node_menu || true ;;
       6) tailscale_p_ssh_menu || true ;;
+      7) tailscale_p_drive_menu || true ;;
       d|D) tailscale_p_cleanup_action || true ;;
       0) return 0 ;;
       *) tgdb_err "無效選項"; ui_pause "按任意鍵返回..." ;;
