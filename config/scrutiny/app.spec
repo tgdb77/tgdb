@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Scrutiny
 description=監控硬碟 SMART 狀態並追蹤磁碟健康趨勢。
 image=ghcr.io/analogj/scrutiny:v0.8.6-omnibus

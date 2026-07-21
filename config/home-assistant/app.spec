@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Home Assistant
 description=整合智慧家庭裝置並建立本地自動化控制。
 image=ghcr.io/home-assistant/home-assistant:stable
@@ -20,4 +21,3 @@ success_warn= 本範本預設採 rootful + privileged + host network，適合家
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Gladys Assistant
 description=管理智慧家庭裝置、自動化流程與區網探索。
 image=docker.io/gladysassistant/gladys:v4

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=ONLYOFFICE
 description=提供線上文件、試算表與簡報協作編輯服務。
 image=docker.io/onlyoffice/documentserver:latest

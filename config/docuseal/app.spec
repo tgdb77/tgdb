@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=DocuSeal
 description=建立、寄送與管理文件電子簽署流程。
 image=docker.io/docuseal/docuseal:latest

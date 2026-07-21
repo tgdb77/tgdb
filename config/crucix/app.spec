@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Crucix
 description=多來源情報監控工具，可追蹤公開資料變化並在事件符合條件時提醒。
 image=ghcr.io/calesthio/crucix:latest

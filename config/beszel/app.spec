@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Beszel-hub
 description=集中查看伺服器與服務的監控資料。
 image=docker.io/henrygd/beszel

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Wallos
 description=訂閱費用與週期付款追蹤服務。
 image=docker.io/bellamy/wallos:latest
@@ -17,4 +18,3 @@ config_label=.env（環境變數）
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

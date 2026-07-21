@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=CheckCle
 description=監控網站與服務狀態並顯示可用性檢查結果。
 image=docker.io/operacle/checkcle:latest
@@ -18,4 +19,3 @@ success_warn= 請在首次登入後立即變更預設帳號與密碼，避免被
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

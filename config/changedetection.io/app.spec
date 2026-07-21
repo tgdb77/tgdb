@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=ChangeDetection.io
 description=網站變更監控工具，可追蹤頁面內容變動並在符合條件時通知。
 image=ghcr.io/dgtlmoon/changedetection.io

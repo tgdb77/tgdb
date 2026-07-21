@@ -11,6 +11,7 @@ record_subdirs=langflow
 
 input=superuser|prompt=請輸入 Langflow 超級管理員帳號（預設 admin，輸入 0 取消）: |required=1|ask=1|default=admin|no_space=1|env=LANGFLOW_SUPERUSER|allow_cancel=1
 input=superuser_password|prompt=請輸入 Langflow 超級管理員密碼（直接按 Enter 使用隨機密碼）: |type=password|no_space=1|ask=1|default_source=random_hex|len=32|env=LANGFLOW_SUPERUSER_PASSWORD
+cli_quick_args=superuser superuser_password
 var=secret_key|source=random_hex|len=64|env=LANGFLOW_SECRET_KEY
 
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）

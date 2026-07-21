@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Bytebase
 description=管理資料庫變更、審核與版本發布流程。
 image=docker.io/bytebase/bytebase:latest

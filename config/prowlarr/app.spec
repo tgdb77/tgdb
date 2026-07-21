@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Prowlarr
 description=集中管理索引器並提供給影音自動化服務使用。
 image=lscr.io/linuxserver/prowlarr:latest

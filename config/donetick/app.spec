@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Donetick
 description=管理家務、例行待辦與任務分派。
 image=docker.io/donetick/donetick:latest

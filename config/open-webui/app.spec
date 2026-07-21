@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Open WebUI
 description=AI 對話網頁介面，可連接本機或遠端模型並管理聊天紀錄。
 image=ghcr.io/open-webui/open-webui:main-slim

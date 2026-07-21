@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Karakeep
 description=保存網頁、筆記與連結，並支援全文搜尋。
 image=ghcr.io/karakeep-app/karakeep:release
@@ -27,4 +28,3 @@ unit=meilisearch|template=quadlet/default3.container|suffix=-meilisearch.contain
 
 update_pull_images=gcr.io/zenika-hub/alpine-chrome:124
 update_pull_images=docker.io/getmeili/meilisearch:v1.37.0
-

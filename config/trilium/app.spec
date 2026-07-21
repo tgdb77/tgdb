@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Trilium
 description=建立階層式筆記、知識庫與個人文件資料庫。
 image=docker.io/triliumnext/notes:latest

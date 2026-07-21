@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=AnythingLLM
 description=AI 知識庫與對話工作區，可連接模型、匯入文件並建立具上下文的聊天助理。
 image=docker.io/mintplexlabs/anythingllm:latest

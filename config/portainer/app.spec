@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Portainer
 description=容器管理平台，可透過 Web UI 管理容器、映像、網路、Volume 與環境資源。
 image=docker.io/portainer/portainer-ce:lts

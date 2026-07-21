@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Vane
 description=提供可連接 Ollama 的本地聊天與模型使用介面。
 image=docker.io/itzcrazykns1337/vane:latest

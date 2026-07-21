@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=ConvertX
 description=透過網頁介面轉換文件、圖片、影音與壓縮檔格式。
 image=ghcr.io/c4illin/convertx:latest

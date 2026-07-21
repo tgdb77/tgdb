@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Unbound
 description=提供可設定轉送與本機紀錄的 DNS Resolver。
 image=docker.io/klutchell/unbound:latest

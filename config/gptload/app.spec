@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=GPT Load
 description=管理多組 AI API 金鑰並提供負載均衡轉發的代理服務。
 image=ghcr.io/tbphp/gpt-load:latest

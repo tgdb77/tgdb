@@ -518,6 +518,10 @@ appspec_cli_quick_min_args() {
   local service="$1"
   local raw
   raw="$(appspec_get "$service" "cli_quick_args" "")"
+  if [ "$raw" = "none" ]; then
+    printf '%s\n' 2
+    return 0
+  fi
   local -a segs=()
   read -r -a segs <<< "$raw"
   local last_seg=""
@@ -565,7 +569,7 @@ appspec_cli_quick_usage() {
   local service="$1"
   local raw
   raw="$(appspec_get "$service" "cli_quick_args" "")"
-  if [ -z "$raw" ]; then
+  if [ -z "$raw" ] || [ "$raw" = "none" ]; then
     printf '%s\n' ""
     return 0
   fi
@@ -634,6 +638,10 @@ appspec_cli_quick() {
 
   local raw
   raw="$(appspec_get "$service" "cli_quick_args" "")"
+  # cli_quick_args=none 表示服務不需要額外 CLI 參數。
+  if [ "$raw" = "none" ]; then
+    raw=""
+  fi
   local -a segs=()
   read -r -a segs <<< "$raw"
   local last_seg=""

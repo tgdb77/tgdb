@@ -12,6 +12,8 @@ record_subdirs=data
 input=MUMBLE_SUPERUSER_PASSWORD|prompt=請輸入 SuperUser 密碼（直接按 Enter 使用隨機密碼）: |type=password|no_space=1|ask=1|default_source=random_hex|len=32|env=MUMBLE_SUPERUSER_PASSWORD
 input=MUMBLE_CONFIG_SERVERPASSWORD|prompt=請輸入伺服器加入密碼（不得為空，輸入 0 取消）: |required=1|type=password|no_space=1|env=MUMBLE_CONFIG_SERVERPASSWORD|allow_cancel=1
 
+cli_quick_args=MUMBLE_CONFIG_SERVERPASSWORD MUMBLE_SUPERUSER_PASSWORD
+
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
 
 success_extra=🔐 SuperUser 帳號：superuser

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=FlareSolverr
 description=替其他服務處理受 Cloudflare 防護頁面影響的瀏覽器請求。
 image=ghcr.io/flaresolverr/flaresolverr:latest

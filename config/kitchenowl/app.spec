@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=KitchenOwl
 description=管理家庭食譜、購物清單、庫存與餐點規劃。
 image=docker.io/tombursch/kitchenowl:latest

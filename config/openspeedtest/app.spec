@@ -11,6 +11,8 @@ base_port=3777
 
 input=https_port|prompt=OpenSpeedTest HTTPS 對外埠: |type=port|env=OPENSPEEDTEST_HTTPS_PORT|default_source=next_available_port|start=3778|avoid=host_port|check_available=1
 
+cli_quick_args=https_port
+
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
 
 success_extra=🔒 HTTPS：https://${access_host}:${https_port}
@@ -19,4 +21,3 @@ success_warn= HTTPS 預設為自簽憑證，瀏覽器出現安全警告屬正常
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

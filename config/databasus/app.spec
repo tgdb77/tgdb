@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Databasus
 description=設定資料庫備份、儲存目的地與通知。
 image=docker.io/databasus/databasus:latest

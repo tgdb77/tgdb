@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=IT-Tools
 description=常用開發與維運小工具集合。
 image=docker.io/corentinth/it-tools:latest
@@ -14,4 +15,3 @@ config_label=.env（環境變數）
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

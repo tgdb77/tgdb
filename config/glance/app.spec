@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Glance
 description=建立可自訂的資訊看板，集中顯示狀態與內容摘要。
 image=docker.io/glanceapp/glance:latest
@@ -21,4 +22,3 @@ success_warn= 要讓 Glance 能讀取容器狀態。需在 Quadlet 取消註解 
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

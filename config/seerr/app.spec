@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Seerr
 description=管理 Jellyfin、Sonarr 與 Radarr 的影音請求。
 image=ghcr.io/seerr-team/seerr:latest

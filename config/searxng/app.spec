@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=SearXNG
 description=彙整多個搜尋來源的中介搜尋服務。
 image=docker.io/searxng/searxng:latest

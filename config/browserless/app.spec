@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Browserless
 description=提供遠端 Chromium 瀏覽器執行與自動化 API。
 image=ghcr.io/browserless/chromium:latest

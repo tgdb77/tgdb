@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Actual Budget
 description=管理個人或家庭預算與帳務紀錄。
 image=docker.io/actualbudget/actual-server:latest

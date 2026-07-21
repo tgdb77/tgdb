@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Grav
 description=使用檔案式內容管理的 PHP 網站與部落格系統。
 image=docker.io/getgrav/grav:latest

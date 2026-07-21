@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=CLIProxyAPI
 description=將命令列工具封裝為 API 的代理服務。
 image=docker.io/eceasy/cli-proxy-api:latest

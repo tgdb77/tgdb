@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Dispatcharr
 description=管理 IPTV 串流、EPG 與 VOD 來源並輸出播放清單。
 image=ghcr.io/dispatcharr/dispatcharr:latest

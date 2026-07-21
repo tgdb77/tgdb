@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Mealie
 description=管理食譜、餐點規劃與購物清單。
 image=ghcr.io/mealie-recipes/mealie:latest

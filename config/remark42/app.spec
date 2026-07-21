@@ -11,6 +11,8 @@ record_subdirs=var
 
 input=site_id|prompt=請輸入 Remark42 的 SITE 識別字（預設 remark）: |ask=1|default=remark|no_space=1|pattern=^[A-Za-z0-9_-]+$|pattern_msg=SITE 識別字僅可使用英數、底線與連字號。|env=SITE
 
+cli_quick_args=site_id
+
 var=secret|source=random_hex|len=64|env=SECRET
 
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）

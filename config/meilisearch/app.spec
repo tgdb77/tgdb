@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=MeiliSearch
 description=提供快速全文搜尋與索引 API。
 image=docker.io/getmeili/meilisearch:v1.42.1

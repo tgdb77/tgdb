@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Netdata
 description=即時查看主機、容器與服務的效能指標。
 image=docker.io/netdata/netdata:stable

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Homer
 description=建立服務入口儀表板，集中整理常用連結。
 image=docker.io/b4bz/homer:latest

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Homarr
 description=建立服務捷徑與狀態整合的首頁儀表板。
 image=ghcr.io/homarr-labs/homarr:latest

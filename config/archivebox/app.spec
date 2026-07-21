@@ -11,6 +11,7 @@ record_subdirs=data sonic
 
 input=admin_user|prompt=請輸入 ArchiveBox 管理員帳號（預設 admin，輸入 0 取消）: |required=1|ask=1|default=admin|no_space=1|pattern=^[A-Za-z0-9._-]+$|pattern_msg=管理員帳號僅可使用英數、點、底線與連字號。|env=ADMIN_USERNAME|allow_cancel=1
 input=admin_pass|prompt=請輸入 ArchiveBox 管理員密碼（直接按 Enter 使用隨機密碼）: |type=password|no_space=1|ask=1|default_source=random_hex|len=32|env=ADMIN_PASSWORD
+cli_quick_args=admin_user admin_pass
 var=search_password|source=random_hex|len=32|env=SEARCH_BACKEND_PASSWORD
 
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）

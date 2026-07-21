@@ -12,6 +12,8 @@ record_subdirs=stalwart snappymail
 input=STALWART_ADMIN_PASSWORD|prompt=請輸入 Stalwart 管理員密碼（直接按 Enter 使用隨機密碼）: |type=password|no_space=1|ask=1|default_source=random_hex|len=32|env=STALWART_ADMIN_PASSWORD
 input=SNAPPYMAIL_PORT|prompt=請輸入 SnappyMail Webmail 對外埠: |type=port|ask=1|default_source=next_available_port|start=28888|avoid=host_port|check_available=1|env=SNAPPYMAIL_PORT
 
+cli_quick_args=STALWART_ADMIN_PASSWORD SNAPPYMAIL_PORT
+
 config=.env|template=configs/.env.example|mode=600|label=.env（環境變數）
 
 post_deploy=scripts/post_deploy_snappymail_admin_password.sh|runner=bash

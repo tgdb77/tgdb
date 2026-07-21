@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Termix
 description=提供瀏覽器中的 SSH 終端與伺服器連線管理。
 image=ghcr.io/lukegus/termix:latest

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=RedisInsight
 image=docker.io/redis/redisinsight:latest
 doc_url=https://redis.io/docs/latest/develop/tools/redisinsight/

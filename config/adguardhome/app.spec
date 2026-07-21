@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=AdGuard Home
 description=DNS 過濾服務，可在網路層封鎖廣告、追蹤器與不想要的網域請求。
 image=docker.io/adguard/adguardhome:latest

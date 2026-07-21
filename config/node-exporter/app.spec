@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Node Exporter
 description=匯出主機 CPU、記憶體、磁碟與網路指標。
 image=docker.io/prom/node-exporter:latest

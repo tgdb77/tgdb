@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Stirling-PDF
 description=PDF 合併、轉換、壓縮與編輯工具。
 image=docker.io/stirlingtools/stirling-pdf:latest

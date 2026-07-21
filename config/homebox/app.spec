@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Homebox
 description=家庭物品清單與資產管理服務。
 image=ghcr.io/sysadminsmedia/homebox:latest

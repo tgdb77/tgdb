@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=CyberChef
 description=提供瀏覽器中的資料編碼、解碼、加密與格式轉換工具。
 image=ghcr.io/gchq/cyberchef:10
@@ -15,4 +16,3 @@ success_warn=若要追最新版，請把映像從 ghcr.io/gchq/cyberchef:10 改�
 
 quadlet_type=single
 quadlet_template=quadlet/default.container
-

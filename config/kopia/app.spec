@@ -22,6 +22,8 @@ input=KOPIA_PASSWORD|prompt=請輸入 Repository 密碼（用於加密/解密，
 input=KOPIA_SERVER_USERNAME|prompt=請輸入 Web UI 帳號（預設 kopia；輸入 0 取消）: |required=1|no_space=1|default=kopia|ask=1|env=KOPIA_SERVER_USERNAME|allow_cancel=1
 input=KOPIA_SERVER_PASSWORD|prompt=請輸入 Web UI 密碼（不得為空；輸入 0 取消）: |required=1|type=password|no_space=1|env=KOPIA_SERVER_PASSWORD|allow_cancel=1
 
+cli_quick_args=KOPIA_PASSWORD KOPIA_SERVER_USERNAME KOPIA_SERVER_PASSWORD volume_dir
+
 success_extra=🔐 Repository 密碼：${KOPIA_PASSWORD}
 success_extra=🔐 Web UI 帳號：${KOPIA_SERVER_USERNAME}
 success_extra=🔐 Web UI 密碼：${KOPIA_SERVER_PASSWORD}

@@ -1,4 +1,5 @@
 spec_version=1
+cli_quick_args=none
 display_name=Frigate
 description=處理攝影機影像、物件偵測與錄影事件。
 image=ghcr.io/blakeblackshear/frigate:stable
