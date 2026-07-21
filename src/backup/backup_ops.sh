@@ -33,7 +33,30 @@ _backup_tar_extract() {
     tar -xzf "$archive" -C "$dest_dir"
 }
 
+_backup_copy_tree() {
+    local src_dir="$1"
+    local dest_dir="$2"
+
+    if command -v podman >/dev/null 2>&1; then
+        podman unshare cp -a "$src_dir/." "$dest_dir/" && return 0
+    fi
+
+    cp -a "$src_dir/." "$dest_dir/"
+}
+
 backup_create() {
+    _backup_operation_lock_acquire || return 1
+    local rc=0
+    if _backup_create_unlocked; then
+        rc=0
+    else
+        rc=$?
+    fi
+    _backup_operation_lock_release
+    return "$rc"
+}
+
+_backup_create_unlocked() {
     _backup_ensure_dirs || return 1
     tgdb_timer_units_stage_to_persist || true
 
@@ -88,7 +111,9 @@ backup_create() {
     echo "備份檔案: $archive"
     echo "----------------------------------"
 
-    _backup_stop_for_cold_snapshot
+    if ! _backup_stop_for_cold_snapshot; then
+        tgdb_fail "無法安全停止所有服務，已取消建立備份。" 1 || return $?
+    fi
 
     local items=()
     items+=("$tgdb_name")
@@ -117,6 +142,18 @@ backup_create() {
 }
 
 backup_create_selected() {
+    _backup_operation_lock_acquire || return 1
+    local rc=0
+    if _backup_create_selected_unlocked "$@"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    _backup_operation_lock_release
+    return "$rc"
+}
+
+_backup_create_selected_unlocked() {
     _backup_ensure_dirs || return 1
 
     if [ "$#" -le 0 ]; then
@@ -129,7 +166,10 @@ backup_create_selected() {
     stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/tgdb_select_backup.XXXXXX")"
     tgdb_name="$(basename "$TGDB_DIR")"
 
-    _backup_stop_selected_for_cold_snapshot "$@"
+    if ! _backup_stop_selected_for_cold_snapshot "$@"; then
+        rm -rf "$stage_dir" 2>/dev/null || true
+        tgdb_fail "無法安全停止所有指定實例服務，已取消建立備份。" 1 || return $?
+    fi
 
     local ok_count=0
     local name
@@ -228,10 +268,26 @@ backup_select_targets_configure_interactive() {
 }
 
 _backup_restore_from_archive() {
+    _backup_operation_lock_acquire || return 1
+    local rc=0
+    if _backup_restore_from_archive_unlocked "$@"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    _backup_operation_lock_release
+    return "$rc"
+}
+
+_backup_restore_from_archive_unlocked() {
     local archive="$1"
 
     if [ -z "$archive" ] || [ ! -f "$archive" ]; then
         tgdb_fail "找不到備份檔：$archive" 1 || return $?
+    fi
+
+    if ! _backup_has_systemctl_user; then
+        tgdb_fail "未偵測到可用的 systemctl --user，無法確認服務已停止；已取消還原。" 1 || return $?
     fi
 
     echo "⏸️ 正在停止服務（還原前置作業）..."
@@ -239,23 +295,42 @@ _backup_restore_from_archive() {
     local had_running=0
     if [ ${#BACKUP_ACTIVE_CONTAINERS[@]} -gt 0 ] || [ ${#BACKUP_ACTIVE_PODS[@]} -gt 0 ]; then
         had_running=1
-        local u
-        for u in "${BACKUP_ACTIVE_CONTAINERS[@]}"; do
-            _backup_stop_unit_by_filename "$u"
-        done
-        for u in "${BACKUP_ACTIVE_PODS[@]}"; do
-            _backup_stop_unit_by_filename "$u"
-        done
+        if ! _backup_stop_collected_units; then
+            tgdb_fail "無法安全停止服務，已取消還原。" 1 || return $?
+        fi
     fi
 
-    mkdir -p "$BACKUP_ROOT"
+    local extract_dir tgdb_name
+    extract_dir="$(mktemp -d "${TMPDIR:-/tmp}/tgdb_full_restore.XXXXXX")" || {
+        tgdb_fail "無法建立還原暫存目錄。" 1 || return $?
+    }
+    tgdb_name="$(basename "$TGDB_DIR")"
 
-    if ! _backup_tar_extract "$archive" "$BACKUP_ROOT"; then
+    if ! _backup_tar_extract "$archive" "$extract_dir"; then
+        rm -rf "$extract_dir" 2>/dev/null || true
         if [ "$had_running" -eq 1 ]; then
             _backup_resume_after_cold_snapshot
         fi
         tgdb_fail "解壓縮備份失敗：$archive" 1 || return $?
     fi
+
+    if [ ! -d "$extract_dir/$tgdb_name" ]; then
+        rm -rf "$extract_dir" 2>/dev/null || true
+        if [ "$had_running" -eq 1 ]; then
+            _backup_resume_after_cold_snapshot
+        fi
+        tgdb_fail "備份檔缺少 TGDB 主要資料目錄，已取消還原：$archive" 1 || return $?
+    fi
+
+    echo "⏳ 已完成解壓縮與結構檢查，正在從暫存目錄套用還原內容..."
+    if ! _backup_copy_tree "$extract_dir" "$BACKUP_ROOT"; then
+        rm -rf "$extract_dir" 2>/dev/null || true
+        if [ "$had_running" -eq 1 ]; then
+            _backup_resume_after_cold_snapshot
+        fi
+        tgdb_fail "無法從暫存目錄套用還原內容。" 1 || return $?
+    fi
+    rm -rf "$extract_dir" 2>/dev/null || true
 
     local restored_name
     while IFS= read -r restored_name; do
@@ -322,6 +397,18 @@ _backup_restore_from_archive() {
 }
 
 _backup_restore_selected_instance_from_archive() {
+    _backup_operation_lock_acquire || return 1
+    local rc=0
+    if _backup_restore_selected_instance_from_archive_unlocked "$@"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    _backup_operation_lock_release
+    return "$rc"
+}
+
+_backup_restore_selected_instance_from_archive_unlocked() {
     local archive="$1"
     local name="$2"
 
@@ -330,6 +417,9 @@ _backup_restore_selected_instance_from_archive() {
     fi
     if [ -z "${name:-}" ]; then
         tgdb_fail "未指定要還原的實例名稱。" 1 || return $?
+    fi
+    if ! _backup_has_systemctl_user; then
+        tgdb_fail "未偵測到可用的 systemctl --user，無法確認服務已停止；已取消還原。" 1 || return $?
     fi
 
     local extract_dir tgdb_name src_instance_dir dest_instance_dir
@@ -352,14 +442,11 @@ _backup_restore_selected_instance_from_archive() {
     local had_running=0
     if [ ${#BACKUP_ACTIVE_CONTAINERS[@]} -gt 0 ] || [ ${#BACKUP_ACTIVE_PODS[@]} -gt 0 ]; then
         had_running=1
-        local u
         echo "⏸️ 正在停止指定實例相關服務（還原前置作業）..."
-        for u in "${BACKUP_ACTIVE_CONTAINERS[@]}"; do
-            _backup_stop_unit_by_filename "$u"
-        done
-        for u in "${BACKUP_ACTIVE_PODS[@]}"; do
-            _backup_stop_unit_by_filename "$u"
-        done
+        if ! _backup_stop_collected_units; then
+            rm -rf "$extract_dir" 2>/dev/null || true
+            tgdb_fail "無法安全停止指定實例服務，已取消還原。" 1 || return $?
+        fi
     fi
 
     local staging_replace="${TGDB_DIR}/.${name}.tgdb-restore.$$"

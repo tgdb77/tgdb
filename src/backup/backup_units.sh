@@ -9,7 +9,8 @@ fi
 _TGDB_BACKUP_UNITS_LOADED=1
 
 _backup_has_systemctl_user() {
-  command -v systemctl >/dev/null 2>&1
+  command -v systemctl >/dev/null 2>&1 || return 1
+  _systemctl_user_try show-environment >/dev/null 2>&1
 }
 
 _backup_runtime_quadlet_archive_root() {
@@ -83,7 +84,25 @@ _backup_stop_unit_by_filename() {
 
   local -a candidates=()
   mapfile -t candidates < <(_backup_unit_candidates_by_filename "$fname")
-  _systemctl_user_try stop -- "${candidates[@]}" >/dev/null 2>&1 || true
+  _systemctl_user_try stop -- "${candidates[@]}" >/dev/null 2>&1
+}
+
+_backup_stop_collected_units() {
+  local u
+  for u in "${BACKUP_ACTIVE_CONTAINERS[@]}"; do
+    if ! _backup_stop_unit_by_filename "$u" || _backup_unit_is_active_by_filename "$u"; then
+      tgdb_warn "無法確認服務已停止：$u；已取消作業以避免建立不一致備份或在服務運行時還原。"
+      _backup_resume_after_cold_snapshot
+      return 1
+    fi
+  done
+  for u in "${BACKUP_ACTIVE_PODS[@]}"; do
+    if ! _backup_stop_unit_by_filename "$u" || _backup_unit_is_active_by_filename "$u"; then
+      tgdb_warn "無法確認服務已停止：$u；已取消作業以避免建立不一致備份或在服務運行時還原。"
+      _backup_resume_after_cold_snapshot
+      return 1
+    fi
+  done
 }
 
 _backup_start_unit_by_filename() {
@@ -161,8 +180,8 @@ _backup_collect_active_user_units() {
 
 _backup_stop_for_cold_snapshot() {
   if ! _backup_has_systemctl_user; then
-    tgdb_warn "未偵測到 systemctl --user，無法自動停機進行冷備份；Postgres/SQLite 可能產生不一致備份。"
-    return 0
+    tgdb_warn "未偵測到可用的 systemctl --user，無法確認服務已停止；為避免產生不一致冷備份，已取消作業。"
+    return 1
   fi
 
   _backup_collect_active_tgdb_units
@@ -173,13 +192,7 @@ _backup_stop_for_cold_snapshot() {
 
   echo "⏸️ 正在停止服務（冷備份，避免 Postgres/SQLite 備份不一致）..."
 
-  local u
-  for u in "${BACKUP_ACTIVE_CONTAINERS[@]}"; do
-    _backup_stop_unit_by_filename "$u"
-  done
-  for u in "${BACKUP_ACTIVE_PODS[@]}"; do
-    _backup_stop_unit_by_filename "$u"
-  done
+  _backup_stop_collected_units
 }
 
 _backup_resume_after_cold_snapshot() {
@@ -299,19 +312,18 @@ _backup_collect_active_units_for_instances() {
 }
 
 _backup_stop_selected_for_cold_snapshot() {
+    if ! _backup_has_systemctl_user; then
+        tgdb_warn "未偵測到可用的 systemctl --user，無法確認指定實例服務已停止；為避免產生不一致冷備份，已取消作業。"
+        return 1
+    fi
+
     _backup_collect_active_units_for_instances "$@"
     if [ ${#BACKUP_ACTIVE_CONTAINERS[@]} -eq 0 ] && [ ${#BACKUP_ACTIVE_PODS[@]} -eq 0 ]; then
         return 0
     fi
 
     echo "⏸️ 正在停止指定實例相關服務（冷備份）..."
-    local u
-    for u in "${BACKUP_ACTIVE_CONTAINERS[@]}"; do
-        _backup_stop_unit_by_filename "$u"
-    done
-    for u in "${BACKUP_ACTIVE_PODS[@]}"; do
-        _backup_stop_unit_by_filename "$u"
-    done
+    _backup_stop_collected_units
 }
 
 _backup_enable_units_by_filenames() {

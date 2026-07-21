@@ -32,7 +32,7 @@ prefixes:
 derp:
   server:
     enabled: false
-    region_id: 901
+    region_id: 900
     region_code: "headscale"
     region_name: "Headscale Embedded DERP"
     verify_clients: true

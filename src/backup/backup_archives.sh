@@ -46,6 +46,37 @@ _backup_ensure_dirs() {
     _backup_ensure_module_config
 }
 
+_backup_operation_lock_acquire() {
+    local lock_file="$BACKUP_ROOT/.tgdb-backup.lock"
+
+    if ! command -v flock >/dev/null 2>&1; then
+        tgdb_fail "找不到 flock，為避免備份或還原同時執行而造成資料不一致，已取消操作。" 1 || return $?
+    fi
+
+    # 同一個 shell 不應重複取得鎖；外層操作會負責釋放。
+    if [ -n "${BACKUP_OPERATION_LOCK_FD:-}" ]; then
+        return 0
+    fi
+
+    mkdir -p "$BACKUP_ROOT" || return 1
+    # shellcheck disable=SC3045 # 專案以 Bash 執行，使用動態檔案描述元避免固定 FD 衝突。
+    exec {BACKUP_OPERATION_LOCK_FD}>"$lock_file"
+    if ! flock -n "$BACKUP_OPERATION_LOCK_FD"; then
+        # shellcheck disable=SC3045 # 與上方動態檔案描述元配對關閉。
+        exec {BACKUP_OPERATION_LOCK_FD}>&-
+        unset BACKUP_OPERATION_LOCK_FD
+        tgdb_fail "已有其他備份或還原作業正在執行，請待其完成後再試。" 1 || return $?
+    fi
+}
+
+_backup_operation_lock_release() {
+    [ -n "${BACKUP_OPERATION_LOCK_FD:-}" ] || return 0
+    flock -u "$BACKUP_OPERATION_LOCK_FD" 2>/dev/null || true
+    # shellcheck disable=SC3045 # 與動態檔案描述元配對關閉。
+    exec {BACKUP_OPERATION_LOCK_FD}>&-
+    unset BACKUP_OPERATION_LOCK_FD
+}
+
 _backup_list_backups_newest_first() {
     ls -1t "$BACKUP_DIR/${BACKUP_PREFIX}-"*.tar.gz 2>/dev/null || true
 }

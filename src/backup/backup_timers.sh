@@ -66,16 +66,8 @@ backup_remove_timer() {
 }
 
 backup_timer_run_once() {
-    if [ -f "$SCRIPT_DIR/fail2ban_manager.sh" ]; then
-        # shellcheck source=/dev/null
-        source "$SCRIPT_DIR/fail2ban_manager.sh"
-        backup_fail2ban_local
-    fi
-    if [ -f "$SCRIPT_DIR/nftables.sh" ]; then
-        # shellcheck source=/dev/null
-        source "$SCRIPT_DIR/nftables.sh"
-        nftables_backup
-    fi
+    # 此 timer 以 systemd --user 執行，不能在無互動終端下取得 sudo 權限。
+    # Fail2ban 與 nftables 的系統層快照將由未來的 root/system scope 備份流程處理。
     backup_create
 }
 
@@ -334,4 +326,3 @@ backup_timer_menu() {
 }
 
 # --- 互動主選單（由 tgdb.sh 呼叫） ---
-

@@ -6,8 +6,7 @@
 
 - `tgdb.sh`：互動式主入口腳本。
 - `src/`：主要功能模組（核心/系統/Apps 等）；進階應用集中於 `src/advanced/`（例如 `nginx-p.sh`、`rclone.sh`、`headscale-p.sh` 等）。
-- `config/`：服務預設設定與 Quadlet 範本（Nginx、OpenList、Teldrive、utils 等）。
-- `plan/`：規劃與協調相關檔案（本文件即位於此倉庫根目錄）。
+- `config/`：服務預設設定與 Quadlet 範本（Excalidraw、PostgreSQL、Redis、utils 等）。
 
 請維持功能模組單一職責，避免將無關邏輯塞入同一腳本。
 
