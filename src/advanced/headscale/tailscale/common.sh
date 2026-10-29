@@ -112,6 +112,13 @@ _tailscale_p_sudo() {
   fi
 }
 
+_tailscale_p_disable_dns_acceptance() {
+  # 即使 tailscale 尚未登入也嘗試套用；未登入時失敗不影響安裝或啟動流程。
+  command -v tailscale >/dev/null 2>&1 || return 0
+  _tailscale_p_sudo tailscale set --accept-dns=false >/dev/null 2>&1 || true
+  return 0
+}
+
 _tailscale_p_require_sudo() {
   if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
     return 0
@@ -153,6 +160,7 @@ _tailscale_p_rerun_up_with_suggested_settings() {
   [ "${parts[1]}" = "up" ] || return 1
 
   local -a cmd=(tailscale up)
+  local accept_dns_added=0
 
   local i=2
   while [ "$i" -lt "${#parts[@]}" ]; do
@@ -180,6 +188,11 @@ _tailscale_p_rerun_up_with_suggested_settings() {
       --auth-key|--auth-key=*)
         # 由外部附加，避免重複
         ;;
+      --accept-dns|--accept-dns=*)
+        # 強制使用本機 DNS，不接受 Tailnet 的 DNS 設定。
+        cmd+=("--accept-dns=false")
+        accept_dns_added=1
+        ;;
       *)
         cmd+=("$a")
         ;;
@@ -190,6 +203,9 @@ _tailscale_p_rerun_up_with_suggested_settings() {
 
   if [ -n "${authkey:-}" ]; then
     cmd+=("--auth-key" "$authkey")
+  fi
+  if [ "$accept_dns_added" -eq 0 ]; then
+    cmd+=("--accept-dns=false")
   fi
 
   _tailscale_p_sudo "${cmd[@]}"
@@ -210,6 +226,7 @@ tailscale_p_show_status() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
+  _tailscale_p_disable_dns_acceptance
 
   clear
   echo "=================================="
@@ -244,6 +261,7 @@ _tailscale_p_print_status_summary() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
+  _tailscale_p_disable_dns_acceptance
 
   local st=""
   st="$(_tailscale_p_sudo tailscale status 2>&1 || true)"
@@ -285,6 +303,7 @@ _tailscale_p_install_official_script() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl enable --now tailscaled 2>/dev/null || true
   fi
+  _tailscale_p_disable_dns_acceptance
 
   if [ -S /var/run/tailscale/tailscaled.sock ]; then
     echo "✅ tailscaled socket 已存在：/var/run/tailscale/tailscaled.sock"

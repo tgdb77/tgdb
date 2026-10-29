@@ -30,6 +30,7 @@ tailscale_p_join_headscale_server() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
+  _tailscale_p_disable_dns_acceptance
 
   local server_url=""
   _tailscale_p_prompt_server_url_required server_url || {
@@ -58,7 +59,7 @@ tailscale_p_join_headscale_server() {
   require_root || { ui_pause "按任意鍵返回..."; return 1; }
 
   local out rc
-  out="$(_tailscale_p_sudo tailscale up --login-server "$server_url" --auth-key "$authkey" 2>&1)" && rc=0 || rc=$?
+  out="$(_tailscale_p_sudo tailscale up --login-server "$server_url" --auth-key "$authkey" --accept-dns=false 2>&1)" && rc=0 || rc=$?
   if [ "$rc" -eq 0 ]; then
     _tailscale_p_mark_joined || true
   else

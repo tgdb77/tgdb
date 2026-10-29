@@ -84,11 +84,23 @@ third_party_reinstall_print_menu() {
 }
 
 third_party_reinstall_collect_params() {
+  local username=""
   local password=""
   local ssh_port=""
   local default_ssh_port=""
 
-  THIRD_PARTY_REINSTALL_USERNAME="root"
+  while true; do
+    read -r -e -p "請輸入系統使用者名稱（預設 root，輸入 0 取消）: " username
+    if [ "$username" = "0" ]; then
+      return 2
+    fi
+    username="${username:-root}"
+    if [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]] && [ "${#username}" -le 32 ]; then
+      THIRD_PARTY_REINSTALL_USERNAME="$username"
+      break
+    fi
+    tgdb_err "使用者名稱格式無效：僅允許小寫英數、底線與連字號，且長度不可超過 32 字元。"
+  done
 
   while true; do
     read -r -s -p "請輸入 root 密碼（輸入 0 取消）: " password
@@ -138,8 +150,9 @@ third_party_reinstall_build_command() {
   local script_path="$1"
   local os_id="$2"
   local os_version="$3"
-  local password="$4"
-  local ssh_port="$5"
+  local username="$4"
+  local password="$5"
+  local ssh_port="$6"
 
   THIRD_PARTY_REINSTALL_COMMAND=()
   if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
@@ -150,7 +163,7 @@ third_party_reinstall_build_command() {
   if [ -n "$os_version" ]; then
     THIRD_PARTY_REINSTALL_COMMAND+=("$os_version")
   fi
-  THIRD_PARTY_REINSTALL_COMMAND+=("--password" "$password" "--ssh-port" "$ssh_port")
+  THIRD_PARTY_REINSTALL_COMMAND+=("--username" "$username" "--password" "$password" "--ssh-port" "$ssh_port")
 
   if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
     THIRD_PARTY_REINSTALL_REBOOT_COMMAND=("reboot")
@@ -260,8 +273,10 @@ third_party_reinstall_menu() {
     THIRD_PARTY_REINSTALL_COMMAND_PREVIEW=""
     THIRD_PARTY_REINSTALL_REBOOT_COMMAND_PREVIEW=""
 
-    if ! third_party_reinstall_collect_params; then
-      case "$?" in
+    third_party_reinstall_collect_params
+    local collect_rc=$?
+    if [ "$collect_rc" -ne 0 ]; then
+      case "$collect_rc" in
         2) continue ;;
         *)
           ui_pause "參數收集失敗，按任意鍵返回..." "main"
@@ -279,6 +294,7 @@ third_party_reinstall_menu() {
       "$THIRD_PARTY_REINSTALL_DOWNLOADED_PATH" \
       "$THIRD_PARTY_REINSTALL_TARGET_ID" \
       "$THIRD_PARTY_REINSTALL_TARGET_VERSION" \
+      "$THIRD_PARTY_REINSTALL_USERNAME" \
       "$THIRD_PARTY_REINSTALL_PASSWORD" \
       "$THIRD_PARTY_REINSTALL_SSH_PORT"; then
       ui_pause "組合執行指令失敗，按任意鍵返回..." "main"

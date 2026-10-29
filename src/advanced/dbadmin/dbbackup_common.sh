@@ -383,7 +383,13 @@ _dbbackup_find_db_endpoints() {
     [ -n "${container_name:-}" ] || continue
 
     case "$db_type" in
-      postgres) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/postgresql/data" 2>/dev/null || true)" ;;
+      postgres)
+        # PostgreSQL 18 起官方映像將 PGDATA 放在 /var/lib/postgresql 下；保留舊路徑相容性。
+        host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/postgresql/data" 2>/dev/null || true)"
+        if [ -z "${host_data_dir:-}" ]; then
+          host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/postgresql" 2>/dev/null || true)"
+        fi
+        ;;
       redis) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/data" 2>/dev/null || true)" ;;
       mysql) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/var/lib/mysql" 2>/dev/null || true)" ;;
       mongo) host_data_dir="$(_dbbackup_unit_volume_host_for_container_path "$file" "/data/db" 2>/dev/null || true)" ;;
@@ -468,7 +474,7 @@ _dbbackup_pick_db_endpoint() {
     if [ "$db_type" = "mysql" ]; then
       tgdb_fail "找不到可用的目標（MySQL / MariaDB）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=mysql 或 tgdb_db=mariadb，且其資料卷掛載存在（/var/lib/mysql），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
     else
-      tgdb_fail "找不到可用的目標（$db_type）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=${db_type}，且其資料卷掛載存在（Postgres: /var/lib/postgresql/data；Redis: /data；MongoDB: /data/db），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
+      tgdb_fail "找不到可用的目標（$db_type）。請確認 DB 容器的 Quadlet 單元內有設定 Label=tgdb_db=${db_type}，且其資料卷掛載存在（Postgres: /var/lib/postgresql/data 或 /var/lib/postgresql；Redis: /data；MongoDB: /data/db），並且同一實例資料夾內有 .env（用於讀取帳密）。" 1 || true
     fi
     ui_pause "按任意鍵返回..."
     return 1

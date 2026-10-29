@@ -117,14 +117,15 @@ tailscale_p_client_enable() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
+  _tailscale_p_disable_dns_acceptance
 
   echo "=================================="
   echo "❖ tailscale up（開啟/連線）❖"
   echo "=================================="
-  echo "將執行：tailscale up（不帶參數：僅把網路帶回 online，不變更設定）"
+  echo "將執行：tailscale up --accept-dns=false（啟動並停用 Tailscale DNS 接管）"
   echo "----------------------------------"
   local out rc
-  out="$(_tailscale_p_sudo tailscale up 2>&1)" && rc=0 || rc=$?
+  out="$(_tailscale_p_sudo tailscale up --accept-dns=false 2>&1)" && rc=0 || rc=$?
   if [ "$rc" -ne 0 ]; then
     tgdb_warn "tailscale up 失敗（rc=$rc）。"
     printf '%s\n' "$out"
@@ -142,6 +143,7 @@ tailscale_p_client_enable() {
       fi
     fi
   fi
+  _tailscale_p_disable_dns_acceptance
   ui_pause "完成，按任意鍵返回..."
   return 0
 }

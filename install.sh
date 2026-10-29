@@ -214,6 +214,11 @@ reexec_as_user() {
   local target_user="$1"
   local target_home=""
   local temp_script=""
+  local target_uid=""
+  local runtime_dir=""
+  local login_command=""
+  local env_assignment=""
+  local escaped=""
 
   target_home="$(getent passwd "$target_user" | cut -d: -f6)"
   if [ -z "$target_home" ] || [ ! -d "$target_home" ]; then
@@ -221,15 +226,50 @@ reexec_as_user() {
     exit 1
   fi
 
+  if ! command -v su >/dev/null 2>&1; then
+    log_error "找不到 su，無法以 '$target_user' 的 login shell 重新啟動安裝流程。"
+    exit 1
+  fi
+
+  target_uid="$(id -u "$target_user")"
+  runtime_dir="/run/user/$target_uid"
+
   temp_script="$(mktemp /tmp/tgdb-install.XXXXXX.sh)"
   cat "$SCRIPT_SOURCE" > "$temp_script"
   chmod 755 "$temp_script"
   chown "$target_user":"$target_user" "$temp_script" 2>/dev/null || true
 
-  log_info "即將切換至普通管理員用戶 '$target_user' 繼續安裝..."
-  exec sudo -H -u "$target_user" \
-    env TGDB_INSTALL_SWITCHED=1 TGDB_PARENT_DIR="$target_home" TGDB_REPO_URL="$REPO_URL" TGDB_BRANCH="$TGDB_BRANCH" \
-    bash "$temp_script" "${TGDB_ARGS[@]}" < /dev/tty > /dev/tty 2>&1
+  for env_assignment in \
+    "TGDB_INSTALL_SWITCHED=1" \
+    "TGDB_PARENT_DIR=$target_home" \
+    "TGDB_REPO_URL=$REPO_URL" \
+    "TGDB_BRANCH=$TGDB_BRANCH" \
+    "HOME=$target_home" \
+    "USER=$target_user" \
+    "LOGNAME=$target_user" \
+    "SHELL=/bin/bash"; do
+    printf -v escaped '%q' "$env_assignment"
+    login_command="${login_command}${login_command:+ }$escaped"
+  done
+
+  if [ -d "$runtime_dir" ]; then
+    printf -v escaped '%q' "XDG_RUNTIME_DIR=$runtime_dir"
+    login_command="${login_command}${login_command:+ }$escaped"
+    if [ -S "$runtime_dir/bus" ]; then
+      printf -v escaped '%q' "DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus"
+      login_command="${login_command}${login_command:+ }$escaped"
+    fi
+  fi
+
+  printf -v escaped '%q' "$temp_script"
+  login_command="${login_command}${login_command:+ }bash $escaped"
+  for arg in "${TGDB_ARGS[@]}"; do
+    printf -v escaped '%q' "$arg"
+    login_command="${login_command}${login_command:+ }$escaped"
+  done
+
+  log_info "即將以 '$target_user' 的 login shell 重新登入並繼續安裝，以刷新 TTY、群組與使用者環境..."
+  exec su - "$target_user" -c "$login_command" < /dev/tty > /dev/tty 2>&1
 }
 
 ensure_normal_admin_runner() {
