@@ -95,7 +95,8 @@ policy:
 dns:
   magic_dns: true
   base_domain: "dns.<root_domain>"
-  override_local_dns: true
+  # 客戶端接受 MagicDNS／分流 DNS，但一般查詢保留本機上游 DNS。
+  override_local_dns: false
   nameservers:
     global:
       - "1.1.1.1"

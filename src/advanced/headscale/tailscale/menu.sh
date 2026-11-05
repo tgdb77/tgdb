@@ -117,21 +117,20 @@ tailscale_p_client_enable() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
-  _tailscale_p_disable_dns_acceptance
 
   echo "=================================="
   echo "❖ tailscale up（開啟/連線）❖"
   echo "=================================="
-  echo "將執行：tailscale up --accept-dns=false（啟動並停用 Tailscale DNS 接管）"
+  echo "將執行：tailscale up --accept-dns=true（啟動並接受 Tailscale DNS 設定）"
   echo "----------------------------------"
   local out rc
-  out="$(_tailscale_p_sudo tailscale up --accept-dns=false 2>&1)" && rc=0 || rc=$?
+  out="$(_tailscale_p_sudo tailscale up --accept-dns=true 2>&1)" && rc=0 || rc=$?
   if [ "$rc" -ne 0 ]; then
     tgdb_warn "tailscale up 失敗（rc=$rc）。"
     printf '%s\n' "$out"
     echo "----------------------------------"
     if printf '%s\n' "$out" | grep -Fq "requires mentioning all non-default flags" 2>/dev/null; then
-      # 理論上不帶 flags 不會觸發此錯誤；若仍觸發，照建議命令重跑即可。
+      # 保留既有非預設設定，並在建議命令中明確啟用 DNS 接管。
       _tailscale_p_rerun_up_with_suggested_settings "$out" "" "" 2>&1 || true
       echo "----------------------------------"
     fi
@@ -143,7 +142,6 @@ tailscale_p_client_enable() {
       fi
     fi
   fi
-  _tailscale_p_disable_dns_acceptance
   ui_pause "完成，按任意鍵返回..."
   return 0
 }

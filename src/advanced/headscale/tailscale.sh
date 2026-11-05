@@ -6,6 +6,8 @@ HEADSCALE_TAILSCALE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tailscale
 
 # shellcheck source=src/advanced/headscale/tailscale/common.sh
 source "$HEADSCALE_TAILSCALE_DIR/common.sh"
+# shellcheck source=src/advanced/headscale/tailscale/dns.sh
+source "$HEADSCALE_TAILSCALE_DIR/dns.sh"
 # shellcheck source=src/advanced/headscale/tailscale/join.sh
 source "$HEADSCALE_TAILSCALE_DIR/join.sh"
 # shellcheck source=src/advanced/headscale/tailscale/exit_node.sh

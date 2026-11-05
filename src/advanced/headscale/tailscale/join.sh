@@ -30,7 +30,6 @@ tailscale_p_join_headscale_server() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
-  _tailscale_p_disable_dns_acceptance
 
   local server_url=""
   _tailscale_p_prompt_server_url_required server_url || {
@@ -50,6 +49,7 @@ tailscale_p_join_headscale_server() {
   echo "❖ tailscale up（加入 Headscale）❖"
   echo "=================================="
   echo "login-server：$server_url"
+  echo "DNS：接受 Tailscale／Headscale 的 MagicDNS 與分流 DNS 設定。"
   echo "----------------------------------"
   echo "提醒：若你使用 Cloudflare 代理/CDN（橘雲），可能導致註冊/認證失敗。"
   echo "建議：加入前先關閉代理（DNS only / 灰雲），讓客戶端可直連源站 IP。"
@@ -59,7 +59,7 @@ tailscale_p_join_headscale_server() {
   require_root || { ui_pause "按任意鍵返回..."; return 1; }
 
   local out rc
-  out="$(_tailscale_p_sudo tailscale up --login-server "$server_url" --auth-key "$authkey" --accept-dns=false 2>&1)" && rc=0 || rc=$?
+  out="$(_tailscale_p_sudo tailscale up --login-server "$server_url" --auth-key "$authkey" --accept-dns=true 2>&1)" && rc=0 || rc=$?
   if [ "$rc" -eq 0 ]; then
     _tailscale_p_mark_joined || true
   else

@@ -112,10 +112,12 @@ _tailscale_p_sudo() {
   fi
 }
 
-_tailscale_p_disable_dns_acceptance() {
-  # 即使 tailscale 尚未登入也嘗試套用；未登入時失敗不影響安裝或啟動流程。
+_tailscale_p_enable_dns_acceptance() {
+  # 即使尚未登入也嘗試套用；加入／啟動時仍會明確指定接受 DNS。
   command -v tailscale >/dev/null 2>&1 || return 0
-  _tailscale_p_sudo tailscale set --accept-dns=false >/dev/null 2>&1 || true
+  if ! _tailscale_p_sudo tailscale set --accept-dns=true; then
+    tgdb_warn "尚未能啟用 Tailscale DNS，請在加入或啟動客戶端後確認。"
+  fi
   return 0
 }
 
@@ -189,8 +191,8 @@ _tailscale_p_rerun_up_with_suggested_settings() {
         # 由外部附加，避免重複
         ;;
       --accept-dns|--accept-dns=*)
-        # 強制使用本機 DNS，不接受 Tailnet 的 DNS 設定。
-        cmd+=("--accept-dns=false")
+        # 接受 Tailnet 的 DNS 設定，即使建議命令沿用先前停用的偏好。
+        cmd+=("--accept-dns=true")
         accept_dns_added=1
         ;;
       *)
@@ -205,7 +207,7 @@ _tailscale_p_rerun_up_with_suggested_settings() {
     cmd+=("--auth-key" "$authkey")
   fi
   if [ "$accept_dns_added" -eq 0 ]; then
-    cmd+=("--accept-dns=false")
+    cmd+=("--accept-dns=true")
   fi
 
   _tailscale_p_sudo "${cmd[@]}"
@@ -226,7 +228,6 @@ tailscale_p_show_status() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
-  _tailscale_p_disable_dns_acceptance
 
   clear
   echo "=================================="
@@ -261,7 +262,6 @@ _tailscale_p_print_status_summary() {
   if command -v systemctl >/dev/null 2>&1; then
     _tailscale_p_sudo systemctl start tailscaled 2>/dev/null || true
   fi
-  _tailscale_p_disable_dns_acceptance
 
   local st=""
   st="$(_tailscale_p_sudo tailscale status 2>&1 || true)"
@@ -290,20 +290,26 @@ _tailscale_p_install_official_script() {
   echo "警語：此操作會執行 pipe-to-shell：curl ... | sh"
   echo "建議：先於測試環境驗證，並確認你信任 Tailscale 官方來源。"
   echo "----------------------------------"
-  echo "將執行：curl -fsSL https://tailscale.com/install.sh | sh"
+  echo "安裝前會先備份 DNS、安裝/啟用 systemd-resolved，並設定 /etc/resolv.conf 的 stub 連結。"
+  echo "若需切換 DNS 管理，會重啟已運作的 NetworkManager；遠端連線可能短暫中斷。"
+  echo "接著執行：curl -fsSL https://tailscale.com/install.sh | sh"
   echo "----------------------------------"
   ui_confirm_yn "確定要繼續嗎？(y/N，預設 Y，輸入 0 取消): " "Y" || return $?
 
-  if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] 2>/dev/null; then
-    curl -fsSL https://tailscale.com/install.sh | sh
-  else
-    curl -fsSL https://tailscale.com/install.sh | sudo sh
+  _tailscale_p_prepare_systemd_resolved || return 1
+
+  # 在子 shell 啟用 pipefail，避免下載失敗卻被當成安裝成功。
+  if ! (set -o pipefail; curl -fsSL https://tailscale.com/install.sh | _tailscale_p_sudo sh); then
+    tgdb_err "Tailscale 官方安裝腳本執行失敗。"
+    return 1
   fi
 
-  if command -v systemctl >/dev/null 2>&1; then
-    _tailscale_p_sudo systemctl enable --now tailscaled 2>/dev/null || true
+  if ! _tailscale_p_sudo systemctl enable --now tailscaled ||
+     ! _tailscale_p_sudo systemctl restart tailscaled; then
+    tgdb_err "tailscaled 啟動失敗。"
+    return 1
   fi
-  _tailscale_p_disable_dns_acceptance
+  _tailscale_p_enable_dns_acceptance
 
   if [ -S /var/run/tailscale/tailscaled.sock ]; then
     echo "✅ tailscaled socket 已存在：/var/run/tailscale/tailscaled.sock"
