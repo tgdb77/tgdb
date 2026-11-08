@@ -5,7 +5,6 @@ set -euo pipefail
 REPO_URL="${TGDB_REPO_URL:-https://github.com/tgdb77/tgdb.git}"
 TGDB_BRANCH="${TGDB_BRANCH:-main}"
 TGDB_ARGS=("$@")
-SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
 TGDB_PARENT_DIR="${TGDB_PARENT_DIR:-}"
 TGDB_DIR=""
 SUDO_CMD=""
@@ -56,9 +55,13 @@ is_valid_username() {
   [[ "$1" =~ ^[a-z][a-z0-9_-]*$ ]]
 }
 
+has_interactive_tty() {
+  ( : < /dev/tty > /dev/tty ) 2>/dev/null
+}
+
 ensure_interactive_tty() {
-  if [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then
-    log_error "目前無法存取互動終端，不能建立普通管理員用戶。"
+  if ! has_interactive_tty; then
+    log_error "目前無法存取互動終端，不能建立或切換普通管理員用戶。"
     log_error "請改在可互動的終端機中執行此安裝腳本。"
     exit 1
   fi
@@ -114,14 +117,15 @@ ensure_sudo_available_for_user() {
     exit 1
   fi
 
-  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
-    # shellcheck disable=SC2024
-    if ! sudo -v < /dev/tty; then
-      log_error "目前用戶無法取得 sudo 權限，請改用具 sudo 權限的普通用戶執行。"
+  if has_interactive_tty; then
+    # sudo 預設會自行從控制終端讀取密碼，不需要重新導向標準輸入。
+    if ! sudo -v; then
+      log_error "sudo 權限驗證失敗，請確認目前用戶的 sudo 規則與密碼。"
       exit 1
     fi
   elif ! sudo -n true >/dev/null 2>&1; then
-    log_error "目前用戶無法取得 sudo 權限，請改用具 sudo 權限的普通用戶執行。"
+    log_error "無法以非互動模式取得 sudo 權限，且沒有可用的互動終端可輸入密碼。"
+    log_error "請在互動終端中重新執行；切換用戶時須保留或建立可用的控制終端。"
     exit 1
   fi
 
@@ -135,6 +139,61 @@ ensure_sudo_installed_as_root() {
 
   log_info "未偵測到 sudo，正在以 root 身分安裝 sudo..."
   install_package_as_root "sudo"
+}
+
+is_usable_admin_user() {
+  local username="$1"
+  local passwd_entry=""
+  local uid=""
+  local home_dir=""
+  local login_shell=""
+
+  passwd_entry="$(getent passwd "$username")" || return 1
+  IFS=: read -r _ _ uid _ _ home_dir login_shell <<< "$passwd_entry"
+
+  [[ "$uid" =~ ^[0-9]+$ ]] && [ "$uid" -ne 0 ] || return 1
+  [ -n "$home_dir" ] && [ -d "$home_dir" ] || return 1
+  [ -n "$login_shell" ] && [ -x "$login_shell" ] || return 1
+  case "${login_shell##*/}" in
+    nologin|false) return 1 ;;
+  esac
+
+  # 以 sudo 實際規則判定，涵蓋 sudo/wheel 群組與個別 sudoers 設定。
+  sudo -n -l -U "$username" >/dev/null 2>&1
+}
+
+find_existing_admin_user() {
+  local username=""
+  local uid=""
+  local uid_min=""
+  local uid_max=""
+
+  # 透過 sudo 啟動時，優先切回原始操作者，但仍須確認帳號可登入且具 sudo 權限。
+  if [ -n "${SUDO_USER:-}" ] && is_usable_admin_user "$SUDO_USER"; then
+    printf '%s\n' "$SUDO_USER"
+    return 0
+  fi
+
+  if [ -r /etc/login.defs ]; then
+    uid_min="$(awk '$1 == "UID_MIN" {print $2; exit}' /etc/login.defs)"
+    uid_max="$(awk '$1 == "UID_MAX" {print $2; exit}' /etc/login.defs)"
+  fi
+  [[ "$uid_min" =~ ^[0-9]+$ ]] || uid_min=1000
+  [[ "$uid_max" =~ ^[0-9]+$ ]] || uid_max=60000
+
+  # 僅掃描普通用戶 UID 範圍，避免誤選服務帳號。
+  while IFS=: read -r username _ uid _ _ _ _; do
+    [[ "$uid" =~ ^[0-9]+$ ]] || continue
+    if [ "$uid" -lt "$uid_min" ] || [ "$uid" -gt "$uid_max" ]; then
+      continue
+    fi
+    if is_usable_admin_user "$username"; then
+      printf '%s\n' "$username"
+      return 0
+    fi
+  done < <(getent passwd)
+
+  return 1
 }
 
 create_admin_user_as_root() {
@@ -210,91 +269,122 @@ create_admin_user_as_root() {
   printf '%s\n' "$username"
 }
 
-reexec_as_user() {
+write_installer_snapshot() {
+  local output_file="$1"
+
+  # 由已載入的函式與設定產生實體安裝器，避免重讀已消耗的 curl 管線或 /dev/fd。
+  # 明確列出本安裝器的函式，避免將呼叫環境中的其他函式一併帶入。
+  {
+    printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
+    declare -p REPO_URL TGDB_BRANCH
+    printf '%s\n' \
+      'TGDB_ARGS=("$@")' \
+      "TGDB_PARENT_DIR=\"\${TGDB_PARENT_DIR:-}\"" \
+      'TGDB_DIR=""' \
+      'SUDO_CMD=""'
+    declare -f \
+      log_info log_warn log_error get_admin_group init_paths is_valid_username \
+      has_interactive_tty ensure_interactive_tty install_package_as_root \
+      ensure_sudo_available_for_user ensure_sudo_installed_as_root \
+      is_usable_admin_user find_existing_admin_user create_admin_user_as_root \
+      write_installer_snapshot switch_to_user_login ensure_normal_admin_runner \
+      install_git sync_project start_tgdb main
+    printf '\nmain "$@"\n'
+  } > "$output_file"
+}
+
+switch_to_user_login() {
   local target_user="$1"
   local target_home=""
-  local temp_script=""
   local target_uid=""
+  local target_gid=""
+  local temp_dir=""
+  local temp_script=""
+  local bash_path=""
   local runtime_dir=""
   local login_command=""
-  local env_assignment=""
-  local escaped=""
+  local shell_command=""
+  local switch_status=0
+  local env_args=()
+  local shell_env_args=()
+
+  ensure_interactive_tty
+  if ! command -v su >/dev/null 2>&1; then
+    log_error "找不到 su，無法切換至 '$target_user' 的登入環境。"
+    exit 1
+  fi
+  if ! su --help 2>&1 | grep -q -- '--pty'; then
+    log_error "目前的 su 不支援 --pty，無法提供自動續跑安裝所需的互動終端。"
+    log_error "請安裝支援 --pty 的 su（util-linux），或先手動 su - $target_user 後再執行安裝指令。"
+    exit 1
+  fi
 
   target_home="$(getent passwd "$target_user" | cut -d: -f6)"
   if [ -z "$target_home" ] || [ ! -d "$target_home" ]; then
-    log_error "找不到用戶 '$target_user' 的家目錄，無法切換執行。"
+    log_error "找不到用戶 '$target_user' 的家目錄，無法繼續安裝。"
     exit 1
   fi
-
-  if ! command -v su >/dev/null 2>&1; then
-    log_error "找不到 su，無法以 '$target_user' 的 login shell 重新啟動安裝流程。"
-    exit 1
-  fi
-
   target_uid="$(id -u "$target_user")"
+  target_gid="$(id -g "$target_user")"
+  bash_path="$(command -v bash)"
   runtime_dir="/run/user/$target_uid"
 
-  temp_script="$(mktemp /tmp/tgdb-install.XXXXXX.sh)"
-  cat "$SCRIPT_SOURCE" > "$temp_script"
-  chmod 755 "$temp_script"
-  chown "$target_user":"$target_user" "$temp_script" 2>/dev/null || true
+  temp_dir="$(mktemp -d /tmp/tgdb-install.XXXXXX)"
+  trap 'rm -rf -- "$temp_dir"' EXIT
+  temp_script="$temp_dir/install.sh"
+  write_installer_snapshot "$temp_script"
+  chmod 600 "$temp_script"
+  chmod 700 "$temp_dir"
+  chown "$target_uid:$target_gid" "$temp_script" "$temp_dir"
 
-  for env_assignment in \
-    "TGDB_INSTALL_SWITCHED=1" \
-    "TGDB_PARENT_DIR=$target_home" \
-    "TGDB_REPO_URL=$REPO_URL" \
-    "TGDB_BRANCH=$TGDB_BRANCH" \
-    "HOME=$target_home" \
-    "USER=$target_user" \
-    "LOGNAME=$target_user" \
-    "SHELL=/bin/bash"; do
-    printf -v escaped '%q' "$env_assignment"
-    login_command="${login_command}${login_command:+ }$escaped"
-  done
-
+  env_args=("TGDB_INSTALL_SWITCHED=1" "TGDB_PARENT_DIR=${TGDB_PARENT_DIR:-$target_home}")
   if [ -d "$runtime_dir" ]; then
-    printf -v escaped '%q' "XDG_RUNTIME_DIR=$runtime_dir"
-    login_command="${login_command}${login_command:+ }$escaped"
+    shell_env_args+=("XDG_RUNTIME_DIR=$runtime_dir")
     if [ -S "$runtime_dir/bus" ]; then
-      printf -v escaped '%q' "DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus"
-      login_command="${login_command}${login_command:+ }$escaped"
+      shell_env_args+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
     fi
   fi
+  printf -v login_command '%q ' env "${env_args[@]}" "${shell_env_args[@]}" "$bash_path" "$temp_script" "${TGDB_ARGS[@]}"
+  printf -v shell_command '%q ' env "${shell_env_args[@]}" "$bash_path" -il
+  # 安裝器退出後接續同一用戶的互動登入 shell，不讓 su -c 立即返回 root。
+  login_command="${login_command}; exec $shell_command"
 
-  printf -v escaped '%q' "$temp_script"
-  login_command="${login_command}${login_command:+ }bash $escaped"
-  for arg in "${TGDB_ARGS[@]}"; do
-    printf -v escaped '%q' "$arg"
-    login_command="${login_command}${login_command:+ }$escaped"
-  done
-
-  log_info "即將以 '$target_user' 的 login shell 重新登入並繼續安裝，以刷新 TTY、群組與使用者環境..."
-  exec su - "$target_user" -c "$login_command" < /dev/tty > /dev/tty 2>&1
+  # --pty 為 su -c 建立的新 session 配置控制終端，讓 sudo 可以正常提示密碼。
+  # 指定 Bash 登入 shell，確保 %q 產生的命令與原始 CLI 參數可正確解析。
+  log_info "即將透過 su --pty - $target_user 登入並自動繼續安裝，sudo 可能要求輸入密碼。"
+  log_info "退出 TGDB 後會留在 '$target_user' 的登入 shell；再輸入 exit 才會返回原本的 root shell。"
+  if su --pty - "$target_user" -s "$bash_path" -c "$login_command" < /dev/tty > /dev/tty 2>&1; then
+    switch_status=0
+  else
+    switch_status=$?
+  fi
+  exit "$switch_status"
 }
 
 ensure_normal_admin_runner() {
-  if [ "${TGDB_INSTALL_SWITCHED:-0}" = "1" ]; then
-    ensure_sudo_available_for_user
-    return 0
-  fi
+  local target_user=""
 
   if [ "$(id -u)" -ne 0 ]; then
     ensure_sudo_available_for_user
     return 0
   fi
 
-  ensure_sudo_installed_as_root
-
-  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER:-}" != "root" ] && id "${SUDO_USER:-}" >/dev/null 2>&1; then
-    log_info "偵測到原始操作者為普通用戶 '$SUDO_USER'，將切換回該用戶後再繼續安裝。"
-    reexec_as_user "$SUDO_USER"
+  if [ "${TGDB_INSTALL_SWITCHED:-0}" = "1" ]; then
+    log_error "切換用戶後仍為 root，已停止安裝；請確認 su 與目標帳號設定。"
+    exit 1
   fi
 
-  local created_user=""
+  ensure_interactive_tty
+  ensure_sudo_installed_as_root
 
-  log_warn "偵測到目前由 root 直接執行，TGDB 需由具 sudo 權限的普通用戶安裝與操作。"
-  created_user="$(create_admin_user_as_root)"
-  reexec_as_user "$created_user"
+  if target_user="$(find_existing_admin_user)"; then
+    log_info "偵測到具 sudo 權限的普通用戶 '$target_user'，將切換至該用戶並自動繼續安裝。"
+  else
+    log_warn "未偵測到可登入且具 sudo 權限的普通用戶，將建立新的普通管理員用戶。"
+    target_user="$(create_admin_user_as_root)"
+  fi
+
+  switch_to_user_login "$target_user"
 }
 
 install_git() {
@@ -406,7 +496,7 @@ start_tgdb() {
     exec ./tgdb.sh
   fi
 
-  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+  if has_interactive_tty; then
     exec ./tgdb.sh < /dev/tty > /dev/tty 2>&1
   fi
 

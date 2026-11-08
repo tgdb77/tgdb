@@ -26,15 +26,65 @@ _third_party_reinstall_join_shell_words() {
   printf -v "$out_var" '%s' "$joined"
 }
 
-third_party_reinstall_detect_virtualization() {
-  local virt=""
-  local product_name=""
-  local sys_vendor=""
+third_party_reinstall_detect_container() {
+  local container=""
 
   if command -v systemd-detect-virt >/dev/null 2>&1; then
-    virt="$(systemd-detect-virt 2>/dev/null || true)"
+    container="$(systemd-detect-virt --container 2>/dev/null || true)"
+    if [ -n "$container" ] && [ "$container" != "none" ]; then
+      printf '%s\n' "$container"
+      return 0
+    fi
+  fi
+
+  if [ -d /proc/vz ]; then
+    printf '%s\n' "openvz"
+    return 0
+  fi
+
+  if [ -r /proc/1/environ ]; then
+    container="$(tr '\0' '\n' </proc/1/environ 2>/dev/null | sed -n 's/^container=//p' | head -n 1)"
+    if [ -n "$container" ]; then
+      printf '%s\n' "$container"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+third_party_reinstall_detect_virtualization() {
+  local virt=""
+  local container=""
+  local product_name=""
+  local sys_vendor=""
+  local bios_vendor=""
+  local board_name=""
+  local dmi_info=""
+
+  if container="$(third_party_reinstall_detect_container)"; then
+    printf 'container (%s)\n' "$container"
+    return 2
+  fi
+
+  if command -v systemd-detect-virt >/dev/null 2>&1; then
+    virt="$(systemd-detect-virt --vm 2>/dev/null || true)"
+    if [ -n "$virt" ] && [ "$virt" != "none" ]; then
+      printf '%s\n' "$virt"
+      return 0
+    fi
+  fi
+
+  if command -v virt-what >/dev/null 2>&1; then
+    virt="$(virt-what 2>/dev/null | head -n 1)"
     case "$virt" in
-      kvm|qemu)
+      openvz|lxc|lxc-libvirt|docker|podman|systemd-nspawn|wsl|container*)
+        printf 'container (%s)\n' "$virt"
+        return 2
+        ;;
+      ""|none)
+        ;;
+      *)
         printf '%s\n' "$virt"
         return 0
         ;;
@@ -47,19 +97,64 @@ third_party_reinstall_detect_virtualization() {
   if [ -r /sys/class/dmi/id/sys_vendor ]; then
     sys_vendor="$(tr -d '\r\n' </sys/class/dmi/id/sys_vendor 2>/dev/null || true)"
   fi
+  if [ -r /sys/class/dmi/id/bios_vendor ]; then
+    bios_vendor="$(tr -d '\r\n' </sys/class/dmi/id/bios_vendor 2>/dev/null || true)"
+  fi
+  if [ -r /sys/class/dmi/id/board_name ]; then
+    board_name="$(tr -d '\r\n' </sys/class/dmi/id/board_name 2>/dev/null || true)"
+  fi
 
-  case "${product_name} ${sys_vendor}" in
-    *KVM*|*QEMU*)
-      if [[ "${product_name} ${sys_vendor}" == *KVM* ]]; then
-        printf '%s\n' "kvm"
-      else
-        printf '%s\n' "qemu"
-      fi
+  dmi_info="$(printf '%s\n' "$product_name $sys_vendor $bios_vendor $board_name" | tr '[:upper:]' '[:lower:]')"
+  case "$dmi_info" in
+    *openvz*|*lxc*|*docker*|*podman*|*container*)
+      printf '%s\n' "container (DMI)"
+      return 2
+      ;;
+    *kvm*)
+      printf '%s\n' "kvm"
+      return 0
+      ;;
+    *qemu*)
+      printf '%s\n' "qemu"
+      return 0
+      ;;
+    *vmware*|*vmw*)
+      printf '%s\n' "vmware"
+      return 0
+      ;;
+    *virtualbox*|*innotek*)
+      printf '%s\n' "virtualbox"
+      return 0
+      ;;
+    *hyper-v*|*microsoft*)
+      printf '%s\n' "hyper-v"
+      return 0
+      ;;
+    *xen*|*hvm*)
+      printf '%s\n' "xen"
+      return 0
+      ;;
+    *bochs*)
+      printf '%s\n' "bochs"
+      return 0
+      ;;
+    *openstack*)
+      printf '%s\n' "openstack"
+      return 0
+      ;;
+    *parallels*)
+      printf '%s\n' "parallels"
+      return 0
+      ;;
+    *bhyve*)
+      printf '%s\n' "bhyve"
       return 0
       ;;
   esac
 
-  return 1
+  # 上游腳本也支援裸機；沒有偵測到容器或虛擬機時允許繼續。
+  printf '%s\n' "bare-metal"
+  return 0
 }
 
 third_party_reinstall_print_menu() {
@@ -316,9 +411,20 @@ third_party_reinstall_menu() {
 
 third_party_run_reinstall() {
   local virt_type=""
+  local detect_rc=0
 
-  if ! virt_type="$(third_party_reinstall_detect_virtualization)"; then
-    tgdb_warn "VPS 系統重裝目前僅支援 KVM 虛擬化技術。"
+  if virt_type="$(third_party_reinstall_detect_virtualization)"; then
+    :
+  else
+    detect_rc=$?
+    case "$detect_rc" in
+      2)
+        tgdb_warn "上游 reinstall 不支援容器環境（已偵測到：$virt_type）。OpenVZ、LXC、Docker 等容器請改用主機商控制台或上游建議工具。"
+        ;;
+      *)
+        tgdb_warn "無法判斷目前執行環境，為避免在不支援的環境中清除資料，已停止重裝。"
+        ;;
+    esac
     ui_pause "按任意鍵返回上一頁..." "main"
     return 0
   fi
@@ -328,6 +434,6 @@ third_party_run_reinstall() {
     return 1
   }
 
-  tgdb_info "已偵測到虛擬化類型：$virt_type"
+  tgdb_info "已偵測到執行環境類型：$virt_type"
   third_party_reinstall_menu
 }

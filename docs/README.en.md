@@ -102,14 +102,12 @@
 bash <(curl -sL tgdb77.pages.dev/7)
 ```
 
-> The installer uses your current working directory. `cd` into the target folder before running it.
-> It creates a `tgdb/` folder in the current directory, then runs `./tgdb.sh` automatically.
-
 > 💡 **Notes**
 >
 > - On the first interactive launch, TGDB may try to create the default shortcut `t` at `~/.local/bin/t`. You can manage it later from `9. Shortcut Management`.
 > - When creating shortcuts, TGDB will try to add `~/.local/bin` to your shell `PATH`; if your current shell has not reloaded its config yet, open a new terminal, sign in again, or run `source ~/.bashrc` to make it available immediately.
 > - The first run may ask for your `sudo` password when installing packages, changing system settings, or updating firewall rules.
+> - If you launch the installer as root, it switches to a regular user with sudo privileges and continues automatically. After exiting TGDB, you remain in that user's login shell; run `exit` again to return to the original root shell.
 
 ---
 
